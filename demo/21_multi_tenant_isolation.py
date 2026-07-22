@@ -10,6 +10,7 @@ Demonstrates complete multi-tenant lifecycle:
 
 Run: python3 demo/21_multi_tenant_isolation.py
 """
+
 import os
 import sys
 
@@ -21,12 +22,20 @@ from zelos.multi_tenancy import ResourceQuota, TenantManager
 def scenario_1_registration():
     print("── Scenario 1: Tenant Registration ──")
     tm = TenantManager()
-    tm.register_tenant("tenant-finance", "Finance Dept", quotas=ResourceQuota(max_goals=50, max_agents=10, budget_per_goal=100))
-    tm.register_tenant("tenant-eng", "Engineering Team", quotas=ResourceQuota(max_goals=200, max_agents=50, budget_per_goal=500))
+    tm.register_tenant(
+        "tenant-finance", "Finance Dept", quotas=ResourceQuota(max_goals=50, max_agents=10, budget_per_goal=100)
+    )
+    tm.register_tenant(
+        "tenant-eng", "Engineering Team", quotas=ResourceQuota(max_goals=200, max_agents=50, budget_per_goal=500)
+    )
     f = tm.get_tenant("tenant-finance")
     e = tm.get_tenant("tenant-eng")
-    print(f"  {f.name}: goals≤{f.namespace.quotas.max_goals}, agents≤{f.namespace.quotas.max_agents}, budget≤${f.namespace.quotas.budget_per_goal}")
-    print(f"  {e.name}: goals≤{e.namespace.quotas.max_goals}, agents≤{e.namespace.quotas.max_agents}, budget≤${e.namespace.quotas.budget_per_goal}")
+    print(
+        f"  {f.name}: goals≤{f.namespace.quotas.max_goals}, agents≤{f.namespace.quotas.max_agents}, budget≤${f.namespace.quotas.budget_per_goal}"
+    )
+    print(
+        f"  {e.name}: goals≤{e.namespace.quotas.max_goals}, agents≤{e.namespace.quotas.max_agents}, budget≤${e.namespace.quotas.budget_per_goal}"
+    )
     assert f.name == "Finance Dept"
     return tm
 
@@ -34,7 +43,9 @@ def scenario_1_registration():
 def scenario_2_quota_enforcement():
     print("── Scenario 2: Quota Enforcement ──")
     tm = TenantManager()
-    tm.register_tenant("tenant-small", "Small Team", quotas=ResourceQuota(max_goals=3, max_agents=2, budget_per_goal=10))
+    tm.register_tenant(
+        "tenant-small", "Small Team", quotas=ResourceQuota(max_goals=3, max_agents=2, budget_per_goal=10)
+    )
     ns = tm.get_namespace("tenant-small")
 
     # Goal quota: allow 3, reject 4th
@@ -95,8 +106,12 @@ def scenario_5_usage_report():
         ns_f.add_goal(f"fg-{_}")
     for _ in range(80):
         ns_e.add_goal(f"eg-{_}")
-    print(f"  Finance:     {ns_f.goal_count}/{ns_f.quotas.max_goals} goals ({ns_f.goal_count * 100 // ns_f.quotas.max_goals}%)")
-    print(f"  Engineering: {ns_e.goal_count}/{ns_e.quotas.max_goals} goals ({ns_e.goal_count * 100 // ns_e.quotas.max_goals}%)")
+    print(
+        f"  Finance:     {ns_f.goal_count}/{ns_f.quotas.max_goals} goals ({ns_f.goal_count * 100 // ns_f.quotas.max_goals}%)"
+    )
+    print(
+        f"  Engineering: {ns_e.goal_count}/{ns_e.quotas.max_goals} goals ({ns_e.goal_count * 100 // ns_e.quotas.max_goals}%)"
+    )
 
 
 if __name__ == "__main__":

@@ -13,3 +13,7 @@ venv/
 data/
 docs/api/
 .idea/vcs.xml
+zelos-ts/node_modules/
+zelos-ts/node_modules/
+zelos-ts/dist/
+package-lock.json

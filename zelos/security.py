@@ -409,9 +409,7 @@ class APIKeyManager:
             self._failed_attempts[key_hash].append(now)
             # Prune old failures
             cutoff = now - self.failure_window_seconds
-            self._failed_attempts[key_hash] = [
-                t for t in self._failed_attempts[key_hash] if t > cutoff
-            ]
+            self._failed_attempts[key_hash] = [t for t in self._failed_attempts[key_hash] if t > cutoff]
             recent = len(self._failed_attempts[key_hash])
             if self.auto_revoke and recent >= self.max_failures and key_hash in self._keys:
                 self._keys[key_hash].revoked = True

@@ -159,7 +159,7 @@ Production security hardening, K8s readiness, operational tooling.
 
 - [ ] etcd integration (replace in-memory leader election)
 - [ ] Message queue integration (NATS/Kafka for cross-node EventBus)
-- [ ] OpenTelemetry actual integration (Jaeger/Zipkin exporters)
+- [x] OpenTelemetry actual integration (Jaeger/Zipkin exporters) — v0.6.0
 
 ---
 
@@ -184,7 +184,7 @@ Comprehensive demos, verified correctness, complete documentation coverage.
 
 - [ ] etcd integration
 - [ ] Message queue integration (NATS/Kafka)
-- [ ] OpenTelemetry (Jaeger/Zipkin)
+- [x] OpenTelemetry (Jaeger/Zipkin) — v0.6.0
 - [ ] Go SDK
 - [ ] Performance optimization (benchmark-driven)
 
@@ -199,7 +199,7 @@ Comprehensive demos, verified correctness, complete documentation coverage.
 
 - [ ] etcd integration (replace in-memory leader election)
 - [ ] Message queue integration (NATS/Kafka for cross-node EventBus)
-- [ ] OpenTelemetry actual integration (Jaeger/Zipkin exporters)
+- [x] OpenTelemetry actual integration (Jaeger/Zipkin exporters) — v0.6.0
 - [ ] Go SDK
 - [ ] Performance optimization (TaskGraph incremental eval, Scheduler caching)
 

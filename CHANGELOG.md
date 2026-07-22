@@ -6,14 +6,18 @@ All notable changes to Zelos will be documented in this file.
 
 ## [0.6.0] — 2026-07-22
 
-### Added — Demo Enrichment & Docs
+### Added — Demo Enrichment, OTel, TS SDK Verification
 - HITL approval workflow demo (6 scenarios: single/multi approver, reject, changes, timeout, audit)
 - Multi-tenant isolation demo (5 scenarios: registration, quotas, isolation, lifecycle, usage report)
-- Demo verification: 9 existing demos verified, 2 new demos (HITL + multi-tenancy)
+- OpenTelemetry → Jaeger integration (OTLP export, span verification, Jaeger UI query)
+- TypeScript SDK: `tsc` compilation verified, `.d.ts` + `.js` output generated
+- GitHub Pages docs deployment workflow (`.github/workflows/docs.yml`)
+- Demo README updated with Phase 5/6 demos + supplementary notes
 
 ### Changed
 - Version bumped: 0.5.0 → 0.6.0
-- ROADMAP: Phase 6 marked Complete
+- Test count: 66 → 68 (63 passed, 5 skipped)
+- ROADMAP: Phase 6 Complete, OTel moved from Phase 7 to done
 
 ---
 

@@ -13,6 +13,7 @@ Covers 6 scenarios:
 
 Run: python3 demo/20_hitl_approval_workflow.py
 """
+
 import os
 import sys
 import time
@@ -36,7 +37,9 @@ def scenario_1_single_approval():
 def scenario_2_multi_approver():
     print("── Scenario 2: Multi-Approver (require_all=True) ──")
     hitl = HumanInTheLoop()
-    req = hitl.create_request("task-rotate-creds", "Rotate root credentials", ["sec-admin@org.com", "cto@org.com"], require_all=True)
+    req = hitl.create_request(
+        "task-rotate-creds", "Rotate root credentials", ["sec-admin@org.com", "cto@org.com"], require_all=True
+    )
     print(f"  Created: {req.request_id} (requires BOTH)")
     hitl.approve(req.request_id, "cto@org.com", "Mgmt approved")
     r1 = hitl.get_request(req.request_id)
@@ -62,7 +65,9 @@ def scenario_4_change_request():
     print("── Scenario 4: Change Request with Feedback ──")
     hitl = HumanInTheLoop()
     req = hitl.create_request("task-ui-widget", "Review React dashboard", ["designer@org.com"])
-    hitl.request_changes(req.request_id, "designer@org.com", "Color contrast too low (WCAG AA 4.5:1). Add loading skeleton.")
+    hitl.request_changes(
+        req.request_id, "designer@org.com", "Color contrast too low (WCAG AA 4.5:1). Add loading skeleton."
+    )
     r1 = hitl.get_request(req.request_id)
     assert r1.status.value == "changes_requested"
     print(f"  → Changes requested: {r1.resolution_comment[:60]}...")
