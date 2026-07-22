@@ -1,5 +1,5 @@
 # zelos.yaml — Zelos Runtime Configuration
-# Phase 1: Single-node, in-process mode.
+# Version: 0.3.0 — Phase 3: Production-grade distributed infrastructure.
 
 runtime:
   instance_id: "zelos-dev-01"
@@ -23,8 +23,38 @@ runtime:
     level: "info"
     format: "json"
 
+# ── Security (Phase 3) ──
+security:
+  audit_max_events: 100000
+  cert_file: ""
+  key_file: ""
+  ca_file: ""
+  require_client_cert: false
+  min_tls_version: "TLSv1.2"
+  verify_hostname: true
+
+# ── Multi-tenancy (Phase 3) ──
+multi_tenancy:
+  enabled: false
+  # tenants:
+  #   - id: "tenant-01"
+  #     name: "Team A"
+  #     quotas:
+  #       max_goals: 50
+  #       max_tasks: 200
+  #       max_agents: 10
+  #       budget_per_goal: 100.0
+  #       max_concurrent_tasks: 20
+
+# ── Distributed Runtime (Phase 3) ──
+distributed:
+  enabled: false
+  # node_id: "node-01"
+  # cluster_port: 9877
+  # peers: ["127.0.0.1:9877"]
+
 plugins:
-  # Storage Backend (Phase 1: in-memory)
+  # Storage Backend
   - id: "in-memory-storage"
     type: "storage"
     version: "0.1.0"
@@ -32,7 +62,7 @@ plugins:
     config:
       max_events: 10000
 
-  # Memory Provider (Phase 1: in-memory)
+  # Memory Provider
   - id: "in-memory-memory"
     type: "memory"
     version: "0.1.0"

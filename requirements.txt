@@ -1,0 +1,7 @@
+# Zelos — Open Multi-Agent Orchestration Runtime
+# Version: 0.3.0
+#
+# Core Runtime: Zero external dependencies (Python stdlib only).
+#
+# Dev Dependencies (testing):
+pytest>=8.0.0

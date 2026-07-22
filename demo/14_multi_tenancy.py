@@ -9,11 +9,16 @@ Demonstrates Phase 3 multi-tenancy features:
 
 Run: python3 demo/14_multi_tenancy.py
 """
-import sys, os
+
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from zelos.multi_tenancy import (
-    Namespace, ResourceQuota, TenantManager, Tenant,
+    Namespace,
+    ResourceQuota,
+    TenantManager,
 )
 
 
@@ -35,7 +40,7 @@ def main():
             max_agents=100,
             budget_per_goal=10000.0,
             max_concurrent_tasks=200,
-        )
+        ),
     )
 
     # Startup tenant — tight limits
@@ -47,18 +52,22 @@ def main():
             max_tasks=50,
             max_agents=5,
             budget_per_goal=100.0,
-        )
+        ),
     )
 
     print(f"   {enterprise_ns.name}:")
-    print(f"     Goals: 0/{enterprise_ns.quotas.max_goals}, "
-          f"Tasks: 0/{enterprise_ns.quotas.max_tasks}, "
-          f"Budget: ${enterprise_ns.quotas.budget_per_goal}/goal")
+    print(
+        f"     Goals: 0/{enterprise_ns.quotas.max_goals}, "
+        f"Tasks: 0/{enterprise_ns.quotas.max_tasks}, "
+        f"Budget: ${enterprise_ns.quotas.budget_per_goal}/goal"
+    )
 
     print(f"   {startup_ns.name}:")
-    print(f"     Goals: 0/{startup_ns.quotas.max_goals}, "
-          f"Tasks: 0/{startup_ns.quotas.max_tasks}, "
-          f"Budget: ${startup_ns.quotas.budget_per_goal}/goal")
+    print(
+        f"     Goals: 0/{startup_ns.quotas.max_goals}, "
+        f"Tasks: 0/{startup_ns.quotas.max_tasks}, "
+        f"Budget: ${startup_ns.quotas.budget_per_goal}/goal"
+    )
 
     # ── 2. Cross-Tenant Isolation ──
     print("\n🔒 2. Cross-Tenant Isolation")
@@ -88,10 +97,8 @@ def main():
     print(f"   Add goal 4 (exceeds quota): {'✅' if result else '❌ QUOTA EXCEEDED'}")
 
     # Budget check
-    print(f"\n   Budget check: $50 within $100 limit? "
-          f"{'✅' if tiny_ns.quotas.check_budget(50) else '❌'}")
-    print(f"   Budget check: $150 within $100 limit? "
-          f"{'✅' if tiny_ns.quotas.check_budget(150) else '❌ EXCEEDED'}")
+    print(f"\n   Budget check: $50 within $100 limit? {'✅' if tiny_ns.quotas.check_budget(50) else '❌'}")
+    print(f"   Budget check: $150 within $100 limit? {'✅' if tiny_ns.quotas.check_budget(150) else '❌ EXCEEDED'}")
 
     # ── 4. Tenant Manager ──
     print("\n👥 4. Tenant Manager")
@@ -99,17 +106,26 @@ def main():
     tm = TenantManager()
 
     # Register tenants
-    tm.register_tenant("acme-corp", "ACME Corporation",
-                       quotas=ResourceQuota(max_goals=100, budget_per_goal=5000),
-                       metadata={"org": "Engineering", "tier": "enterprise"})
+    tm.register_tenant(
+        "acme-corp",
+        "ACME Corporation",
+        quotas=ResourceQuota(max_goals=100, budget_per_goal=5000),
+        metadata={"org": "Engineering", "tier": "enterprise"},
+    )
 
-    tm.register_tenant("dev-team", "Development Team",
-                       quotas=ResourceQuota(max_goals=20, budget_per_goal=200),
-                       metadata={"org": "R&D", "tier": "standard"})
+    tm.register_tenant(
+        "dev-team",
+        "Development Team",
+        quotas=ResourceQuota(max_goals=20, budget_per_goal=200),
+        metadata={"org": "R&D", "tier": "standard"},
+    )
 
-    tm.register_tenant("oss-project", "Open Source Project",
-                       quotas=ResourceQuota(max_goals=5, budget_per_goal=0),
-                       metadata={"org": "Community", "tier": "free"})
+    tm.register_tenant(
+        "oss-project",
+        "Open Source Project",
+        quotas=ResourceQuota(max_goals=5, budget_per_goal=0),
+        metadata={"org": "Community", "tier": "free"},
+    )
 
     print(f"   Registered tenants: {tm.tenant_count()}")
 
@@ -117,9 +133,11 @@ def main():
         ns = tenant.namespace
         ns.add_goal(f"{tenant.tenant_id}-g-1")
         ns.add_agent(f"{tenant.tenant_id}-agent-1")
-        print(f"   [{tenant.metadata.get('tier', 'N/A'):12s}] {tenant.name:25s} "
-              f"→ {ns.goal_count} goals, {ns.agent_count} agents, "
-              f"budget=${ns.quotas.budget_per_goal}/goal")
+        print(
+            f"   [{tenant.metadata.get('tier', 'N/A'):12s}] {tenant.name:25s} "
+            f"→ {ns.goal_count} goals, {ns.agent_count} agents, "
+            f"budget=${ns.quotas.budget_per_goal}/goal"
+        )
 
     # Deactivate a tenant
     tm.deactivate_tenant("oss-project")
@@ -133,7 +151,7 @@ def main():
     print(f"   Active tenants: {report['active_tenants']}")
 
     print(f"\n{'=' * 60}")
-    print(f"  Demo complete. Multi-tenancy primitives working.")
+    print("  Demo complete. Multi-tenancy primitives working.")
     print(f"{'=' * 60}")
 
 

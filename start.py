@@ -17,25 +17,24 @@ Options:
     --config PATH       Path to zelos.yaml config file
     --no-dashboard      Don't start the HTTP adapter (CLI only)
 """
-import sys
-import os
-import time
+
 import argparse
+import os
+import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from zelos.runtime import ZelosRuntime
 from zelos.http_adapter import HTTPAdapter
+from zelos.runtime import ZelosRuntime
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Zelos Runtime — Open Multi-Agent Orchestration Runtime")
+    parser = argparse.ArgumentParser(description="Zelos Runtime — Open Multi-Agent Orchestration Runtime")
     parser.add_argument("--host", default="127.0.0.1", help="Bind host")
     parser.add_argument("--port", type=int, default=9876, help="Bind port")
     parser.add_argument("--config", "-c", default=None, help="Path to zelos.yaml")
-    parser.add_argument("--no-dashboard", action="store_true",
-                        help="Don't start HTTP adapter")
+    parser.add_argument("--no-dashboard", action="store_true", help="Don't start HTTP adapter")
     args = parser.parse_args()
 
     # ── Create Runtime ──
@@ -68,11 +67,11 @@ def main():
 
     print()
     print("=" * 55)
-    print(f"  Zelos Runtime v0.3.0 — Ready")
+    print("  Zelos Runtime v0.3.0 — Ready")
     if not args.no_dashboard:
         print(f"  Dashboard: {adapter.url}")
         print(f"  API:       {adapter.url}/api/v1/health")
-    print(f"  Press Ctrl+C to stop")
+    print("  Press Ctrl+C to stop")
     print("=" * 55)
     print()
 

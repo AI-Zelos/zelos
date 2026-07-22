@@ -3,9 +3,10 @@ zelos.yaml Configuration Loader
 
 Reads and validates zelos.yaml, providing defaults for all settings.
 """
-import os
+
 import json
-from typing import Any, Dict, List, Optional
+import os
+from typing import Any
 
 VALID_PLUGIN_TYPES = {"storage", "memory", "policy", "scoring_strategy", "verifier", "planner", "adapter"}
 VALID_AUTH_ROLES = {"admin", "agent", "client"}
@@ -25,14 +26,14 @@ class ConfigLoader:
     """Loads and validates zelos.yaml configuration."""
 
     def __init__(self):
-        self._config: Dict[str, Any] = {}
+        self._config: dict[str, Any] = {}
 
-    def load(self, path: str) -> Dict[str, Any]:
+    def load(self, path: str) -> dict[str, Any]:
         """Load configuration from a YAML file."""
         if not os.path.exists(path):
             raise FileNotFoundError(f"Configuration file not found: {path}")
 
-        with open(path, "r") as f:
+        with open(path) as f:
             content = f.read()
 
         data = self._parse_yaml(content)
@@ -40,19 +41,19 @@ class ConfigLoader:
         self._validate(self._config)
         return self._config
 
-    def load_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def load_dict(self, data: dict[str, Any]) -> dict[str, Any]:
         """Load configuration from a dict (for programmatic use)."""
         self._config = self._apply_defaults(data)
         self._validate(self._config)
         return self._config
 
     @property
-    def config(self) -> Dict[str, Any]:
+    def config(self) -> dict[str, Any]:
         return dict(self._config)
 
     # ── YAML Parser (Phase 1: supports YAML subset — no external dependency) ──
 
-    def _parse_yaml(self, content: str) -> Dict[str, Any]:
+    def _parse_yaml(self, content: str) -> dict[str, Any]:
         """Parse a YAML-like config. Phase 1: also supports JSON."""
         # Try JSON first (useful for testing)
         content = content.strip()
@@ -62,6 +63,7 @@ class ConfigLoader:
         # Try YAML (simple subset: key: value, nested via indentation)
         try:
             import yaml
+
             return yaml.safe_load(content)
         except ImportError:
             pass
@@ -69,7 +71,7 @@ class ConfigLoader:
         # Fallback: basic YAML parser for simple configs
         return self._parse_simple_yaml(content)
 
-    def _parse_simple_yaml(self, content: str) -> Dict[str, Any]:
+    def _parse_simple_yaml(self, content: str) -> dict[str, Any]:
         """Minimal YAML parser supporting nested dicts, lists, scalars."""
         lines = content.split("\n")
         result = {}
@@ -126,7 +128,7 @@ class ConfigLoader:
 
     # ── Defaults ──
 
-    def _apply_defaults(self, data: Dict) -> Dict:
+    def _apply_defaults(self, data: dict) -> dict:
         """Deep-merge user config with defaults."""
         result = json.loads(json.dumps(DEFAULT_CONFIG))  # Deep copy
 
@@ -149,14 +151,14 @@ class ConfigLoader:
 
     # ── Validation ──
 
-    def _validate(self, config: Dict) -> None:
+    def _validate(self, config: dict) -> None:
         plugins = config.get("plugins", [])
         for p in plugins:
             if not isinstance(p, dict):
                 raise ValueError(f"Plugin entry must be a dict: {p}")
 
             if "id" not in p:
-                raise ValueError(f"Plugin missing required field: id")
+                raise ValueError("Plugin missing required field: id")
 
             ptype = p.get("type", "")
             if ptype and ptype not in VALID_PLUGIN_TYPES:
@@ -175,7 +177,7 @@ class ConfigLoader:
                 raise ValueError(f"Invalid auth role '{role}'. Valid: {', '.join(VALID_AUTH_ROLES)}")
 
 
-def load_config(path: Optional[str] = None) -> Dict[str, Any]:
+def load_config(path: str | None = None) -> dict[str, Any]:
     """Convenience: load config from path, or return defaults."""
     loader = ConfigLoader()
     if path and os.path.exists(path):

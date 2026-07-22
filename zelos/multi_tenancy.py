@@ -6,18 +6,19 @@ Produces hard isolation between tenants sharing a single Runtime:
   - ResourceQuota caps: goals, tasks, agents, budget per goal
   - TenantManager: register, activate/deactivate, cross-tenant isolation
 """
-import time
-import uuid
-import threading
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
 
+import threading
+import time
+from dataclasses import dataclass, field
+from typing import Any
 
 # ═══════════════════ Resource Quota ═══════════════════
+
 
 @dataclass
 class ResourceQuota:
     """Resource limits for a namespace or tenant."""
+
     max_goals: int = 100
     max_tasks: int = 500
     max_agents: int = 50
@@ -42,6 +43,7 @@ class ResourceQuota:
 
 # ═══════════════════ Namespace ═══════════════════
 
+
 class Namespace:
     """Isolated resource container for a tenant.
 
@@ -51,14 +53,13 @@ class Namespace:
       - Agents (agent IDs)
     """
 
-    def __init__(self, namespace_id: str, name: str = "",
-                 quotas: Optional[ResourceQuota] = None):
+    def __init__(self, namespace_id: str, name: str = "", quotas: ResourceQuota | None = None):
         self.namespace_id = namespace_id
         self.name = name or namespace_id
         self.quotas = quotas or ResourceQuota()
-        self._goals: List[str] = []
-        self._tasks: List[str] = []
-        self._agents: List[str] = []
+        self._goals: list[str] = []
+        self._tasks: list[str] = []
+        self._agents: list[str] = []
         self._created_at = time.time()
         self._lock = threading.RLock()
 
@@ -153,14 +154,16 @@ class Namespace:
 
 # ═══════════════════ Tenant ═══════════════════
 
+
 @dataclass
 class Tenant:
     """A tenant represents a team/organization using the Runtime."""
+
     tenant_id: str
     name: str
     namespace: Namespace
     active: bool = True
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict:
@@ -176,6 +179,7 @@ class Tenant:
 
 # ═══════════════════ Tenant Manager ═══════════════════
 
+
 class TenantManager:
     """Central tenant registry with cross-tenant isolation enforcement.
 
@@ -184,13 +188,13 @@ class TenantManager:
     """
 
     def __init__(self):
-        self._tenants: Dict[str, Tenant] = {}
+        self._tenants: dict[str, Tenant] = {}
         self._default_namespace = Namespace("default", "Default Namespace")
         self._lock = threading.RLock()
 
-    def register_tenant(self, tenant_id: str, name: str = "",
-                        quotas: Optional[ResourceQuota] = None,
-                        metadata: Optional[Dict] = None) -> Tenant:
+    def register_tenant(
+        self, tenant_id: str, name: str = "", quotas: ResourceQuota | None = None, metadata: dict | None = None
+    ) -> Tenant:
         """Register a new tenant with its own namespace."""
         namespace = Namespace(tenant_id, name, quotas)
         tenant = Tenant(
@@ -203,10 +207,10 @@ class TenantManager:
             self._tenants[tenant_id] = tenant
         return tenant
 
-    def get_tenant(self, tenant_id: str) -> Optional[Tenant]:
+    def get_tenant(self, tenant_id: str) -> Tenant | None:
         return self._tenants.get(tenant_id)
 
-    def get_namespace(self, tenant_id: str) -> Optional[Namespace]:
+    def get_namespace(self, tenant_id: str) -> Namespace | None:
         """Get a tenant's namespace. Returns default if not found."""
         tenant = self._tenants.get(tenant_id)
         return tenant.namespace if tenant else self._default_namespace
@@ -239,13 +243,13 @@ class TenantManager:
                 return True
         return False
 
-    def list_tenants(self) -> List[Tenant]:
+    def list_tenants(self) -> list[Tenant]:
         return list(self._tenants.values())
 
     def tenant_count(self) -> int:
         return len(self._tenants)
 
-    def get_usage_report(self) -> Dict[str, Any]:
+    def get_usage_report(self) -> dict[str, Any]:
         """Aggregate usage across all tenants."""
         tenants_usage = {}
         for tenant_id, tenant in self._tenants.items():

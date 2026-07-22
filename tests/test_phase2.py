@@ -1,25 +1,34 @@
 """Phase 2 — Acceptance Tests: Verifier v2, Observability, Plugin Isolation."""
-import sys, os, time, json, tempfile, subprocess
+
+import json
+import os
+import sys
+import tempfile
+import time
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from zelos.verifier_v2 import CodeReviewer, SecurityScanner, FactChecker
-from zelos.verifier import SchemaVerifier, VerificationGate, VerificationCriteria, Verdict
-from zelos.observability import (
-    StructuredLogger, MetricsCollector, Counter, Gauge, Histogram, Tracer, Span
-)
-from zelos.plugin_isolation import SubProcessPlugin, SubProcessPluginRunner
+from zelos.observability import MetricsCollector, StructuredLogger, Tracer
+from zelos.plugin_isolation import SubProcessPlugin
+from zelos.verifier import SchemaVerifier, VerificationCriteria, VerificationGate
+from zelos.verifier_v2 import CodeReviewer, FactChecker, SecurityScanner
 
-PASS = 0; FAIL = 0
+PASS = 0
+FAIL = 0
+
 
 def t(name, condition):
     global PASS, FAIL
     if condition:
-        PASS += 1; print(f"  ✅ {name}")
+        PASS += 1
+        print(f"  ✅ {name}")
     else:
-        FAIL += 1; print(f"  ❌ {name}")
+        FAIL += 1
+        print(f"  ❌ {name}")
 
 
 # ═══════════════════ Verifier v2 ═══════════════════
+
 
 def test_verifier_v2():
     print("\n🔍 Verifier v2 — CodeReviewer, SecurityScanner, FactChecker")
@@ -31,7 +40,10 @@ def test_verifier_v2():
 
     # VER2-02: Syntax error
     v2 = cr.verify("def hello(\n    return 'world'\n", VerificationCriteria())
-    t("VER2-02: Syntax error detected", v2.verdict == "failed" or any("Syntax" in i.get("message", "") for i in v2.issues))
+    t(
+        "VER2-02: Syntax error detected",
+        v2.verdict == "failed" or any("Syntax" in i.get("message", "") for i in v2.issues),
+    )
 
     # VER2-03: eval() detection
     v3 = cr.verify("x = eval(user_input)", VerificationCriteria(options={"language": "python"}))
@@ -39,7 +51,10 @@ def test_verifier_v2():
 
     # VER2-04: Hardcoded secret
     v4 = cr.verify("password = 'admin123'\nlogin()", VerificationCriteria())
-    t("VER2-04: Hardcoded credential", any("credential" in i["message"].lower() or "password" in i["message"].lower() for i in v4.issues))
+    t(
+        "VER2-04: Hardcoded credential",
+        any("credential" in i["message"].lower() or "password" in i["message"].lower() for i in v4.issues),
+    )
 
     # VER2-05: JavaScript
     v5 = cr.verify("eval(userData)", VerificationCriteria(options={"language": "javascript"}))
@@ -51,7 +66,7 @@ def test_verifier_v2():
     t("VER2-06: SQL injection detected", v6.verdict == "failed")
 
     # VER2-07: XSS
-    v7 = ss.verify('el.innerHTML = user_input', VerificationCriteria())
+    v7 = ss.verify("el.innerHTML = user_input", VerificationCriteria())
     t("VER2-07: XSS detected", any("XSS" in i["message"] or "innerHTML" in i["message"] for i in v7.issues))
 
     # VER2-08: Security pass
@@ -72,7 +87,9 @@ def test_verifier_v2():
     gate.add_verifier(SchemaVerifier())
     gate.add_verifier(CodeReviewer())
     gate.add_verifier(SecurityScanner())
-    criteria = VerificationCriteria(expected_output_schema={"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]})
+    criteria = VerificationCriteria(
+        expected_output_schema={"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]}
+    )
     v11 = gate.verify({"code": "x = eval(input())"}, criteria)
     t("VER2-11: Gate catches eval in code", v11.verdict in ("failed", "passed"))
 
@@ -82,6 +99,7 @@ def test_verifier_v2():
 
 
 # ═══════════════════ Observability ═══════════════════
+
 
 def test_observability():
     print("\n📊 Observability — Logging, Metrics, Tracing")
@@ -94,16 +112,20 @@ def test_observability():
 
     # OBS-02: Log levels
     logger2 = StructuredLogger(level="warn", format="json")
-    d = logger2.debug("debug"); i = logger2.info("info")
-    w = logger2.warn("warn"); e = logger2.error("error")
+    d = logger2.debug("debug")
+    i = logger2.info("info")
+    w = logger2.warn("warn")
+    e = logger2.error("error")
     t("OBS-02: Level filtering", d is None and i is None and w is not None and e is not None)
 
     # OBS-03: Task counter
     mc = MetricsCollector()
     tc = mc.counter("task_completed_total", "Completed tasks")
     tf = mc.counter("task_failed_total", "Failed tasks")
-    for _ in range(5): tc.inc()
-    for _ in range(2): tf.inc()
+    for _ in range(5):
+        tc.inc()
+    for _ in range(2):
+        tf.inc()
     t("OBS-03: Task counters", tc.value == 5 and tf.value == 2)
 
     # OBS-04: Agent gauge
@@ -142,6 +164,7 @@ def test_observability():
 
 # ═══════════════════ Plugin Isolation ═══════════════════
 
+
 def test_plugin_isolation():
     print("\n🔌 Plugin Isolation — Sub-Process")
 
@@ -177,7 +200,9 @@ for line in sys.stdin:
 
         # ISO-03: Graceful shutdown
         plugin.stop()
-        import time as _t; _t.sleep(0.3)
+        import time as _t
+
+        _t.sleep(0.3)
         t("ISO-03: Graceful shutdown", not plugin.is_running())
     else:
         t("ISO-01: Sub-process start", False)

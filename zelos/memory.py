@@ -4,15 +4,17 @@ Memory Architecture — 6-layer context storage with pluggable providers.
 Layers: session, project, user, knowledge, execution, skill.
 Phase 1: In-memory provider with TTL, max entries, and search.
 """
+
 import time
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class MemoryLayer:
     """Labels for the 6 memory layers."""
+
     SESSION = "session"
     PROJECT = "project"
     USER = "user"
@@ -30,10 +32,10 @@ class MemoryEntry:
     layer: str
     created_at: float = 0.0
     updated_at: float = 0.0
-    ttl_seconds: Optional[float] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    ttl_seconds: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def is_expired(self, now: Optional[float] = None) -> bool:
+    def is_expired(self, now: float | None = None) -> bool:
         if self.ttl_seconds is None:
             return False
         t = now or time.time()
@@ -44,45 +46,43 @@ class MemoryProvider(ABC):
     """Abstract base for memory storage backends."""
 
     @abstractmethod
-    def store(self, layer: str, key: str, value: Any,
-              ttl_seconds: Optional[float] = None, metadata: Optional[Dict] = None) -> None:
-        ...
+    def store(
+        self, layer: str, key: str, value: Any, ttl_seconds: float | None = None, metadata: dict | None = None
+    ) -> None: ...
 
     @abstractmethod
-    def retrieve(self, layer: str, key: str) -> Optional[Any]:
-        ...
+    def retrieve(self, layer: str, key: str) -> Any | None: ...
 
     @abstractmethod
-    def update(self, layer: str, key: str, value: Any) -> None:
-        ...
+    def update(self, layer: str, key: str, value: Any) -> None: ...
 
     @abstractmethod
-    def delete(self, layer: str, key: str) -> None:
-        ...
+    def delete(self, layer: str, key: str) -> None: ...
 
     @abstractmethod
-    def search(self, layer: str, query: str) -> List[MemoryEntry]:
-        ...
+    def search(self, layer: str, query: str) -> list[MemoryEntry]: ...
 
 
 class InMemoryMemoryProvider(MemoryProvider):
     """Phase 1: In-memory memory provider with per-layer LRU eviction."""
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: dict | None = None):
         config = config or {}
         self.max_entries_per_layer = config.get("max_entries_per_layer", 5000)
         self.default_ttl = config.get("ttl_seconds")
         # layer → {key: MemoryEntry}, using OrderedDict for LRU
-        self._layers: Dict[str, OrderedDict] = {
-            layer: OrderedDict() for layer in MemoryLayer.ALL
-        }
+        self._layers: dict[str, OrderedDict] = {layer: OrderedDict() for layer in MemoryLayer.ALL}
 
-    def store(self, layer: str, key: str, value: Any,
-              ttl_seconds: Optional[float] = None, metadata: Optional[Dict] = None) -> None:
+    def store(
+        self, layer: str, key: str, value: Any, ttl_seconds: float | None = None, metadata: dict | None = None
+    ) -> None:
         self._validate_layer(layer)
         entry = MemoryEntry(
-            key=key, value=value, layer=layer,
-            created_at=time.time(), updated_at=time.time(),
+            key=key,
+            value=value,
+            layer=layer,
+            created_at=time.time(),
+            updated_at=time.time(),
             ttl_seconds=ttl_seconds or self.default_ttl,
             metadata=metadata or {},
         )
@@ -93,7 +93,7 @@ class InMemoryMemoryProvider(MemoryProvider):
         layer_dict[key] = entry
         layer_dict.move_to_end(key)
 
-    def retrieve(self, layer: str, key: str) -> Optional[Any]:
+    def retrieve(self, layer: str, key: str) -> Any | None:
         self._validate_layer(layer)
         entry = self._layers[layer].get(key)
         if entry is None:
@@ -120,7 +120,7 @@ class InMemoryMemoryProvider(MemoryProvider):
         self._validate_layer(layer)
         self._layers[layer].pop(key, None)
 
-    def search(self, layer: str, query: str) -> List[MemoryEntry]:
+    def search(self, layer: str, query: str) -> list[MemoryEntry]:
         self._validate_layer(layer)
         results = []
         for entry in list(self._layers[layer].values()):
@@ -145,9 +145,9 @@ class ContextAssembler:
     def __init__(self, provider: MemoryProvider):
         self._provider = provider
 
-    def assemble(self, task_id: str, goal_id: str,
-                 project_id: Optional[str] = None,
-                 user_id: Optional[str] = None) -> Dict[str, Any]:
+    def assemble(
+        self, task_id: str, goal_id: str, project_id: str | None = None, user_id: str | None = None
+    ) -> dict[str, Any]:
         """Gather relevant context from all layers for a Task."""
         context = {
             "session": self._get_layer_entries(MemoryLayer.SESSION, goal_id),
@@ -158,7 +158,7 @@ class ContextAssembler:
         }
         return context
 
-    def _get_layer_entries(self, layer: str, scope: str) -> Dict[str, Any]:
+    def _get_layer_entries(self, layer: str, scope: str) -> dict[str, Any]:
         entries = self._provider.search(layer, scope)
         result = {}
         for e in entries:

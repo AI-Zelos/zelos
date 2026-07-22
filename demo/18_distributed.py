@@ -8,11 +8,18 @@ Demonstrates Phase 3 distributed runtime features:
 
 Run: python3 demo/18_distributed.py
 """
-import sys, os, time
+
+import os
+import sys
+import time
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from zelos.distributed import (
-    LeaderElection, WorkStealing, NodeRegistry, ClusterNode, LeaderState,
+    ClusterNode,
+    LeaderElection,
+    NodeRegistry,
+    WorkStealing,
 )
 
 
@@ -75,7 +82,7 @@ def main():
     print(f"   worker-c load: {worker_c.queue_size()} tasks ({worker_c.get_load_percent():.0f}%)")
 
     # Worker B steals from Worker A
-    print(f"\n   worker-b steals from worker-a...")
+    print("\n   worker-b steals from worker-a...")
     stolen = worker_b.steal_from(worker_a, max_count=4)
     print(f"   Stolen tasks: {len(stolen)}")
     print(f"   worker-a after: {worker_a.queue_size()} tasks ({worker_a.get_load_percent():.0f}%)")
@@ -83,7 +90,7 @@ def main():
 
     # Worker C also steals
     stolen2 = worker_c.steal_from(worker_a, max_count=2)
-    print(f"\n   worker-c steals from worker-a...")
+    print("\n   worker-c steals from worker-a...")
     print(f"   Stolen tasks: {len(stolen2)}")
     print(f"   worker-a after: {worker_a.queue_size()} tasks ({worker_a.get_load_percent():.0f}%)")
     print(f"   worker-c after: {worker_c.queue_size()} tasks ({worker_c.get_load_percent():.0f}%)")
@@ -95,52 +102,65 @@ def main():
 
     # Register cluster nodes
     cluster_nodes = [
-        ("zelos-primary", "10.0.1.10", 9876,
-         ["code-generation.python", "code-generation.typescript", "code-review.security"],
-         20),
-        ("zelos-worker-1", "10.0.1.11", 9876,
-         ["automation.browser", "data-analysis.sql"], 10),
-        ("zelos-worker-2", "10.0.1.12", 9876,
-         ["code-generation.python", "research.analysis"], 10),
-        ("zelos-worker-3", "10.0.1.13", 9876,
-         ["code-review.security", "automation.browser", "code-generation.rust"], 15),
+        (
+            "zelos-primary",
+            "10.0.1.10",
+            9876,
+            ["code-generation.python", "code-generation.typescript", "code-review.security"],
+            20,
+        ),
+        ("zelos-worker-1", "10.0.1.11", 9876, ["automation.browser", "data-analysis.sql"], 10),
+        ("zelos-worker-2", "10.0.1.12", 9876, ["code-generation.python", "research.analysis"], 10),
+        (
+            "zelos-worker-3",
+            "10.0.1.13",
+            9876,
+            ["code-review.security", "automation.browser", "code-generation.rust"],
+            15,
+        ),
     ]
 
     for nid, host, port, caps, cap in cluster_nodes:
         node = ClusterNode(
-            node_id=nid, host=host, port=port,
-            capabilities=caps, capacity=cap,
+            node_id=nid,
+            host=host,
+            port=port,
+            capabilities=caps,
+            capacity=cap,
         )
         nr.register(node)
         nr.heartbeat(nid)
 
     # Simulate one dead node
-    nr.heartbeat("zelos-worker-2",
-                 timestamp=time.time() - 3600)
+    nr.heartbeat("zelos-worker-2", timestamp=time.time() - 3600)
 
     print(f"   Cluster size: {nr.node_count()} nodes")
-    print(f"\n   Node details:")
+    print("\n   Node details:")
     for node in nr.list_nodes():
         status_icon = {"healthy": "🟢", "degraded": "🟡", "dead": "🔴", "unknown": "⚪"}
-        print(f"     {status_icon.get(node.status, '⚪')} {node.node_id:16s} "
-              f"({node.host}:{node.port}) — {node.status:8s} "
-              f"capacity={node.capacity}")
+        print(
+            f"     {status_icon.get(node.status, '⚪')} {node.node_id:16s} "
+            f"({node.host}:{node.port}) — {node.status:8s} "
+            f"capacity={node.capacity}"
+        )
 
     # Dead node detection
     dead = nr.detect_dead_nodes(timeout_seconds=60)
     print(f"\n   Dead nodes detected: {dead}")
 
     # Capability lookup
-    print(f"\n   Capability: 'code-generation.python'")
+    print("\n   Capability: 'code-generation.python'")
     python_nodes = nr.find_by_capability("code-generation.python")
     for n in python_nodes:
         print(f"     → {n.node_id} ({n.host}:{n.port}) — status: {n.status}")
 
     # Cluster status
     status = nr.cluster_status()
-    print(f"\n   Cluster status:")
+    print("\n   Cluster status:")
     print(f"     Total: {status['total_nodes']} nodes")
-    print(f"     Healthy: {status['healthy_nodes']} | Degraded: {status['degraded_nodes']} | Dead: {status['dead_nodes']}")
+    print(
+        f"     Healthy: {status['healthy_nodes']} | Degraded: {status['degraded_nodes']} | Dead: {status['dead_nodes']}"
+    )
     print(f"     Capacity: {status['total_capacity']} concurrent tasks")
     print(f"     Capabilities: {', '.join(status['cluster_capabilities'])}")
 
@@ -149,7 +169,7 @@ def main():
         node.stop()
 
     print(f"\n{'=' * 60}")
-    print(f"  Demo complete. Distributed runtime primitives working.")
+    print("  Demo complete. Distributed runtime primitives working.")
     print(f"{'=' * 60}")
 
 

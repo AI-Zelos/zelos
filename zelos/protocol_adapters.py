@@ -7,14 +7,14 @@ Adapters contain ZERO business logic. They are stateless, replaceable plugins.
 Architecture:
   Protocol Adapter (translate) → Runtime API → Kernel
 """
-import json
+
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional
 from abc import ABC, abstractmethod
-
+from typing import Any
 
 # ═══════════════════ Adapter Base ═══════════════════
+
 
 class ProtocolAdapter(ABC):
     """Base for all protocol adapters."""
@@ -30,6 +30,7 @@ class ProtocolAdapter(ABC):
 
 
 # ═══════════════════ gRPC Adapter ═══════════════════
+
 
 class GRPCAdapter(ProtocolAdapter):
     """
@@ -98,8 +99,12 @@ class GRPCAdapter(ProtocolAdapter):
             entrypoint=request.get("entrypoint", ""),
             capabilities=request.get("capabilities", []),
         )
-        return {"agent_id": agent_id, "status": "registered",
-                "heartbeat_interval_ms": 30000, "runtime_version": "0.2.0"}
+        return {
+            "agent_id": agent_id,
+            "status": "registered",
+            "heartbeat_interval_ms": 30000,
+            "runtime_version": "0.2.0",
+        }
 
     def AgentHeartbeat(self, request: dict) -> dict:
         if not self.runtime:
@@ -111,8 +116,8 @@ class GRPCAdapter(ProtocolAdapter):
         if not self.runtime:
             return {"status": "rejected"}
         ok = self.runtime._execution_engine.submit_result(
-            request.get("task_id", ""), request.get("agent_id", ""),
-            request.get("result", {}))
+            request.get("task_id", ""), request.get("agent_id", ""), request.get("result", {})
+        )
         return {"status": "accepted" if ok else "rejected"}
 
     def GetHealth(self, _=None) -> dict:
@@ -123,6 +128,7 @@ class GRPCAdapter(ProtocolAdapter):
 
 
 # ═══════════════════ WebSocket Adapter ═══════════════════
+
 
 class WebSocketAdapter(ProtocolAdapter):
     """
@@ -138,9 +144,9 @@ class WebSocketAdapter(ProtocolAdapter):
 
     def __init__(self, runtime=None):
         super().__init__(runtime)
-        self._clients: Dict[str, dict] = {}  # client_id → {subscriptions, queue}
+        self._clients: dict[str, dict] = {}  # client_id → {subscriptions, queue}
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
     def start(self) -> None:
         self._running = True
@@ -163,7 +169,7 @@ class WebSocketAdapter(ProtocolAdapter):
         if client_id in self._clients:
             self._clients[client_id]["subscriptions"].append(f"goal.{goal_id}")
 
-    def get_events(self, client_id: str) -> List[dict]:
+    def get_events(self, client_id: str) -> list[dict]:
         """Drain event queue for a client."""
         if client_id not in self._clients:
             return []
@@ -174,7 +180,7 @@ class WebSocketAdapter(ProtocolAdapter):
 
     def _on_event(self, event) -> Any:
         """Fan out event to interested clients."""
-        for cid, client in self._clients.items():
+        for _cid, client in self._clients.items():
             for sub in client["subscriptions"]:
                 # Simple match: "goal.g-001" matches events with correlation_id
                 parts = sub.split(".", 1)
@@ -183,10 +189,12 @@ class WebSocketAdapter(ProtocolAdapter):
                 elif event.event_type.startswith(sub):
                     client["queue"].append(event.to_dict())
         from zelos.event_bus import HandlerResult
+
         return HandlerResult.ACK
 
 
 # ═══════════════════ MCP Adapter ═══════════════════
+
 
 class MCPAdapter(ProtocolAdapter):
     """
@@ -200,7 +208,7 @@ class MCPAdapter(ProtocolAdapter):
 
     def __init__(self, runtime=None):
         super().__init__(runtime)
-        self._tool_registry: Dict[str, dict] = {}  # tool_name → {server, schema}
+        self._tool_registry: dict[str, dict] = {}  # tool_name → {server, schema}
 
     def start(self) -> None: ...
 
@@ -210,11 +218,14 @@ class MCPAdapter(ProtocolAdapter):
         """Register an MCP tool available to Agents."""
         self._tool_registry[name] = {"endpoint": server_endpoint, "schema": schema}
 
-    def list_tools(self) -> List[dict]:
+    def list_tools(self) -> list[dict]:
         """Return all registered MCP tools (MCP tools/list format)."""
         return [
-            {"name": name, "description": info["schema"].get("description", ""),
-             "inputSchema": info["schema"].get("input_schema", {})}
+            {
+                "name": name,
+                "description": info["schema"].get("description", ""),
+                "inputSchema": info["schema"].get("input_schema", {}),
+            }
             for name, info in self._tool_registry.items()
         ]
 
@@ -228,6 +239,7 @@ class MCPAdapter(ProtocolAdapter):
 
 
 # ═══════════════════ A2A Adapter ═══════════════════
+
 
 class A2AAdapter(ProtocolAdapter):
     """
@@ -250,7 +262,7 @@ class A2AAdapter(ProtocolAdapter):
 
     def __init__(self, runtime=None):
         super().__init__(runtime)
-        self._external_agents: Dict[str, dict] = {}
+        self._external_agents: dict[str, dict] = {}
 
     def start(self) -> None: ...
 
@@ -268,13 +280,12 @@ class A2AAdapter(ProtocolAdapter):
             "name": agent.get("name", ""),
             "description": f"Zelos Agent providing {len(agent.get('capabilities', []))} capabilities",
             "skills": [
-                {"name": c["name"], "description": c.get("description", "")}
-                for c in agent.get("capabilities", [])
+                {"name": c["name"], "description": c.get("description", "")} for c in agent.get("capabilities", [])
             ],
-            "endpoint": f"zelos://agents/{agent.get('agent_id','')}",
+            "endpoint": f"zelos://agents/{agent.get('agent_id', '')}",
         }
 
-    def receive_external_task(self, task_data: dict) -> Optional[str]:
+    def receive_external_task(self, task_data: dict) -> str | None:
         """Receive an A2A Task from an external system → create Zelos Task."""
         if not self.runtime:
             return None
@@ -287,6 +298,7 @@ class A2AAdapter(ProtocolAdapter):
     def register_external_agent(self, agent_card: dict) -> str:
         """Register an external (non-Zelos) Agent via its A2A Card."""
         import uuid
+
         aid = str(uuid.uuid4())
         self._external_agents[aid] = {
             "card": agent_card,

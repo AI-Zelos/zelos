@@ -8,10 +8,15 @@ Demonstrates Phase 3 security features:
 
 Run: python3 demo/13_security.py
 """
-import sys, os, json, time
+
+import json
+import os
+import sys
+import time
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from zelos.security import AccessControl, AuditLogger, APIKeyManager
+from zelos.security import AccessControl, APIKeyManager, AuditLogger
 
 
 def main():
@@ -106,7 +111,7 @@ def main():
         print(f"   - {k['key_hash']}: {k['role']} ({'revoked' if k['revoked'] else 'active'})")
 
     print(f"\n{'=' * 60}")
-    print(f"  Demo complete. All security primitives working.")
+    print("  Demo complete. All security primitives working.")
     print(f"{'=' * 60}")
 
 

@@ -1,13 +1,14 @@
 """
 Execution Engine — Dispatches Tasks to Agents, monitors lifecycle, enforces timeouts.
 """
-import time
-import threading
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
 
-from .task_graph import Task, TaskStatus, TaskGraphEngine
-from .event_bus import EventBus, Event
+import threading
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+
+from .event_bus import EventBus
+from .task_graph import TaskGraphEngine, TaskStatus
 
 
 @dataclass
@@ -27,10 +28,10 @@ class AgentState:
     operational_state: str = "idle"
     last_heartbeat_at: float = 0.0
     heartbeat_interval_ms: int = 30000
-    endpoint: Optional[str] = None
+    endpoint: str | None = None
     max_concurrent_tasks: int = 5
-    current_tasks: List[str] = field(default_factory=list)
-    capabilities: List[dict] = field(default_factory=list)
+    current_tasks: list[str] = field(default_factory=list)
+    capabilities: list[dict] = field(default_factory=list)
     historical_success_rate: float = 0.0
     total_completed: int = 0
     total_failed: int = 0
@@ -42,12 +43,12 @@ class ExecutionEngine:
     def __init__(self, task_graph: TaskGraphEngine, event_bus: EventBus):
         self._task_graph = task_graph
         self._event_bus = event_bus
-        self._in_flight: Dict[str, InFlightTask] = {}  # task_id → InFlightTask
-        self._agents: Dict[str, AgentState] = {}
-        self._agent_dispatch: Optional[Callable] = None  # Callback: (agent_id, task) → bool
-        self._agent_cancel: Optional[Callable] = None
+        self._in_flight: dict[str, InFlightTask] = {}  # task_id → InFlightTask
+        self._agents: dict[str, AgentState] = {}
+        self._agent_dispatch: Callable | None = None  # Callback: (agent_id, task) → bool
+        self._agent_cancel: Callable | None = None
         self._lock = threading.RLock()
-        self._monitor_thread: Optional[threading.Thread] = None
+        self._monitor_thread: threading.Thread | None = None
         self._running = False
 
     # ── Agent Management ──
@@ -81,10 +82,10 @@ class ExecutionEngine:
                 if self._in_flight[tid].agent_id == agent_id:
                     self.cancel_task(tid)
 
-    def get_agent(self, agent_id: str) -> Optional[AgentState]:
+    def get_agent(self, agent_id: str) -> AgentState | None:
         return self._agents.get(agent_id)
 
-    def list_agents(self) -> List[AgentState]:
+    def list_agents(self) -> list[AgentState]:
         return list(self._agents.values())
 
     # ── Dispatch ──
@@ -209,5 +210,5 @@ class ExecutionEngine:
         return len(self._in_flight)
 
     @property
-    def in_flight_task_ids(self) -> List[str]:
+    def in_flight_task_ids(self) -> list[str]:
         return list(self._in_flight.keys())

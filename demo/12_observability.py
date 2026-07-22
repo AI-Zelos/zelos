@@ -6,10 +6,14 @@ Demo 12: 可观测性 — 结构化日志 + 指标 + 追踪
 
 用法: python3 demo/12_observability.py
 """
-import sys, os, json
+
+import json
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from zelos.observability import StructuredLogger, MetricsCollector, Tracer
+from zelos.observability import MetricsCollector, StructuredLogger, Tracer
 
 
 def main():
@@ -21,11 +25,13 @@ def main():
     print("\n📝 结构化日志 (JSON):")
     logger = StructuredLogger(level="info", format="json")
     log_lines = []
-    for msg, ctx in [("Runtime started", {"version": "0.2.0"}),
-                      ("Goal submitted", {"goal_id": "g-001", "priority": "high"}),
-                      ("Task dispatched", {"task_id": "t1", "agent": "ClaudeCode"}),
-                      ("Task completed", {"task_id": "t1", "duration_ms": 3500}),
-                      ("Goal completed", {"goal_id": "g-001", "total_tasks": 3})]:
+    for msg, ctx in [
+        ("Runtime started", {"version": "0.2.0"}),
+        ("Goal submitted", {"goal_id": "g-001", "priority": "high"}),
+        ("Task dispatched", {"task_id": "t1", "agent": "ClaudeCode"}),
+        ("Task completed", {"task_id": "t1", "duration_ms": 3500}),
+        ("Goal completed", {"goal_id": "g-001", "total_tasks": 3}),
+    ]:
         line = logger.info(msg, **ctx)
         if line:
             parsed = json.loads(line)
@@ -38,10 +44,12 @@ def main():
     mc = MetricsCollector()
 
     c = mc.counter("task_completed_total", "Total completed tasks")
-    for _ in range(42): c.inc()
+    for _ in range(42):
+        c.inc()
 
     f = mc.counter("task_failed_total", "Total failed tasks")
-    for _ in range(3): f.inc()
+    for _ in range(3):
+        f.inc()
 
     g = mc.gauge("agents_connected", "Currently connected agents")
     g.set(4)
@@ -89,7 +97,7 @@ def main():
         if s.parent_id:
             print(f"       parent={s.parent_id}")
 
-    print(f"\n✅ Demo 12 完成")
+    print("\n✅ Demo 12 完成")
 
 
 if __name__ == "__main__":

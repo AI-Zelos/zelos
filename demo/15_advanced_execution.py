@@ -8,14 +8,18 @@ Demonstrates Phase 3 advanced execution features:
 
 Run: python3 demo/15_advanced_execution.py
 """
-import sys, os, time
+
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from zelos.task_graph import Task, TaskStatus, TaskGraphEngine
 from zelos.advanced_execution import (
-    DynamicPlanModifier, SubGoalManager, HumanInTheLoop,
-    ApprovalStatus,
+    DynamicPlanModifier,
+    HumanInTheLoop,
+    SubGoalManager,
 )
+from zelos.task_graph import Task, TaskGraphEngine
 
 
 def main():
@@ -30,10 +34,14 @@ def main():
 
     # Create initial plan: 3 tasks
     for i in range(1, 4):
-        tg.add_task(Task(
-            task_id=f"t{i}", plan_id="demo-plan",
-            description=f"Task {i}", required_capability=f"cap.{i}",
-        ))
+        tg.add_task(
+            Task(
+                task_id=f"t{i}",
+                plan_id="demo-plan",
+                description=f"Task {i}",
+                required_capability=f"cap.{i}",
+            )
+        )
 
     print(f"   Initial plan: {len(tg.list_tasks())} tasks")
 
@@ -60,24 +68,27 @@ def main():
     # ── 2. Sub-Goal Spawning ──
     print("\n🎯 2. Sub-Goal Spawning")
     tg2 = TaskGraphEngine()
-    tg2.add_task(Task(task_id="main-1", plan_id="main-plan",
-                      description="Main research task",
-                      required_capability="research.analysis"))
+    tg2.add_task(
+        Task(
+            task_id="main-1",
+            plan_id="main-plan",
+            description="Main research task",
+            required_capability="research.analysis",
+        )
+    )
 
     sgm = SubGoalManager(tg2)
 
     # Parent task spawns sub-goals
-    sub1 = sgm.spawn_sub_goal("main-1", "Investigate competitor features",
-                              budget=25.0, num_tasks=2)
-    sub2 = sgm.spawn_sub_goal("main-1", "Benchmark performance metrics",
-                              budget=15.0, required_capability="data-analysis.sql")
-    sub3 = sgm.spawn_sub_goal("main-1", "Generate comparison report",
-                              budget=10.0)
+    sub1 = sgm.spawn_sub_goal("main-1", "Investigate competitor features", budget=25.0, num_tasks=2)
+    sub2 = sgm.spawn_sub_goal(
+        "main-1", "Benchmark performance metrics", budget=15.0, required_capability="data-analysis.sql"
+    )
+    sub3 = sgm.spawn_sub_goal("main-1", "Generate comparison report", budget=10.0)
 
     print(f"   Sub-goals spawned: {sgm.get_sub_goal_count()}")
     for sg in sgm.list_sub_goals():
-        print(f"   - {sg['sub_goal_id']}: {sg['description'][:50]} "
-              f"({len(sg['task_ids'])} tasks, ${sg['budget']})")
+        print(f"   - {sg['sub_goal_id']}: {sg['description'][:50]} ({len(sg['task_ids'])} tasks, ${sg['budget']})")
 
     # Mark some as complete, one as failed
     sgm.mark_sub_goal_completed(sub1["sub_goal_id"])
@@ -128,18 +139,19 @@ def main():
     print(f"   req1 (deploy-prod) after bob: {req1.status.value}")
 
     # Request changes
-    hitl.request_changes(req3.request_id, "dba-team",
-                         "Please add an index on email column too")
+    hitl.request_changes(req3.request_id, "dba-team", "Please add an index on email column too")
     print(f"   req3 (schema-migration) status: {req3.status.value} — feedback: {req3.resolution_comment}")
 
     # ── 4. Audit Trail ──
-    print(f"\n📋 Approval Audit Trail for req1:")
+    print("\n📋 Approval Audit Trail for req1:")
     for entry in hitl.get_history(req1.request_id):
-        print(f"   [{entry['action']}] at {entry['timestamp']:.0f} — "
-              f"{entry.get('approver', 'system')}: {entry.get('comment', entry.get('detail', ''))}")
+        print(
+            f"   [{entry['action']}] at {entry['timestamp']:.0f} — "
+            f"{entry.get('approver', 'system')}: {entry.get('comment', entry.get('detail', ''))}"
+        )
 
     print(f"\n{'=' * 60}")
-    print(f"  Demo complete. Advanced execution features working.")
+    print("  Demo complete. Advanced execution features working.")
     print(f"{'=' * 60}")
 
 

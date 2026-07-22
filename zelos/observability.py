@@ -3,16 +3,17 @@ Phase 2 Observability — Structured Logging, Metrics, Tracing.
 
 OpenTelemetry-compatible format. Prometheus export for metrics.
 """
+
 import json
-import time
 import math
 import threading
-from collections import defaultdict
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
-
+from typing import Any, Optional
 
 # ═══════════════════ Structured Logging ═══════════════════
+
 
 class StructuredLogger:
     """JSON-formatted structured logger with level filtering."""
@@ -23,12 +24,12 @@ class StructuredLogger:
         self.level = level
         self.format = format
         self._min_level = self.LEVELS.get(level, 20)
-        self._handlers: List[Callable] = []
+        self._handlers: list[Callable] = []
 
     def add_handler(self, handler: Callable[[dict], None]) -> None:
         self._handlers.append(handler)
 
-    def _log(self, level: str, message: str, **context) -> Optional[str]:
+    def _log(self, level: str, message: str, **context) -> str | None:
         if self.LEVELS.get(level, 0) < self._min_level:
             return None
 
@@ -49,24 +50,26 @@ class StructuredLogger:
 
         return line
 
-    def debug(self, message: str, **ctx) -> Optional[str]:
+    def debug(self, message: str, **ctx) -> str | None:
         return self._log("debug", message, **ctx)
 
-    def info(self, message: str, **ctx) -> Optional[str]:
+    def info(self, message: str, **ctx) -> str | None:
         return self._log("info", message, **ctx)
 
-    def warn(self, message: str, **ctx) -> Optional[str]:
+    def warn(self, message: str, **ctx) -> str | None:
         return self._log("warn", message, **ctx)
 
-    def error(self, message: str, **ctx) -> Optional[str]:
+    def error(self, message: str, **ctx) -> str | None:
         return self._log("error", message, **ctx)
 
 
 # ═══════════════════ Metrics ═══════════════════
 
+
 class Counter:
     """Monotonically increasing counter."""
-    def __init__(self, name: str, help: str = "", labels: Optional[Dict] = None):
+
+    def __init__(self, name: str, help: str = "", labels: dict | None = None):
         self.name = name
         self.help = help
         self._value: float = 0
@@ -82,7 +85,8 @@ class Counter:
 
 class Gauge:
     """Value that can go up and down."""
-    def __init__(self, name: str, help: str = "", labels: Optional[Dict] = None):
+
+    def __init__(self, name: str, help: str = "", labels: dict | None = None):
         self.name = name
         self.help = help
         self._value: float = 0
@@ -104,11 +108,12 @@ class Gauge:
 
 class Histogram:
     """Distribution of values with percentile calculation."""
-    def __init__(self, name: str, help: str = "", buckets: Optional[List[float]] = None):
+
+    def __init__(self, name: str, help: str = "", buckets: list[float] | None = None):
         self.name = name
         self.help = help
         self.buckets = buckets or [0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
-        self._values: List[float] = []
+        self._values: list[float] = []
         self._lock = threading.Lock()
 
     def observe(self, value: float) -> None:
@@ -136,9 +141,9 @@ class MetricsCollector:
     """Central metrics registry with Prometheus export support."""
 
     def __init__(self):
-        self._counters: Dict[str, Counter] = {}
-        self._gauges: Dict[str, Gauge] = {}
-        self._histograms: Dict[str, Histogram] = {}
+        self._counters: dict[str, Counter] = {}
+        self._gauges: dict[str, Gauge] = {}
+        self._histograms: dict[str, Histogram] = {}
         self._lock = threading.Lock()
 
     def counter(self, name: str, help: str = "") -> Counter:
@@ -185,18 +190,21 @@ class MetricsCollector:
         return {
             "counters": {n: c.value for n, c in self._counters.items()},
             "gauges": {n: g.value for n, g in self._gauges.items()},
-            "histograms": {n: {"count": h.count, "p50": h.percentile(50), "p95": h.percentile(95),
-                               "p99": h.percentile(99)} for n, h in self._histograms.items()},
+            "histograms": {
+                n: {"count": h.count, "p50": h.percentile(50), "p95": h.percentile(95), "p99": h.percentile(99)}
+                for n, h in self._histograms.items()
+            },
         }
 
 
 # ═══════════════════ Tracing ═══════════════════
 
+
 @dataclass
 class SpanEvent:
     name: str
     timestamp: float = 0.0
-    attributes: Dict[str, Any] = field(default_factory=dict)
+    attributes: dict[str, Any] = field(default_factory=dict)
 
 
 class Span:
@@ -205,9 +213,9 @@ class Span:
         self.span_id = str(hash(f"{name}{time.time()}"))[-16:]
         self.parent_id = parent.span_id if parent else None
         self.start_time = time.time()
-        self.end_time: Optional[float] = None
-        self.events: List[SpanEvent] = []
-        self.attributes: Dict[str, Any] = {}
+        self.end_time: float | None = None
+        self.events: list[SpanEvent] = []
+        self.attributes: dict[str, Any] = {}
 
     def add_event(self, name: str, **attributes) -> None:
         self.events.append(SpanEvent(name, time.time(), attributes))
@@ -229,9 +237,9 @@ class Tracer:
     """Simple tracer with span hierarchy."""
 
     def __init__(self):
-        self._spans: List[Span] = []
-        self._current: Optional[Span] = None
-        self._stack: List[Span] = []
+        self._spans: list[Span] = []
+        self._current: Span | None = None
+        self._stack: list[Span] = []
 
     def start_span(self, name: str) -> Span:
         parent = self._stack[-1] if self._stack else None
@@ -241,7 +249,7 @@ class Tracer:
         self._current = span
         return span
 
-    def end_span(self) -> Optional[Span]:
+    def end_span(self) -> Span | None:
         if self._stack:
             span = self._stack.pop()
             span.end()
@@ -249,5 +257,5 @@ class Tracer:
             return span
         return None
 
-    def get_spans(self) -> List[Span]:
+    def get_spans(self) -> list[Span]:
         return list(self._spans)

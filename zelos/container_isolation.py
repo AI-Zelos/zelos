@@ -7,35 +7,37 @@ Phase 3: Full container execution via subprocess + remote HTTP dispatch.
   - RemotePlugin: HTTP-based remote plugin execution with retry
   - ContainerIsolationFactory: Create the right isolation mode
 """
-import json
-import time
-import threading
-import subprocess
-import shutil
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
 
+import json
+import shutil
+import subprocess
+import threading
+import time
+from dataclasses import dataclass, field
+from typing import Any
 
 # ═══════════════════ Container Plugin Config ═══════════════════
+
 
 @dataclass
 class ContainerPluginConfig:
     """Configuration for running a plugin in a container."""
+
     plugin_id: str
     image: str
     runtime: str = "docker"
-    command: Optional[List[str]] = None
-    entrypoint: Optional[str] = None
-    env: Dict[str, str] = field(default_factory=dict)
-    mounts: Dict[str, str] = field(default_factory=dict)
-    ports: Dict[int, int] = field(default_factory=dict)
+    command: list[str] | None = None
+    entrypoint: str | None = None
+    env: dict[str, str] = field(default_factory=dict)
+    mounts: dict[str, str] = field(default_factory=dict)
+    ports: dict[int, int] = field(default_factory=dict)
     cpu_limit: float = 1.0
     memory_limit_mb: int = 512
     network_mode: str = "bridge"
     restart_policy: str = "unless-stopped"
-    labels: Dict[str, str] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
 
-    def to_docker_command(self) -> List[str]:
+    def to_docker_command(self) -> list[str]:
         """Generate the docker/podman run command."""
         cmd = [self.runtime, "run", "--rm"]
         cmd.extend(["--name", f"zelos-plugin-{self.plugin_id}"])
@@ -60,15 +62,20 @@ class ContainerPluginConfig:
 
     def to_dict(self) -> dict:
         return {
-            "plugin_id": self.plugin_id, "image": self.image,
-            "runtime": self.runtime, "command": self.command,
-            "env": self.env, "mounts": self.mounts,
-            "cpu_limit": self.cpu_limit, "memory_limit_mb": self.memory_limit_mb,
+            "plugin_id": self.plugin_id,
+            "image": self.image,
+            "runtime": self.runtime,
+            "command": self.command,
+            "env": self.env,
+            "mounts": self.mounts,
+            "cpu_limit": self.cpu_limit,
+            "memory_limit_mb": self.memory_limit_mb,
             "network_mode": self.network_mode,
         }
 
 
 # ═══════════════════ Container Runner (Phase 3: actual execution) ═══════════════════
+
 
 class ContainerRunner:
     """Actually runs and manages container plugins via subprocess.
@@ -79,7 +86,7 @@ class ContainerRunner:
 
     def __init__(self, config: ContainerPluginConfig):
         self.config = config
-        self._process: Optional[subprocess.Popen] = None
+        self._process: subprocess.Popen | None = None
         self._running = False
 
     def start(self) -> bool:
@@ -88,8 +95,7 @@ class ContainerRunner:
             return False
         cmd = self.config.to_docker_command()
         try:
-            self._process = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self._process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             self._running = True
             return True
         except (subprocess.SubprocessError, FileNotFoundError, OSError):
@@ -100,8 +106,7 @@ class ContainerRunner:
         if not self._process:
             return
         try:
-            stop_cmd = [self.config.runtime, "stop",
-                        f"zelos-plugin-{self.config.plugin_id}"]
+            stop_cmd = [self.config.runtime, "stop", f"zelos-plugin-{self.config.plugin_id}"]
             subprocess.run(stop_cmd, timeout=timeout_seconds, capture_output=True)
         except (subprocess.SubprocessError, FileNotFoundError):
             if self._process:
@@ -119,10 +124,8 @@ class ContainerRunner:
         if not self.is_running():
             return False
         try:
-            inspect_cmd = [self.config.runtime, "inspect",
-                           f"zelos-plugin-{self.config.plugin_id}"]
-            result = subprocess.run(inspect_cmd, capture_output=True,
-                                    text=True, timeout=5)
+            inspect_cmd = [self.config.runtime, "inspect", f"zelos-plugin-{self.config.plugin_id}"]
+            result = subprocess.run(inspect_cmd, capture_output=True, text=True, timeout=5)
             return result.returncode == 0
         except (subprocess.SubprocessError, FileNotFoundError):
             return False
@@ -134,16 +137,15 @@ class ContainerRunner:
         if not self._process:
             return ""
         try:
-            logs_cmd = [self.config.runtime, "logs", "--tail", str(tail),
-                        f"zelos-plugin-{self.config.plugin_id}"]
-            result = subprocess.run(logs_cmd, capture_output=True,
-                                    text=True, timeout=5)
+            logs_cmd = [self.config.runtime, "logs", "--tail", str(tail), f"zelos-plugin-{self.config.plugin_id}"]
+            result = subprocess.run(logs_cmd, capture_output=True, text=True, timeout=5)
             return result.stdout
         except (subprocess.SubprocessError, FileNotFoundError):
             return ""
 
 
 # ═══════════════════ Remote Plugin ═══════════════════
+
 
 class RemotePlugin:
     """Plugin that executes on a remote host via HTTP.
@@ -157,13 +159,17 @@ class RemotePlugin:
     Phase 3: dispatch() called from Runtime orchestrator for remote agents.
     """
 
-    def __init__(self, plugin_id: str, endpoint: str,
-                 health_endpoint: str = "/health",
-                 task_endpoint: str = "/execute",
-                 callback_url: Optional[str] = None,
-                 timeout_seconds: float = 30.0,
-                 max_retries: int = 3,
-                 retry_backoff_ms: int = 1000):
+    def __init__(
+        self,
+        plugin_id: str,
+        endpoint: str,
+        health_endpoint: str = "/health",
+        task_endpoint: str = "/execute",
+        callback_url: str | None = None,
+        timeout_seconds: float = 30.0,
+        max_retries: int = 3,
+        retry_backoff_ms: int = 1000,
+    ):
         self.plugin_id = plugin_id
         self.endpoint = endpoint.rstrip("/")
         self.health_endpoint = health_endpoint
@@ -188,6 +194,7 @@ class RemotePlugin:
     def health_check(self) -> bool:
         """Check if remote plugin is healthy via HTTP GET."""
         import urllib.request
+
         try:
             req = urllib.request.Request(self.health_url, method="GET")
             urllib.request.urlopen(req, timeout=5)
@@ -200,17 +207,17 @@ class RemotePlugin:
                 self._healthy = False
             return False
 
-    def dispatch(self, task: dict) -> Optional[dict]:
+    def dispatch(self, task: dict) -> dict | None:
         """Dispatch a task to the remote plugin via HTTP POST. Returns result."""
         import urllib.request
+
         last_error = None
         for attempt in range(self.max_retries):
             try:
                 payload = json.dumps(task).encode("utf-8")
                 req = urllib.request.Request(
-                    self.task_url, data=payload,
-                    headers={"Content-Type": "application/json"},
-                    method="POST")
+                    self.task_url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
+                )
                 resp = urllib.request.urlopen(req, timeout=self.timeout_seconds)
                 return json.loads(resp.read().decode("utf-8"))
             except Exception as e:
@@ -219,8 +226,7 @@ class RemotePlugin:
                     time.sleep(self.retry_backoff_ms / 1000 * (attempt + 1))
         return {
             "status": "failed",
-            "error": {"code": "remote_dispatch_failed",
-                      "message": str(last_error), "attempts": self.max_retries}
+            "error": {"code": "remote_dispatch_failed", "message": str(last_error), "attempts": self.max_retries},
         }
 
     @property
@@ -229,8 +235,10 @@ class RemotePlugin:
 
     def to_dict(self) -> dict:
         return {
-            "plugin_id": self.plugin_id, "endpoint": self.endpoint,
-            "status": self._status, "healthy": self._healthy,
+            "plugin_id": self.plugin_id,
+            "endpoint": self.endpoint,
+            "status": self._status,
+            "healthy": self._healthy,
             "last_health_check": self._last_health_check,
             "timeout_seconds": self.timeout_seconds,
             "max_retries": self.max_retries,
@@ -238,6 +246,7 @@ class RemotePlugin:
 
 
 # ═══════════════════ Factory ═══════════════════
+
 
 class ContainerIsolationFactory:
     """Create plugin isolation instances by type."""
@@ -249,7 +258,8 @@ class ContainerIsolationFactory:
         if mode not in ContainerIsolationFactory.ISOLATION_MODES:
             raise ValueError(
                 f"Unknown isolation mode: '{mode}'. "
-                f"Supported: {', '.join(sorted(ContainerIsolationFactory.ISOLATION_MODES))}")
+                f"Supported: {', '.join(sorted(ContainerIsolationFactory.ISOLATION_MODES))}"
+            )
         if mode == "remote":
             if not isinstance(config, RemotePlugin):
                 raise TypeError("Remote mode requires a RemotePlugin instance")
@@ -263,5 +273,5 @@ class ContainerIsolationFactory:
             return config
 
     @staticmethod
-    def list_modes() -> List[str]:
+    def list_modes() -> list[str]:
         return sorted(ContainerIsolationFactory.ISOLATION_MODES)

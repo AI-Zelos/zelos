@@ -3,12 +3,12 @@ Event Bus — In-process pub/sub event system.
 
 Phase 1: In-memory ring buffer, at-least-once delivery, prefix pattern matching.
 """
-import uuid
-import time
+
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
 from enum import Enum
+from typing import Any
 
 
 class HandlerResult(Enum):
@@ -25,9 +25,9 @@ class Event:
     timestamp: float
     correlation_id: str
     data_version: str = "1.0.0"
-    payload: Dict[str, Any] = field(default_factory=dict)
-    causation_id: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
+    causation_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     _frozen: bool = field(default=False, repr=False)
 
@@ -60,9 +60,9 @@ class EventBus:
     """In-process Event Bus. Central communication backbone."""
 
     def __init__(self, max_events: int = 10000):
-        self._subscribers: Dict[str, List[Callable]] = {}  # exact type → handlers
-        self._pattern_subscribers: List[tuple] = []  # (pattern, handler)
-        self._correlation_subscribers: Dict[str, List[Callable]] = {}  # corr_id → handlers
+        self._subscribers: dict[str, list[Callable]] = {}  # exact type → handlers
+        self._pattern_subscribers: list[tuple] = []  # (pattern, handler)
+        self._correlation_subscribers: dict[str, list[Callable]] = {}  # corr_id → handlers
         self._store = InMemoryEventStore(max_events=max_events)
         self._lock = threading.RLock()
 
@@ -163,7 +163,7 @@ class InMemoryEventStore:
     """Phase 1: In-memory ring buffer event store."""
 
     def __init__(self, max_events: int = 10000):
-        self._events: List[Event] = []
+        self._events: list[Event] = []
         self._event_ids: set = set()
         self._max_events = max_events
         self._position = 0
@@ -178,13 +178,13 @@ class InMemoryEventStore:
         self._events.append(event)
         self._event_ids.add(event.event_id)
 
-    def read_from(self, from_position: int) -> List[Event]:
+    def read_from(self, from_position: int) -> list[Event]:
         idx = from_position - self._position
         if idx < 0:
             idx = 0
         return list(self._events[idx:])
 
-    def get_by_correlation(self, correlation_id: str) -> List[Event]:
+    def get_by_correlation(self, correlation_id: str) -> list[Event]:
         return [e for e in self._events if e.correlation_id == correlation_id]
 
     def __len__(self):

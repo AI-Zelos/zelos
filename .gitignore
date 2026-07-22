@@ -1,3 +1,13 @@
 .claude/
 __pycache__/
 .DS_Store
+.pytest_cache/
+.coverage
+coverage.xml
+*.egg-info/
+dist/
+build/
+*.pyc
+.venv/
+venv/
+data/

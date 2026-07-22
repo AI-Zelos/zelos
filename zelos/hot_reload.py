@@ -11,16 +11,17 @@ Upgrade strategies:
   - BLUE_GREEN: Spin up new version, then cut over
   - CANARY: Route x% of traffic to new version
 """
-import os
-import time
-import threading
-import hashlib
-from enum import Enum
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set
 
+import os
+import threading
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 # ═══════════════════ Upgrade Strategy ═══════════════════
+
 
 class UpgradeStrategy(Enum):
     ROLLING = "rolling"
@@ -31,9 +32,11 @@ class UpgradeStrategy(Enum):
 
 # ═══════════════════ Plugin Version ═══════════════════
 
+
 @dataclass
 class PluginVersion:
     """A specific version of a plugin."""
+
     plugin_id: str
     version: str
     entrypoint: str
@@ -41,9 +44,9 @@ class PluginVersion:
     status: str = "active"  # active, draining, drained, rolled_back
     canary_percent: int = 0
     created_at: float = field(default_factory=time.time)
-    activated_at: Optional[float] = None
-    drained_at: Optional[float] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    activated_at: float | None = None
+    drained_at: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -61,6 +64,7 @@ class PluginVersion:
 
 # ═══════════════════ File Watcher ═══════════════════
 
+
 class FileWatcher:
     """Watch a directory for file changes using polling.
 
@@ -68,18 +72,19 @@ class FileWatcher:
     Supports debouncing — multiple rapid changes → single event.
     """
 
-    def __init__(self, watch_dir: str, patterns: Optional[List[str]] = None,
-                 poll_interval_ms: int = 500, debounce_ms: int = 300):
+    def __init__(
+        self, watch_dir: str, patterns: list[str] | None = None, poll_interval_ms: int = 500, debounce_ms: int = 300
+    ):
         self.watch_dir = os.path.abspath(watch_dir)
         self.patterns = patterns or ["*.py"]
         self.poll_interval_ms = poll_interval_ms
         self.debounce_ms = debounce_ms
         self._running = False
-        self._thread: Optional[threading.Thread] = None
-        self._file_states: Dict[str, float] = {}  # filename → last modified
-        self._changes: List[Dict[str, Any]] = []
+        self._thread: threading.Thread | None = None
+        self._file_states: dict[str, float] = {}  # filename → last modified
+        self._changes: list[dict[str, Any]] = []
         self._lock = threading.RLock()
-        self._callbacks: List[Callable] = []
+        self._callbacks: list[Callable] = []
 
     def start(self) -> None:
         """Start watching the directory."""
@@ -104,7 +109,7 @@ class FileWatcher:
         """Register a callback: callback(event_dict) when file changes."""
         self._callbacks.append(callback)
 
-    def get_changes(self) -> List[Dict[str, Any]]:
+    def get_changes(self) -> list[dict[str, Any]]:
         """Get and clear pending changes."""
         with self._lock:
             changes = list(self._changes)
@@ -126,18 +131,19 @@ class FileWatcher:
     def _matches_pattern(self, filename: str) -> bool:
         """Check if filename matches any watch pattern."""
         import fnmatch
+
         return any(fnmatch.fnmatch(filename, p) for p in self.patterns)
 
     def _watch_loop(self) -> None:
         """Polling loop."""
-        last_event_time: Dict[str, float] = {}
+        last_event_time: dict[str, float] = {}
         while self._running:
             try:
                 if not os.path.isdir(self.watch_dir):
                     time.sleep(self.poll_interval_ms / 1000)
                     continue
 
-                current_files: Set[str] = set()
+                current_files: set[str] = set()
                 for entry in os.listdir(self.watch_dir):
                     filepath = os.path.join(self.watch_dir, entry)
                     if os.path.isfile(filepath) and self._matches_pattern(entry):
@@ -160,8 +166,7 @@ class FileWatcher:
                 # Detect deleted files
                 for filename in list(self._file_states.keys()):
                     if filename not in current_files:
-                        self._record_change("deleted", filename,
-                                          os.path.join(self.watch_dir, filename))
+                        self._record_change("deleted", filename, os.path.join(self.watch_dir, filename))
                         del self._file_states[filename]
 
             except OSError:
@@ -187,6 +192,7 @@ class FileWatcher:
 
 # ═══════════════════ Hot Reload Manager ═══════════════════
 
+
 class HotReloadManager:
     """Manages plugin version lifecycle and hot upgrades.
 
@@ -198,15 +204,15 @@ class HotReloadManager:
     """
 
     def __init__(self, upgrade_strategy: UpgradeStrategy = UpgradeStrategy.ROLLING):
-        self._versions: Dict[str, Dict[str, PluginVersion]] = {}  # plugin_id → {version → PluginVersion}
-        self._active: Dict[str, str] = {}  # plugin_id → active_version
+        self._versions: dict[str, dict[str, PluginVersion]] = {}  # plugin_id → {version → PluginVersion}
+        self._active: dict[str, str] = {}  # plugin_id → active_version
         self.upgrade_strategy = upgrade_strategy
-        self._upgrade_history: List[Dict[str, Any]] = []
+        self._upgrade_history: list[dict[str, Any]] = []
         self._lock = threading.RLock()
 
-    def register_version(self, plugin_id: str, version: str, entrypoint: str,
-                         checksum: str = "", canary_percent: int = 0,
-                         **metadata) -> PluginVersion:
+    def register_version(
+        self, plugin_id: str, version: str, entrypoint: str, checksum: str = "", canary_percent: int = 0, **metadata
+    ) -> PluginVersion:
         """Register a new plugin version. The latest version becomes active."""
         pv = PluginVersion(
             plugin_id=plugin_id,
@@ -224,33 +230,35 @@ class HotReloadManager:
             self._versions[plugin_id][version] = pv
             self._active[plugin_id] = version
 
-            self._upgrade_history.append({
-                "plugin_id": plugin_id,
-                "version": version,
-                "action": "registered",
-                "timestamp": time.time(),
-            })
+            self._upgrade_history.append(
+                {
+                    "plugin_id": plugin_id,
+                    "version": version,
+                    "action": "registered",
+                    "timestamp": time.time(),
+                }
+            )
 
         return pv
 
-    def get_version(self, plugin_id: str, version: str) -> Optional[PluginVersion]:
+    def get_version(self, plugin_id: str, version: str) -> PluginVersion | None:
         """Get a specific plugin version."""
         versions = self._versions.get(plugin_id, {})
         return versions.get(version)
 
-    def get_active_version(self, plugin_id: str) -> Optional[PluginVersion]:
+    def get_active_version(self, plugin_id: str) -> PluginVersion | None:
         """Get the currently active version of a plugin."""
         active_ver = self._active.get(plugin_id)
         if active_ver:
             return self._versions.get(plugin_id, {}).get(active_ver)
         return None
 
-    def get_versions(self, plugin_id: str) -> List[PluginVersion]:
+    def get_versions(self, plugin_id: str) -> list[PluginVersion]:
         """List all versions of a plugin (oldest first)."""
         versions = self._versions.get(plugin_id, {})
         return sorted(versions.values(), key=lambda v: v.created_at)
 
-    def get_version_history(self, plugin_id: str) -> List[PluginVersion]:
+    def get_version_history(self, plugin_id: str) -> list[PluginVersion]:
         """Get full version history (all versions, oldest first)."""
         return self.get_versions(plugin_id)
 
@@ -262,12 +270,14 @@ class HotReloadManager:
         pv.status = "drained"
         pv.drained_at = time.time()
 
-        self._upgrade_history.append({
-            "plugin_id": plugin_id,
-            "version": version,
-            "action": "drained",
-            "timestamp": time.time(),
-        })
+        self._upgrade_history.append(
+            {
+                "plugin_id": plugin_id,
+                "version": version,
+                "action": "drained",
+                "timestamp": time.time(),
+            }
+        )
         return True
 
     def activate_version(self, plugin_id: str, version: str) -> bool:
@@ -281,12 +291,14 @@ class HotReloadManager:
         with self._lock:
             self._active[plugin_id] = version
 
-        self._upgrade_history.append({
-            "plugin_id": plugin_id,
-            "version": version,
-            "action": "activated",
-            "timestamp": time.time(),
-        })
+        self._upgrade_history.append(
+            {
+                "plugin_id": plugin_id,
+                "version": version,
+                "action": "activated",
+                "timestamp": time.time(),
+            }
+        )
         return True
 
     def rollback(self, plugin_id: str, target_version: str) -> bool:
@@ -304,19 +316,21 @@ class HotReloadManager:
     def set_upgrade_strategy(self, strategy: UpgradeStrategy) -> None:
         self.upgrade_strategy = strategy
 
-    def get_upgrade_history(self) -> List[Dict[str, Any]]:
+    def get_upgrade_history(self) -> list[dict[str, Any]]:
         return list(self._upgrade_history)
 
-    def list_plugins(self) -> List[Dict[str, Any]]:
+    def list_plugins(self) -> list[dict[str, Any]]:
         """List all plugins with their active versions."""
         result = []
         for plugin_id in self._versions:
             active = self.get_active_version(plugin_id)
             all_versions = self.get_versions(plugin_id)
-            result.append({
-                "plugin_id": plugin_id,
-                "active_version": active.version if active else None,
-                "version_count": len(all_versions),
-                "strategy": self.upgrade_strategy.value,
-            })
+            result.append(
+                {
+                    "plugin_id": plugin_id,
+                    "active_version": active.version if active else None,
+                    "version_count": len(all_versions),
+                    "strategy": self.upgrade_strategy.value,
+                }
+            )
         return result

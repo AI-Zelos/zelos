@@ -3,14 +3,13 @@ Scheduler — Matches Ready tasks to available Agents.
 Phase 1: 5-phase pipeline (Order → Filter → Score → Policy → Select).
 Scoring Phase 3 is delegated to a ScoringStrategy plugin.
 """
-import time
-import random
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-from abc import ABC, abstractmethod
 
-from .task_graph import Task, TaskStatus, TaskGraphEngine
-from .capability_registry import CapabilityRegistry, CapabilityEntry
+import random
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+from .capability_registry import CapabilityRegistry
+from .task_graph import Task, TaskGraphEngine, TaskStatus
 
 
 @dataclass
@@ -24,7 +23,7 @@ class AgentCandidate:
     avg_latency_ms: float
     availability: float
     current_load: float
-    tags: List[str]
+    tags: list[str]
     total_completed: int
     executed_dependency: bool = False
     last_used_seconds_ago: float = 999.0
@@ -41,14 +40,13 @@ class ScoringStrategy(ABC):
     """Plugin interface for custom Agent ranking."""
 
     @abstractmethod
-    def score(self, task: Task, candidates: List[AgentCandidate]) -> List[ScoredCandidate]:
-        ...
+    def score(self, task: Task, candidates: list[AgentCandidate]) -> list[ScoredCandidate]: ...
 
 
 class DefaultScoringStrategy(ScoringStrategy):
     """Default weighted multi-factor scoring."""
 
-    def __init__(self, weights: Optional[Dict[str, float]] = None):
+    def __init__(self, weights: dict[str, float] | None = None):
         self.weights = weights or {
             "success_rate": 0.30,
             "cost_efficiency": 0.20,
@@ -59,21 +57,27 @@ class DefaultScoringStrategy(ScoringStrategy):
             "recency": 0.05,
         }
 
-    def score(self, task: Task, candidates: List[AgentCandidate]) -> List[ScoredCandidate]:
+    def score(self, task: Task, candidates: list[AgentCandidate]) -> list[ScoredCandidate]:
         results = []
         for c in candidates:
             s = (
-                c.success_rate * self.weights.get("success_rate", 0.30) +
-                (1.0 - min(c.cost_per_call / (task.max_cost_per_call or 1.0), 1.0)) * self.weights.get("cost_efficiency", 0.20) +
-                (1.0 - c.current_load) * self.weights.get("load_distribution", 0.15) +
-                (1.0 - min(c.avg_latency_ms / (task.max_latency_ms or 30000), 1.0)) * self.weights.get("latency", 0.15) +
-                c.availability * self.weights.get("availability", 0.10) +
-                (1.0 if c.executed_dependency else 0.5 if c.total_completed > 0 else 0.0) * self.weights.get("affinity", 0.05) +
-                max(0, 1.0 - c.last_used_seconds_ago / 300) * self.weights.get("recency", 0.05)
+                c.success_rate * self.weights.get("success_rate", 0.30)
+                + (1.0 - min(c.cost_per_call / (task.max_cost_per_call or 1.0), 1.0))
+                * self.weights.get("cost_efficiency", 0.20)
+                + (1.0 - c.current_load) * self.weights.get("load_distribution", 0.15)
+                + (1.0 - min(c.avg_latency_ms / (task.max_latency_ms or 30000), 1.0))
+                * self.weights.get("latency", 0.15)
+                + c.availability * self.weights.get("availability", 0.10)
+                + (1.0 if c.executed_dependency else 0.5 if c.total_completed > 0 else 0.0)
+                * self.weights.get("affinity", 0.05)
+                + max(0, 1.0 - c.last_used_seconds_ago / 300) * self.weights.get("recency", 0.05)
             )
             score = max(0.0, min(1.0, s))
-            results.append(ScoredCandidate(candidate=c, score=score,
-                reason=f"success={c.success_rate:.2f} cost={c.cost_per_call:.3f}"))
+            results.append(
+                ScoredCandidate(
+                    candidate=c, score=score, reason=f"success={c.success_rate:.2f} cost={c.cost_per_call:.3f}"
+                )
+            )
         results.sort(key=lambda r: r.score, reverse=True)
         return results
 
@@ -99,8 +103,8 @@ class Scheduler:
         self,
         task_graph: TaskGraphEngine,
         capability_registry: CapabilityRegistry,
-        scoring_strategy: Optional[ScoringStrategy] = None,
-        policy_plugin: Optional[PolicyPlugin] = None,
+        scoring_strategy: ScoringStrategy | None = None,
+        policy_plugin: PolicyPlugin | None = None,
     ):
         self._task_graph = task_graph
         self._registry = capability_registry
@@ -115,7 +119,7 @@ class Scheduler:
 
     # ── Main Entry Point ──
 
-    def schedule(self) -> List[Dict[str, str]]:
+    def schedule(self) -> list[dict[str, str]]:
         """
         Run scheduling round. Returns list of assignments [{task_id, agent_id}].
         """
@@ -127,7 +131,7 @@ class Scheduler:
                 assignments.append(result)
         return assignments
 
-    def _schedule_one(self, task: Task) -> Optional[Dict[str, str]]:
+    def _schedule_one(self, task: Task) -> dict[str, str] | None:
         candidates = self._phase2_filter(task)
         if not candidates:
             if task.fallback_capability:
@@ -157,19 +161,21 @@ class Scheduler:
 
     # ── Phase 1: Order ──
 
-    def _phase1_order(self) -> List[Task]:
+    def _phase1_order(self) -> list[Task]:
         tasks = self._task_graph.get_ready_tasks()
         priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        tasks.sort(key=lambda t: (
-            priority_order.get(t.priority, 2),
-            -(len(self._task_graph._dependents_map.get(t.task_id, set()))),
-            t.created_at,
-        ))
+        tasks.sort(
+            key=lambda t: (
+                priority_order.get(t.priority, 2),
+                -(len(self._task_graph._dependents_map.get(t.task_id, set()))),
+                t.created_at,
+            )
+        )
         return tasks
 
     # ── Phase 2: Filter ──
 
-    def _phase2_filter(self, task: Task) -> List[AgentCandidate]:
+    def _phase2_filter(self, task: Task) -> list[AgentCandidate]:
         providers = self._registry.find_providers_for(task.required_capability)
         candidates = []
         for agent_id in providers:
@@ -188,24 +194,26 @@ class Scheduler:
                 if not set(task.required_tags).issubset(set(cap.tags)):
                     continue
 
-            candidates.append(AgentCandidate(
-                agent_id=agent_id,
-                agent_name=cap.agent_name,
-                capability_name=cap.name,
-                capability_version=cap.version,
-                success_rate=0.9,
-                cost_per_call=0.05,
-                avg_latency_ms=5000,
-                availability=0.99,
-                current_load=0.0,
-                tags=list(cap.tags),
-                total_completed=100,
-            ))
+            candidates.append(
+                AgentCandidate(
+                    agent_id=agent_id,
+                    agent_name=cap.agent_name,
+                    capability_name=cap.name,
+                    capability_version=cap.version,
+                    success_rate=0.9,
+                    cost_per_call=0.05,
+                    avg_latency_ms=5000,
+                    availability=0.99,
+                    current_load=0.0,
+                    tags=list(cap.tags),
+                    total_completed=100,
+                )
+            )
         return candidates
 
     # ── Phase 3: Score ──
 
-    def _phase3_score(self, task: Task, candidates: List[AgentCandidate]) -> List[ScoredCandidate]:
+    def _phase3_score(self, task: Task, candidates: list[AgentCandidate]) -> list[ScoredCandidate]:
         return self._scoring.score(task, candidates)
 
     # ── Phase 4: Policy ──
@@ -215,13 +223,13 @@ class Scheduler:
 
     # ── Phase 5: Select ──
 
-    def _phase5_select(self, task_id: str, agent_id: str) -> Dict[str, str]:
+    def _phase5_select(self, task_id: str, agent_id: str) -> dict[str, str]:
         self._task_graph.transition(task_id, TaskStatus.ASSIGNED, agent_id=agent_id)
         return {"task_id": task_id, "agent_id": agent_id}
 
     # ── Retry ──
 
-    def evaluate_retry(self, task: Task) -> Optional[str]:
+    def evaluate_retry(self, task: Task) -> str | None:
         """Returns 'retry' if task should be retried, None if exhausted."""
         task.attempt += 1
         if task.attempt <= task.max_retries:

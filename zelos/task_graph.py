@@ -1,9 +1,8 @@
 """
 Task Graph Engine — Manages Task state machine and DAG dependency resolution.
 """
-import uuid
+
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
 from enum import Enum
 
 
@@ -37,21 +36,21 @@ class Task:
     description: str
     required_capability: str
     status: TaskStatus = TaskStatus.CREATED
-    dependencies: List[str] = field(default_factory=list)
-    dependents: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
+    dependents: list[str] = field(default_factory=list)
     attempt: int = 0
     max_retries: int = 3
     backoff_base_ms: int = 1000
     timeout_ms: int = 30000
-    assigned_agent_id: Optional[str] = None
+    assigned_agent_id: str | None = None
     priority: str = "medium"
-    fallback_capability: Optional[str] = None
-    preferred_agent_id: Optional[str] = None
-    excluded_agent_ids: List[str] = field(default_factory=list)
+    fallback_capability: str | None = None
+    preferred_agent_id: str | None = None
+    excluded_agent_ids: list[str] = field(default_factory=list)
     min_success_rate: float = 0.0
-    required_tags: List[str] = field(default_factory=list)
-    max_cost_per_call: Optional[float] = None
-    max_latency_ms: Optional[int] = None
+    required_tags: list[str] = field(default_factory=list)
+    max_cost_per_call: float | None = None
+    max_latency_ms: int | None = None
     created_at: float = 0.0
     updated_at: float = 0.0
 
@@ -60,9 +59,9 @@ class TaskGraphEngine:
     """Kernel component — manages Tasks and their dependency DAG."""
 
     def __init__(self):
-        self._tasks: Dict[str, Task] = {}
-        self._dependencies: Dict[str, Set[str]] = {}  # task_id → {dependency_ids}
-        self._dependents_map: Dict[str, Set[str]] = {}  # task_id → {dependent_ids}
+        self._tasks: dict[str, Task] = {}
+        self._dependencies: dict[str, set[str]] = {}  # task_id → {dependency_ids}
+        self._dependents_map: dict[str, set[str]] = {}  # task_id → {dependent_ids}
 
     # ── Task CRUD ──
 
@@ -75,15 +74,15 @@ class TaskGraphEngine:
         for dep_id in task.dependencies:
             self._dependents_map.setdefault(dep_id, set()).add(task.task_id)
 
-    def get_task(self, task_id: str) -> Optional[Task]:
+    def get_task(self, task_id: str) -> Task | None:
         return self._tasks.get(task_id)
 
-    def list_tasks(self) -> List[Task]:
+    def list_tasks(self) -> list[Task]:
         return list(self._tasks.values())
 
     # ── State Transitions ──
 
-    def transition(self, task_id: str, to_status: TaskStatus, agent_id: Optional[str] = None) -> Task:
+    def transition(self, task_id: str, to_status: TaskStatus, agent_id: str | None = None) -> Task:
         task = self._get_required(task_id)
         valid = VALID_TRANSITIONS.get(task.status, set())
         if to_status not in valid:
@@ -116,7 +115,7 @@ class TaskGraphEngine:
         self.transition(task_id, TaskStatus.READY)
         return True
 
-    def evaluate_all(self) -> List[str]:
+    def evaluate_all(self) -> list[str]:
         """Evaluate all CREATED tasks. Returns list of task_ids that became READY."""
         ready = []
         for task_id in list(self._tasks.keys()):
@@ -125,7 +124,7 @@ class TaskGraphEngine:
                     ready.append(task_id)
         return ready
 
-    def on_task_completed(self, completed_task_id: str) -> List[str]:
+    def on_task_completed(self, completed_task_id: str) -> list[str]:
         """Notify that a task completed. Evaluate its dependents. Returns newly READY task_ids."""
         ready = []
         for dep_id in self._dependents_map.get(completed_task_id, set()):
@@ -134,7 +133,7 @@ class TaskGraphEngine:
                     ready.append(dep_id)
         return ready
 
-    def get_ready_tasks(self) -> List[Task]:
+    def get_ready_tasks(self) -> list[Task]:
         return [t for t in self._tasks.values() if t.status == TaskStatus.READY]
 
     # ── DAG Validation ──

@@ -1,24 +1,33 @@
 """Storage Backend — Acceptance Tests: InMemory, Redis, PostgreSQL, MySQL."""
-import sys, os, json, time
+
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from zelos.storage import (
-    StorageBackend, InMemoryStorageBackend,
-    RedisStorageBackend, PostgreSQLStorageBackend,
-    MySQLStorageBackend, create_storage_backend, BACKENDS
+    InMemoryStorageBackend,
+    MySQLStorageBackend,
+    PostgreSQLStorageBackend,
+    RedisStorageBackend,
+    create_storage_backend,
 )
 
-PASS = 0; FAIL = 0
+PASS = 0
+FAIL = 0
+
 
 def t(name, condition):
     global PASS, FAIL
     if condition:
-        PASS += 1; print(f"  ✅ {name}")
+        PASS += 1
+        print(f"  ✅ {name}")
     else:
-        FAIL += 1; print(f"  ❌ {name}")
+        FAIL += 1
+        print(f"  ❌ {name}")
 
 
-def test_backend(name, backend):
+def _check_backend(name, backend):
     """Run the common test suite against any backend."""
     prefix = f"[{name}]"
 
@@ -78,7 +87,7 @@ def test_all():
 
     # ── InMemory ──
     mem = InMemoryStorageBackend()
-    test_backend("InMemory", mem)
+    _check_backend("InMemory", mem)
 
     # ── Storage Factory ──
     b = create_storage_backend({"type": "memory"})
@@ -103,7 +112,7 @@ def test_all():
     try:
         redis_backend = RedisStorageBackend({"url": "redis://localhost:6379/0", "prefix": "zelos-test"})
         if redis_backend.connect():
-            test_backend("Redis", redis_backend)
+            _check_backend("Redis", redis_backend)
             redis_ok = True
             # STOR-11: Key pattern
             redis_backend.connect()
@@ -120,7 +129,7 @@ def test_all():
     try:
         pg_backend = PostgreSQLStorageBackend({"url": "postgresql://localhost:5432/zelos_test"})
         if pg_backend.connect():
-            test_backend("PostgreSQL", pg_backend)
+            _check_backend("PostgreSQL", pg_backend)
             pg_ok = True
             t("STOR-12: PG table schema", True)  # create_tables ran without error
             pg_backend.disconnect()
@@ -134,7 +143,7 @@ def test_all():
     try:
         mysql_backend = MySQLStorageBackend({"url": "mysql://root@localhost:3306/zelos_test"})
         if mysql_backend.connect():
-            test_backend("MySQL", mysql_backend)
+            _check_backend("MySQL", mysql_backend)
             mysql_ok = True
             t("STOR-13: MySQL table schema", True)
             mysql_backend.disconnect()

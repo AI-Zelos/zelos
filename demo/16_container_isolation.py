@@ -8,11 +8,16 @@ Demonstrates Phase 3 container/remote plugin isolation:
 
 Run: python3 demo/16_container_isolation.py
 """
-import sys, os
+
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from zelos.container_isolation import (
-    ContainerPluginConfig, RemotePlugin, ContainerIsolationFactory,
+    ContainerIsolationFactory,
+    ContainerPluginConfig,
+    RemotePlugin,
 )
 
 
@@ -121,7 +126,7 @@ def main():
     print(f"   remote → {type(remote_instance).__name__} (plugin_id={remote_instance.plugin_id})")
 
     print(f"\n{'=' * 60}")
-    print(f"  Demo complete. Container isolation primitives working.")
+    print("  Demo complete. Container isolation primitives working.")
     print(f"{'=' * 60}")
 
 

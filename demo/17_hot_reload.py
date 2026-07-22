@@ -9,11 +9,18 @@ Demonstrates Phase 3 hot reload features:
 
 Run: python3 demo/17_hot_reload.py
 """
-import sys, os, time, tempfile
+
+import os
+import sys
+import tempfile
+import time
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from zelos.hot_reload import (
-    FileWatcher, HotReloadManager, UpgradeStrategy, PluginVersion,
+    FileWatcher,
+    HotReloadManager,
+    UpgradeStrategy,
 )
 
 
@@ -40,7 +47,7 @@ def main():
         time.sleep(0.2)
 
         print(f"   Watching: {tmpdir}")
-        print(f"   Initial files: plugin_a.py, plugin_b.py")
+        print("   Initial files: plugin_a.py, plugin_b.py")
 
         # Modify plugin_a
         time.sleep(0.1)
@@ -75,25 +82,25 @@ def main():
         print(f"   Registered {plugin_id}@{ver} → active: {active.version}")
 
     # Show version history
-    print(f"\n   Version history for verifier-plugin:")
+    print("\n   Version history for verifier-plugin:")
     for v in hrm.get_version_history("verifier-plugin"):
         print(f"     {v.version:8s} [{v.status:12s}] {v.entrypoint} ({v.checksum})")
 
     # Drain old versions
-    print(f"\n   Drain old versions:")
+    print("\n   Drain old versions:")
     for old_ver in ["1.0.0", "1.1.0"]:
         hrm.drain_version("verifier-plugin", old_ver)
         drained = hrm.get_version("verifier-plugin", old_ver)
         print(f"     {old_ver}: {drained.status}")
 
     # Rollback
-    print(f"\n   ⚠️  Rollback: 2.0.0 has a bug → rolling back to 1.2.0")
+    print("\n   ⚠️  Rollback: 2.0.0 has a bug → rolling back to 1.2.0")
     hrm.rollback("verifier-plugin", "1.2.0")
     active = hrm.get_active_version("verifier-plugin")
     print(f"   Active after rollback: {active.version} ({active.status})")
 
     # ── 3. Upgrade Strategies ──
-    print(f"\n📊 3. Upgrade Strategies")
+    print("\n📊 3. Upgrade Strategies")
 
     strategies = [
         (UpgradeStrategy.ROLLING, "One instance at a time"),
@@ -107,20 +114,18 @@ def main():
         print(f"   {strat.value:12s} — {desc}")
 
     # Canary deployment
-    print(f"\n   Canary deployment example:")
+    print("\n   Canary deployment example:")
     hrm.set_upgrade_strategy(UpgradeStrategy.CANARY)
-    hrm.register_version("api-gateway", "3.0.0", "gateway:v3", "sha256:xxx",
-                         canary_percent=5)
+    hrm.register_version("api-gateway", "3.0.0", "gateway:v3", "sha256:xxx", canary_percent=5)
     v3 = hrm.get_version("api-gateway", "3.0.0")
     print(f"     api-gateway@3.0.0: {v3.canary_percent}% traffic → new version")
     print(f"     api-gateway@2.0.0: {100 - v3.canary_percent}% traffic → old version")
-    print(f"     (ramp up canary_percent gradually, then full cut-over)")
+    print("     (ramp up canary_percent gradually, then full cut-over)")
 
     # ── 4. Plugin Summary ──
-    print(f"\n📋 4. Plugin Summary")
+    print("\n📋 4. Plugin Summary")
     for p in hrm.list_plugins():
-        print(f"   {p['plugin_id']}: {p['active_version']} "
-              f"({p['version_count']} versions, {p['strategy']})")
+        print(f"   {p['plugin_id']}: {p['active_version']} ({p['version_count']} versions, {p['strategy']})")
 
     # Upgrade history
     history = hrm.get_upgrade_history()
@@ -129,7 +134,7 @@ def main():
         print(f"     [{h['action']:12s}] {h['plugin_id']}@{h['version']}")
 
     print(f"\n{'=' * 60}")
-    print(f"  Demo complete. Hot reload primitives working.")
+    print("  Demo complete. Hot reload primitives working.")
     print(f"{'=' * 60}")
 
 

@@ -34,8 +34,8 @@ A new engineer can understand the entire Runtime architecture without reading an
 
 ## Phase 1: Runtime Kernel
 
-**Status:** Not Started
-**Timeline:** TBD
+**Status:** Complete
+**Timeline:** July 2026
 
 ### Goal
 
@@ -43,32 +43,26 @@ Implement the minimal viable Runtime Kernel — single-node, in-process.
 
 ### Scope
 
-- Event Bus (in-process, pub/sub, event persistence)
-- Capability Registry (registration, indexing, query)
-- Task Graph Engine (state machine, dependency resolution)
-- Scheduler (capability matching, basic scoring, FIFO dispatch)
-- Execution Engine (dispatch, heartbeat, timeout, retry)
-- Plugin Lifecycle Manager (load, configure, start, health check)
-- Runtime API (Goal API, Agent API, Admin API)
-- HTTP Protocol Adapter
-- Python SDK (Agent base class, Goal submission)
-
-### Out of Scope
-
-- Distributed deployment
-- Persistent storage (in-memory only)
-- Advanced scheduling (cost, latency optimization)
-- Plugin isolation (in-process only)
-- MCP / A2A adapters
-- Verifier framework (manual verification only)
-- Policy engine
+- [x] Event Bus (in-process, pub/sub, event persistence)
+- [x] Capability Registry (registration, indexing, query)
+- [x] Task Graph Engine (state machine, dependency resolution)
+- [x] Scheduler (capability matching, basic scoring, FIFO dispatch)
+- [x] Execution Engine (dispatch, heartbeat, timeout, retry)
+- [x] Plugin Lifecycle Manager (load, configure, start, health check)
+- [x] Runtime API (Goal API, Agent API, Admin API)
+- [x] HTTP Protocol Adapter
+- [x] Python SDK (Agent base class, Goal submission)
+- [x] Config Loader (zelos.yaml support)
+- [x] LLM Planner (OpenAI / Anthropic / Google / Mock providers)
+- [x] Memory Architecture (6-layer, in-memory provider)
+- [x] Policy Engine (cost limits, rate limits, allowlists)
 
 ---
 
 ## Phase 2: Developer Platform
 
-**Status:** Not Started
-**Timeline:** TBD
+**Status:** Complete
+**Timeline:** July 2026
 
 ### Goal
 
@@ -76,15 +70,16 @@ Complete development platform. Enable production use cases.
 
 ### Scope
 
-- Pluggable Planner (LLM-based default, custom planner support)
-- Verifier framework (schema, code review, security verifiers)
-- Policy engine (cost limits, rate limits, allowlists)
-- Memory architecture (all 6 layers, pluggable backends)
-- Advanced Scheduler (cost-aware, latency-aware, affinity)
-- Protocol Adapters (gRPC, MCP, A2A, WebSocket)
-- Observability (OpenTelemetry, Prometheus, structured logging)
-- SDKs (Python production, TypeScript, Go)
-- Plugin isolation (sub-process mode)
+- [x] Pluggable Planner (LLM-based default, custom planner support)
+- [x] Verifier framework (schema, code review, security verifiers)
+- [x] Policy engine (cost limits, rate limits, allowlists)
+- [x] Memory architecture (all 6 layers, pluggable backends)
+- [x] Advanced Scheduler (ScoringStrategy plugin, tiered escalation)
+- [x] Protocol Adapters (gRPC, WebSocket, MCP, A2A)
+- [x] Observability (structured logging, Prometheus metrics, tracing)
+- [x] SDK expansion (schema module, BaseAgent, ZelosClient)
+- [x] Plugin isolation (sub-process mode)
+- [x] Pluggable Storage (InMemory, Redis, PostgreSQL, MySQL backends)
 
 ---
 
@@ -124,4 +119,4 @@ Explicitly NOT part of Zelos core. Future ecosystem:
 
 ## Versioning
 
-Semantic Versioning. Current target: **v0.1.0** after Phase 1.
+Semantic Versioning. Current version: **v0.3.0** (Phase 3 Complete).

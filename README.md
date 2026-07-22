@@ -192,6 +192,28 @@ plugins:
 
 ---
 
+## Development
+
+```bash
+# Clone and enter the project
+git clone https://github.com/zelos/zelos.git && cd zelos
+
+# Install dev dependencies (pytest + ruff only; core has zero external deps)
+pip install -e ".[dev]"
+
+# Quick reference
+make dev        # Start Runtime in hot-reload mode
+make test       # Run all 47 tests
+make lint       # Ruff code quality check
+make format     # Auto-format all code
+make check      # Full CI pipeline (lint + test)
+make build      # Build Docker image
+make run        # Start via Docker Compose
+make clean      # Remove build artifacts
+```
+
+---
+
 ## Quick Start: One Command
 
 ```bash
@@ -267,7 +289,7 @@ One line to load config + a few `add_agent()` calls. That's it.
 
 ```python
 from zelos.runtime import ZelosRuntime
-from zelos.sdk.schema import CapabilityDeclaration
+from zelos_sdk.schema import CapabilityDeclaration
 
 # ── Load from zelos.yaml ──
 runtime = ZelosRuntime.from_yaml("zelos.yaml")

@@ -14,7 +14,10 @@ AutoGen 擅长多 Agent 对话式协作。Zelos 把整个 AutoGen GroupChat 看�
     export OPENAI_API_KEY="sk-xxx"
     python3 demo/09_autogen_agent.py
 """
-import sys, os
+
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -22,7 +25,8 @@ API_BASE = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
 MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 if not API_KEY:
-    print("❌ 请设置 OPENAI_API_KEY"); sys.exit(1)
+    print("❌ 请设置 OPENAI_API_KEY")
+    sys.exit(1)
 
 
 class AutoGenZelosAgent:
@@ -42,17 +46,19 @@ class AutoGenZelosAgent:
         self._base_url = kw.get("base_url", API_BASE)
 
     def execute(self, task):
-        desc = task.description if hasattr(task, 'description') else str(task)
-        cap = task.required_capability if hasattr(task, 'required_capability') else 'code'
+        desc = task.description if hasattr(task, "description") else str(task)
+        cap = task.required_capability if hasattr(task, "required_capability") else "code"
 
         try:
             import autogen
 
-            config_list = [{
-                "model": self._model,
-                "api_key": self._api_key,
-                "base_url": self._base_url,
-            }]
+            config_list = [
+                {
+                    "model": self._model,
+                    "api_key": self._api_key,
+                    "base_url": self._base_url,
+                }
+            ]
 
             # AutoGen 的两个角色
             assistant = autogen.AssistantAgent(
@@ -74,17 +80,18 @@ class AutoGenZelosAgent:
             )
 
             # 提取最终结果
-            output = assistant.last_message() if hasattr(assistant, 'last_message') else "Task completed"
+            output = assistant.last_message() if hasattr(assistant, "last_message") else "Task completed"
             if isinstance(output, dict):
                 output = output.get("content", str(output))
 
         except ImportError:
             output = f"[AutoGen Mock] Task completed: {desc[:50]}"
 
-        return type('Artifact', (), {
-            'content_type': 'application/json',
-            'content': {'result': output, 'agent': 'AutoGen', 'capability': cap}
-        })()
+        return type(
+            "Artifact",
+            (),
+            {"content_type": "application/json", "content": {"result": output, "agent": "AutoGen", "capability": cap}},
+        )()
 
 
 def main():
@@ -96,36 +103,65 @@ def main():
     print("  AutoGen 内部有多 Agent 对话协作")
     print("  Zelos 只看到 1 个 Agent\n")
 
-    ALL_CAPS = ["code-generation.python", "code-review.quality", "verification.unit-test",
-                "design.architecture", "communication.documentation"]
+    ALL_CAPS = [
+        "code-generation.python",
+        "code-review.quality",
+        "verification.unit-test",
+        "design.architecture",
+        "communication.documentation",
+    ]
 
-    runtime = ZelosRuntime({
-        "plugins": [{
-            "id": "llm-planner", "type": "planner",
-            "entrypoint": "zelos.planner.LLMPlanner",
-            "config": {"provider": "openai", "model": MODEL,
-                       "api_key": API_KEY, "base_url": API_BASE,
-                       "temperature": 0.3, "max_tokens": 4000},
-        }]
-    })
+    runtime = ZelosRuntime(
+        {
+            "plugins": [
+                {
+                    "id": "llm-planner",
+                    "type": "planner",
+                    "entrypoint": "zelos.planner.LLMPlanner",
+                    "config": {
+                        "provider": "openai",
+                        "model": MODEL,
+                        "api_key": API_KEY,
+                        "base_url": API_BASE,
+                        "temperature": 0.3,
+                        "max_tokens": 4000,
+                    },
+                }
+            ]
+        }
+    )
 
-    runtime.add_agent("AutoGenBot", "demo.09_autogen_agent:AutoGenZelosAgent", [
-        type('C', (), {'name': c, 'version': '1.0.0', 'description': c,
-                       'input_schema': {}, 'output_schema': {}, 'tags': ['autogen']})
-        for c in ALL_CAPS
-    ])
+    runtime.add_agent(
+        "AutoGenBot",
+        "demo.09_autogen_agent:AutoGenZelosAgent",
+        [
+            type(
+                "C",
+                (),
+                {
+                    "name": c,
+                    "version": "1.0.0",
+                    "description": c,
+                    "input_schema": {},
+                    "output_schema": {},
+                    "tags": ["autogen"],
+                },
+            )
+            for c in ALL_CAPS
+        ],
+    )
 
     runtime.start()
     goal = runtime.submit_goal("Write a Python function that calculates fibonacci numbers")
-    result = runtime.wait_for_goal(goal['goal_id'], timeout_seconds=15)
+    result = runtime.wait_for_goal(goal["goal_id"], timeout_seconds=15)
 
     print(f"📊 {result['status']} | {result['progress']['completed_tasks']}/{result['progress']['total_tasks']}")
     for t in runtime._task_graph.list_tasks():
-        print(f"   {'✅' if t.status.value=='completed' else '⬜'} {t.description[:50]} [{t.required_capability}]")
+        print(f"   {'✅' if t.status.value == 'completed' else '⬜'} {t.description[:50]} [{t.required_capability}]")
 
     runtime.shutdown()
-    print(f"\n💡 AutoGen 内部对话对 Zelos 完全透明")
-    print(f"✅ Demo 09 完成")
+    print("\n💡 AutoGen 内部对话对 Zelos 完全透明")
+    print("✅ Demo 09 完成")
 
 
 if __name__ == "__main__":

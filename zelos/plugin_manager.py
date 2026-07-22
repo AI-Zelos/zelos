@@ -1,11 +1,12 @@
 """
 Plugin Lifecycle Manager — Discovers, loads, configures, and manages plugin lifecycle.
 """
-import time
+
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
 from enum import Enum
+from typing import Any
 
 
 class PluginStatus(Enum):
@@ -32,10 +33,10 @@ class PluginManifest:
     display_name: str = ""
     description: str = ""
     entrypoint: str = ""
-    dependencies: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     runtime_api_version: str = "1.0.0"
-    config_schema: Dict[str, Any] = field(default_factory=dict)
-    config: Dict[str, Any] = field(default_factory=dict)
+    config_schema: dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
     restart_policy: str = "always"  # always | never | on_crash
     max_restarts: int = 5
 
@@ -46,21 +47,21 @@ class PluginInstance:
     status: PluginStatus = PluginStatus.UNLOADED
     restarts: int = 0
     instance: Any = None  # The actual plugin object
-    load_error: Optional[str] = None
+    load_error: str | None = None
 
 
 class PluginLifecycleManager:
     """Kernel component — plugin lifecycle management."""
 
     def __init__(self):
-        self._plugins: Dict[str, PluginInstance] = {}  # plugin_id → PluginInstance
-        self._plugin_factory: Dict[str, Callable] = {}  # plugin_id → factory function
+        self._plugins: dict[str, PluginInstance] = {}  # plugin_id → PluginInstance
+        self._plugin_factory: dict[str, Callable] = {}  # plugin_id → factory function
         self._health_check_interval: float = 10.0
         self._lock = threading.RLock()
 
     # ── Discovery ──
 
-    def discover_from_config(self, plugin_configs: List[dict]) -> List[PluginManifest]:
+    def discover_from_config(self, plugin_configs: list[dict]) -> list[PluginManifest]:
         manifests = []
         for cfg in plugin_configs:
             manifest = PluginManifest(
@@ -82,7 +83,7 @@ class PluginLifecycleManager:
 
     # ── Loading ──
 
-    def load_all(self, manifests: List[PluginManifest]) -> List[PluginInstance]:
+    def load_all(self, manifests: list[PluginManifest]) -> list[PluginInstance]:
         """Load plugins in topological order by type."""
         # Sort by load order
         type_order = {t: i for i, t in enumerate(PLUGIN_LOAD_ORDER)}
@@ -167,7 +168,7 @@ class PluginLifecycleManager:
         inst = self._plugins.get(plugin_id)
         if not inst or inst.status != PluginStatus.RUNNING:
             return False
-        if inst.instance and hasattr(inst.instance, 'health'):
+        if inst.instance and hasattr(inst.instance, "health"):
             try:
                 return inst.instance.health()
             except Exception:
@@ -176,16 +177,16 @@ class PluginLifecycleManager:
 
     # ── Query ──
 
-    def get_plugin(self, plugin_id: str) -> Optional[PluginInstance]:
+    def get_plugin(self, plugin_id: str) -> PluginInstance | None:
         return self._plugins.get(plugin_id)
 
-    def list_plugins(self, plugin_type: Optional[str] = None) -> List[PluginInstance]:
+    def list_plugins(self, plugin_type: str | None = None) -> list[PluginInstance]:
         result = list(self._plugins.values())
         if plugin_type:
             result = [p for p in result if p.manifest.plugin_type == plugin_type]
         return result
 
-    def get_status(self, plugin_id: str) -> Optional[PluginStatus]:
+    def get_status(self, plugin_id: str) -> PluginStatus | None:
         inst = self._plugins.get(plugin_id)
         return inst.status if inst else None
 
@@ -223,7 +224,7 @@ class PluginLifecycleManager:
                         return False
         return True
 
-    def _topological_sort(self, manifests: List[PluginManifest]) -> List[PluginManifest]:
+    def _topological_sort(self, manifests: list[PluginManifest]) -> list[PluginManifest]:
         """Topological sort within same type by dependencies."""
         id_to_manifest = {m.plugin_id: m for m in manifests}
         visited = set()
@@ -243,7 +244,7 @@ class PluginLifecycleManager:
                 dfs(m)
         return result
 
-    def _check_circular_deps(self, manifests: List[PluginManifest]) -> None:
+    def _check_circular_deps(self, manifests: list[PluginManifest]) -> None:
         """Check for circular dependencies."""
         id_to_manifest = {m.plugin_id: m for m in manifests}
         visiting = set()

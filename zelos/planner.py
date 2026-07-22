@@ -4,27 +4,28 @@ LLM-Based Planner — Decomposes Goals into ExecutionPlans using configurable LL
 Supports: OpenAI, Anthropic, Google, OpenAI-compatible endpoints, and Mock for testing.
 Phase 1: Single-call decomposition with structured JSON output.
 """
+
 import json
-import uuid
-import time
 import re
-import urllib.request
+import time
 import urllib.error
+import urllib.request
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 # ═══════════════════════════════════════════
 # Data Structures
 # ═══════════════════════════════════════════
+
 
 @dataclass
 class PlannerTask:
     task_id: str = ""
     description: str = ""
     required_capability: str = ""
-    dependencies: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     priority: str = "medium"
     timeout_ms: int = 30000
 
@@ -43,8 +44,8 @@ class PlannerTask:
 class PlannerPlan:
     plan_id: str = ""
     goal_id: str = ""
-    tasks: List[PlannerTask] = field(default_factory=list)
-    dependencies: List[Dict[str, Any]] = field(default_factory=list)
+    tasks: list[PlannerTask] = field(default_factory=list)
+    dependencies: list[dict[str, Any]] = field(default_factory=list)
     planner_id: str = "llm-planner"
     planner_version: str = "0.1.0"
     created_at: float = 0.0
@@ -67,24 +68,31 @@ class PlannerPlan:
 # LLM Providers
 # ═══════════════════════════════════════════
 
+
 class LLMProvider(ABC):
     """Abstract base for LLM providers."""
 
     @abstractmethod
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def chat(self, messages: list[dict[str, str]], **kwargs) -> str:
         """Send a chat completion request. Returns the response text."""
         ...
 
     @abstractmethod
-    def provider_name(self) -> str:
-        ...
+    def provider_name(self) -> str: ...
 
 
 class OpenAICompatibleProvider(LLMProvider):
     """Works with OpenAI API and any OpenAI-compatible endpoint (vLLM, Ollama, etc.)."""
 
-    def __init__(self, model: str, api_key: str, base_url: str = "https://api.openai.com/v1",
-                 temperature: float = 0.3, max_tokens: int = 4000, **kwargs):
+    def __init__(
+        self,
+        model: str,
+        api_key: str,
+        base_url: str = "https://api.openai.com/v1",
+        temperature: float = 0.3,
+        max_tokens: int = 4000,
+        **kwargs,
+    ):
         self.model = model
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
@@ -95,7 +103,7 @@ class OpenAICompatibleProvider(LLMProvider):
     def provider_name(self) -> str:
         return "openai"
 
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def chat(self, messages: list[dict[str, str]], **kwargs) -> str:
         payload = {
             "model": self.model,
             "messages": messages,
@@ -122,8 +130,15 @@ class OpenAICompatibleProvider(LLMProvider):
 class AnthropicProvider(LLMProvider):
     """Anthropic Claude API provider."""
 
-    def __init__(self, model: str, api_key: str, base_url: str = "https://api.anthropic.com/v1",
-                 temperature: float = 0.3, max_tokens: int = 4000, **kwargs):
+    def __init__(
+        self,
+        model: str,
+        api_key: str,
+        base_url: str = "https://api.anthropic.com/v1",
+        temperature: float = 0.3,
+        max_tokens: int = 4000,
+        **kwargs,
+    ):
         self.model = model
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
@@ -134,7 +149,7 @@ class AnthropicProvider(LLMProvider):
     def provider_name(self) -> str:
         return "anthropic"
 
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def chat(self, messages: list[dict[str, str]], **kwargs) -> str:
         # Extract system message
         system = ""
         user_messages = []
@@ -172,8 +187,15 @@ class AnthropicProvider(LLMProvider):
 class GoogleProvider(LLMProvider):
     """Google Gemini API provider."""
 
-    def __init__(self, model: str, api_key: str, base_url: str = "https://generativelanguage.googleapis.com/v1beta",
-                 temperature: float = 0.3, max_tokens: int = 4000, **kwargs):
+    def __init__(
+        self,
+        model: str,
+        api_key: str,
+        base_url: str = "https://generativelanguage.googleapis.com/v1beta",
+        temperature: float = 0.3,
+        max_tokens: int = 4000,
+        **kwargs,
+    ):
         self.model = model
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
@@ -184,7 +206,7 @@ class GoogleProvider(LLMProvider):
     def provider_name(self) -> str:
         return "google"
 
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def chat(self, messages: list[dict[str, str]], **kwargs) -> str:
         # Convert to Gemini format
         contents = []
         system_instruction = ""
@@ -223,7 +245,7 @@ class MockLLMProvider(LLMProvider):
     def __init__(self, response: str = "", **kwargs):
         self._response = response
         self._call_count = 0
-        self._call_args: List[dict] = []
+        self._call_args: list[dict] = []
         self._fail_count = 0
         self.model = kwargs.get("model", "mock")
         self.temperature = kwargs.get("temperature", 0.3)
@@ -239,7 +261,7 @@ class MockLLMProvider(LLMProvider):
         """Fail the first N calls, then succeed."""
         self._fail_count = count
 
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def chat(self, messages: list[dict[str, str]], **kwargs) -> str:
         self._call_count += 1
         self._call_args.append({"messages": messages, "kwargs": kwargs})
         if self._fail_count > 0:
@@ -260,14 +282,11 @@ SUPPORTED_PROVIDERS = {
 }
 
 
-def create_provider(config: Dict[str, Any]) -> LLMProvider:
+def create_provider(config: dict[str, Any]) -> LLMProvider:
     """Factory: create an LLM provider from configuration."""
     provider_name = config.get("provider", "openai").lower()
     if provider_name not in SUPPORTED_PROVIDERS:
-        raise ValueError(
-            f"Unsupported provider: '{provider_name}'. "
-            f"Supported: {', '.join(SUPPORTED_PROVIDERS.keys())}"
-        )
+        raise ValueError(f"Unsupported provider: '{provider_name}'. Supported: {', '.join(SUPPORTED_PROVIDERS.keys())}")
     cls = SUPPORTED_PROVIDERS[provider_name]
     return cls(
         model=config.get("model", "gpt-4o"),
@@ -330,7 +349,7 @@ Use these capability domains:
 class LLMPlanner:
     """Default LLM-based Planner plugin."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         config = config or {}
         self.planner_id = config.get("planner_id", "llm-planner")
         self.planner_version = config.get("planner_version", "0.1.0")
@@ -346,11 +365,11 @@ class LLMPlanner:
 
     @property
     def model(self) -> str:
-        return getattr(self._provider, 'model', 'unknown')
+        return getattr(self._provider, "model", "unknown")
 
     # ── Plugin Interface ──
 
-    def plan(self, goal_description: str, goal_id: str = "", context: Optional[Dict] = None) -> PlannerPlan:
+    def plan(self, goal_description: str, goal_id: str = "", context: dict | None = None) -> PlannerPlan:
         """Decompose a Goal into an ExecutionPlan."""
         messages = [
             {"role": "system", "content": self.system_prompt},
@@ -362,15 +381,16 @@ class LLMPlanner:
         self._validate_plan(plan)
         return plan
 
-    def replan(self, goal_description: str, current_plan: PlannerPlan,
-               events: Optional[List[Dict]] = None) -> PlannerPlan:
+    def replan(self, goal_description: str, current_plan: PlannerPlan, events: list[dict] | None = None) -> PlannerPlan:
         """Modify an existing plan based on events (failed tasks, new requirements)."""
         events_text = json.dumps(events or [], indent=2)
         existing = json.dumps(current_plan.to_dict(), indent=2)
 
         messages = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"""
+            {
+                "role": "user",
+                "content": f"""
 Goal: {goal_description}
 
 Current plan (DO NOT remove completed tasks):
@@ -381,7 +401,8 @@ Recent events that triggered re-planning:
 
 Add new tasks and dependencies to handle the events. Preserve all existing tasks.
 Respond with the COMPLETE updated plan as JSON (existing tasks + new tasks).
-"""},
+""",
+            },
         ]
 
         response_text = self._call_llm_with_retry(messages)
@@ -394,7 +415,7 @@ Respond with the COMPLETE updated plan as JSON (existing tasks + new tasks).
         new_plan.version = current_plan.version + 1
 
         # Merge: keep completed tasks from old plan
-        old_task_ids = {t.task_id for t in current_plan.tasks}
+        {t.task_id for t in current_plan.tasks}
         for old_t in current_plan.tasks:
             if old_t.task_id not in {t.task_id for t in new_plan.tasks}:
                 new_plan.tasks.append(old_t)
@@ -404,7 +425,7 @@ Respond with the COMPLETE updated plan as JSON (existing tasks + new tasks).
 
     # ── LLM Call ──
 
-    def _call_llm_with_retry(self, messages: List[Dict]) -> str:
+    def _call_llm_with_retry(self, messages: list[dict]) -> str:
         last_error = None
         for attempt in range(self.max_retries + 1):
             try:
@@ -423,14 +444,14 @@ Respond with the COMPLETE updated plan as JSON (existing tasks + new tasks).
         text = text.strip()
         if text.startswith("```"):
             # Remove opening fence (```json or ```)
-            text = re.sub(r'^```(?:json)?\s*\n', '', text)
+            text = re.sub(r"^```(?:json)?\s*\n", "", text)
             # Remove closing fence
-            text = re.sub(r'\n```\s*$', '', text)
+            text = re.sub(r"\n```\s*$", "", text)
 
         try:
             data = json.loads(text)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse LLM response as JSON: {e}\nRaw response:\n{text[:500]}")
+            raise ValueError(f"Failed to parse LLM response as JSON: {e}\nRaw response:\n{text[:500]}") from e
 
         plan = PlannerPlan(
             plan_id=str(uuid.uuid4()),
@@ -496,7 +517,7 @@ Respond with the COMPLETE updated plan as JSON (existing tasks + new tasks).
             adjacency[dep["from_task_id"]].append(dep["to_task_id"])
 
         WHITE, GRAY, BLACK = 0, 1, 2
-        color = {tid: WHITE for tid in task_ids}
+        color = dict.fromkeys(task_ids, WHITE)
 
         def dfs(node):
             color[node] = GRAY

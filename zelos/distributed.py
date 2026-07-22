@@ -6,16 +6,15 @@ Enables Zelos to run as a cluster:
   - WorkStealing: Idle nodes steal tasks from overloaded nodes
   - NodeRegistry: Track cluster membership, health, and capabilities
 """
-import time
-import uuid
-import random
-import threading
-from enum import Enum
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
 
+import threading
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 # ═══════════════════ Leader Election ═══════════════════
+
 
 class LeaderState(Enum):
     FOLLOWER = "follower"
@@ -26,8 +25,9 @@ class LeaderState(Enum):
 @dataclass
 class ElectionTerm:
     """Tracks the current election term."""
+
     term_number: int = 0
-    voted_for: Optional[str] = None
+    voted_for: str | None = None
 
 
 class LeaderElection:
@@ -40,21 +40,22 @@ class LeaderElection:
     Phase 3 provides the reference implementation.
     """
 
-    def __init__(self, node_id: str, heartbeat_interval_ms: int = 500,
-                 election_timeout_ms: int = 2000, priority: int = 0):
+    def __init__(
+        self, node_id: str, heartbeat_interval_ms: int = 500, election_timeout_ms: int = 2000, priority: int = 0
+    ):
         self.node_id = node_id
         self.heartbeat_interval_ms = heartbeat_interval_ms
         self.election_timeout_ms = election_timeout_ms
         self.priority = priority
         self.state = LeaderState.FOLLOWER
         self._term = ElectionTerm()
-        self._leader_id: Optional[str] = None
+        self._leader_id: str | None = None
         self._last_heartbeat: float = 0.0
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._lock = threading.RLock()
-        self._peers: Dict[str, Dict[str, Any]] = {}  # node_id → {priority, last_seen}
-        self._election_callbacks: List[callable] = []
+        self._peers: dict[str, dict[str, Any]] = {}  # node_id → {priority, last_seen}
+        self._election_callbacks: list[callable] = []
 
     def start(self) -> None:
         """Start the election loop."""
@@ -73,7 +74,7 @@ class LeaderElection:
     def is_leader(self) -> bool:
         return self.state == LeaderState.LEADER
 
-    def get_leader_id(self) -> Optional[str]:
+    def get_leader_id(self) -> str | None:
         return self._leader_id
 
     def register_peer(self, node_id: str, priority: int = 0) -> None:
@@ -157,6 +158,7 @@ class LeaderElection:
 
 # ═══════════════════ Work Stealing ═══════════════════
 
+
 class WorkStealing:
     """Work-stealing queue for distributed task scheduling.
 
@@ -168,23 +170,24 @@ class WorkStealing:
     def __init__(self, node_id: str, max_concurrent_tasks: int = 10):
         self.node_id = node_id
         self.max_concurrent_tasks = max_concurrent_tasks
-        self._ready_queue: List[Dict[str, Any]] = []
+        self._ready_queue: list[dict[str, Any]] = []
         self._lock = threading.RLock()
 
-    def enqueue_task(self, task_id: str, capability: str,
-                     priority: str = "medium", **metadata) -> None:
+    def enqueue_task(self, task_id: str, capability: str, priority: str = "medium", **metadata) -> None:
         """Add a READY task to the local queue."""
         with self._lock:
-            self._ready_queue.append({
-                "task_id": task_id,
-                "capability": capability,
-                "priority": priority,
-                "status": "ready",
-                "enqueued_at": time.time(),
-                "metadata": metadata,
-            })
+            self._ready_queue.append(
+                {
+                    "task_id": task_id,
+                    "capability": capability,
+                    "priority": priority,
+                    "status": "ready",
+                    "enqueued_at": time.time(),
+                    "metadata": metadata,
+                }
+            )
 
-    def dequeue_task(self) -> Optional[Dict[str, Any]]:
+    def dequeue_task(self) -> dict[str, Any] | None:
         """Get the next task (highest priority first)."""
         with self._lock:
             if not self._ready_queue:
@@ -201,7 +204,7 @@ class WorkStealing:
     def can_accept_more(self) -> bool:
         return self.queue_size() < self.max_concurrent_tasks
 
-    def steal_from(self, other: "WorkStealing", max_count: int = 5) -> List[Dict[str, Any]]:
+    def steal_from(self, other: "WorkStealing", max_count: int = 5) -> list[dict[str, Any]]:
         """Steal tasks from another node's queue."""
         stolen = []
         with self._lock:
@@ -231,18 +234,20 @@ class WorkStealing:
 
 # ═══════════════════ Node Registry ═══════════════════
 
+
 @dataclass
 class ClusterNode:
     """A node in the Zelos cluster."""
+
     node_id: str
     host: str
     port: int
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
     capacity: int = 10
     status: str = "unknown"  # unknown, healthy, degraded, dead
     last_heartbeat: float = 0.0
     registered_at: float = field(default_factory=time.time)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -266,7 +271,7 @@ class NodeRegistry:
     """
 
     def __init__(self, heartbeat_timeout_seconds: float = 30.0):
-        self._nodes: Dict[str, ClusterNode] = {}
+        self._nodes: dict[str, ClusterNode] = {}
         self.heartbeat_timeout_seconds = heartbeat_timeout_seconds
         self._lock = threading.RLock()
 
@@ -285,7 +290,7 @@ class NodeRegistry:
                 return True
         return False
 
-    def heartbeat(self, node_id: str, timestamp: Optional[float] = None) -> bool:
+    def heartbeat(self, node_id: str, timestamp: float | None = None) -> bool:
         """Record a heartbeat from a node."""
         node = self._nodes.get(node_id)
         if not node:
@@ -294,20 +299,20 @@ class NodeRegistry:
         node.status = "healthy"
         return True
 
-    def get_node(self, node_id: str) -> Optional[ClusterNode]:
+    def get_node(self, node_id: str) -> ClusterNode | None:
         return self._nodes.get(node_id)
 
     def node_count(self) -> int:
         return len(self._nodes)
 
-    def list_nodes(self, status: Optional[str] = None) -> List[ClusterNode]:
+    def list_nodes(self, status: str | None = None) -> list[ClusterNode]:
         """List all nodes, optionally filtered by status."""
         nodes = list(self._nodes.values())
         if status:
             nodes = [n for n in nodes if n.status == status]
         return nodes
 
-    def find_by_capability(self, capability_name: str) -> List[ClusterNode]:
+    def find_by_capability(self, capability_name: str) -> list[ClusterNode]:
         """Find nodes that provide a specific capability."""
         results = []
         for node in self._nodes.values():
@@ -315,7 +320,7 @@ class NodeRegistry:
                 results.append(node)
         return results
 
-    def detect_dead_nodes(self, timeout_seconds: Optional[float] = None) -> List[str]:
+    def detect_dead_nodes(self, timeout_seconds: float | None = None) -> list[str]:
         """Detect nodes that haven't sent heartbeats recently.
 
         Returns list of dead node IDs.
@@ -329,7 +334,7 @@ class NodeRegistry:
                 dead.append(node.node_id)
         return dead
 
-    def cluster_status(self) -> Dict[str, Any]:
+    def cluster_status(self) -> dict[str, Any]:
         """Aggregate cluster health info."""
         nodes = list(self._nodes.values())
         total = len(nodes)
@@ -337,7 +342,7 @@ class NodeRegistry:
         degraded = sum(1 for n in nodes if n.status == "degraded")
         dead = sum(1 for n in nodes if n.status == "dead")
 
-        all_caps: Set[str] = set()
+        all_caps: set[str] = set()
         for n in nodes:
             all_caps.update(n.capabilities)
 
@@ -351,7 +356,7 @@ class NodeRegistry:
             "leader_id": None,  # Set by Runtime
         }
 
-    def get_node_by_host(self, host: str, port: int) -> Optional[ClusterNode]:
+    def get_node_by_host(self, host: str, port: int) -> ClusterNode | None:
         for node in self._nodes.values():
             if node.host == host and node.port == port:
                 return node

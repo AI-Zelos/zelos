@@ -4,19 +4,19 @@ Pluggable Storage Backends — Event persistence + State storage.
 Phase 2: InMemory, Redis, PostgreSQL, MySQL backends.
 All share a common interface: connect / disconnect / append / read / state / snapshot.
 """
-import json
-import time
-import threading
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
 
+import json
+import threading
+import time
+from abc import ABC, abstractmethod
 
 # ═══════════════════ Common Interface ═══════════════════
+
 
 class StorageBackend(ABC):
     """Abstract storage backend for events and state."""
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: dict | None = None):
         self.config = config or {}
         self._connected = False
 
@@ -30,24 +30,26 @@ class StorageBackend(ABC):
     def health(self) -> bool: ...
 
     @abstractmethod
-    def append(self, stream: str, events: List[dict]) -> int: ...
+    def append(self, stream: str, events: list[dict]) -> int: ...
 
     @abstractmethod
-    def read(self, stream: str, from_position: int, count: int) -> List[dict]: ...
+    def read(self, stream: str, from_position: int, count: int) -> list[dict]: ...
 
     @abstractmethod
     def set_state(self, key: str, value: dict) -> None: ...
 
     @abstractmethod
-    def get_state(self, key: str) -> Optional[dict]: ...
+    def get_state(self, key: str) -> dict | None: ...
 
     @abstractmethod
     def delete_state(self, key: str) -> None: ...
 
     def create_snapshot(self, key: str, events_position: int, state: dict) -> None:
-        self.set_state(f"snapshot:{key}", {"events_position": events_position, "state": state, "timestamp": time.time()})
+        self.set_state(
+            f"snapshot:{key}", {"events_position": events_position, "state": state, "timestamp": time.time()}
+        )
 
-    def get_snapshot(self, key: str) -> Optional[dict]:
+    def get_snapshot(self, key: str) -> dict | None:
         return self.get_state(f"snapshot:{key}")
 
     @property
@@ -57,13 +59,14 @@ class StorageBackend(ABC):
 
 # ═══════════════════ InMemory ═══════════════════
 
+
 class InMemoryStorageBackend(StorageBackend):
     """Phase 1 compatible — stores everything in memory."""
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: dict | None = None):
         super().__init__(config)
-        self._streams: Dict[str, List[dict]] = {}
-        self._state: Dict[str, dict] = {}
+        self._streams: dict[str, list[dict]] = {}
+        self._state: dict[str, dict] = {}
         self._lock = threading.Lock()
 
     def connect(self) -> bool:
@@ -76,23 +79,23 @@ class InMemoryStorageBackend(StorageBackend):
     def health(self) -> bool:
         return self._connected
 
-    def append(self, stream: str, events: List[dict]) -> int:
+    def append(self, stream: str, events: list[dict]) -> int:
         with self._lock:
             if stream not in self._streams:
                 self._streams[stream] = []
             self._streams[stream].extend(events)
             return len(self._streams[stream])
 
-    def read(self, stream: str, from_position: int, count: int) -> List[dict]:
+    def read(self, stream: str, from_position: int, count: int) -> list[dict]:
         with self._lock:
             events = self._streams.get(stream, [])
-            return events[from_position:from_position + count]
+            return events[from_position : from_position + count]
 
     def set_state(self, key: str, value: dict) -> None:
         with self._lock:
             self._state[key] = value
 
-    def get_state(self, key: str) -> Optional[dict]:
+    def get_state(self, key: str) -> dict | None:
         return self._state.get(key)
 
     def delete_state(self, key: str) -> None:
@@ -100,6 +103,7 @@ class InMemoryStorageBackend(StorageBackend):
 
 
 # ═══════════════════ Redis ═══════════════════
+
 
 class RedisStorageBackend(StorageBackend):
     """Redis-backed storage. Events stored as lists, state as hash.
@@ -109,7 +113,7 @@ class RedisStorageBackend(StorageBackend):
       prefix: "zelos" (key namespace)
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: dict | None = None):
         super().__init__(config)
         self._url = (config or {}).get("url", "redis://localhost:6379/0")
         self._prefix = (config or {}).get("prefix", "zelos")
@@ -118,6 +122,7 @@ class RedisStorageBackend(StorageBackend):
     def connect(self) -> bool:
         try:
             import redis
+
             self._client = redis.Redis.from_url(self._url, decode_responses=True)
             self._client.ping()
             self._connected = True
@@ -146,7 +151,7 @@ class RedisStorageBackend(StorageBackend):
     def _state_key(self, key: str) -> str:
         return f"{self._prefix}:state:{key}"
 
-    def append(self, stream: str, events: List[dict]) -> int:
+    def append(self, stream: str, events: list[dict]) -> int:
         if not self._client:
             return -1
         pipe = self._client.pipeline()
@@ -155,7 +160,7 @@ class RedisStorageBackend(StorageBackend):
         pipe.execute()
         return self._client.llen(self._stream_key(stream))
 
-    def read(self, stream: str, from_position: int, count: int) -> List[dict]:
+    def read(self, stream: str, from_position: int, count: int) -> list[dict]:
         if not self._client:
             return []
         raw = self._client.lrange(self._stream_key(stream), from_position, from_position + count - 1)
@@ -165,7 +170,7 @@ class RedisStorageBackend(StorageBackend):
         if self._client:
             self._client.set(self._state_key(key), json.dumps(value))
 
-    def get_state(self, key: str) -> Optional[dict]:
+    def get_state(self, key: str) -> dict | None:
         if not self._client:
             return None
         raw = self._client.get(self._state_key(key))
@@ -178,6 +183,7 @@ class RedisStorageBackend(StorageBackend):
 
 # ═══════════════════ PostgreSQL ═══════════════════
 
+
 class PostgreSQLStorageBackend(StorageBackend):
     """PostgreSQL-backed storage. Events table + state table.
 
@@ -185,7 +191,7 @@ class PostgreSQLStorageBackend(StorageBackend):
       url: postgresql://user:pass@localhost:5432/zelos
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: dict | None = None):
         super().__init__(config)
         self._url = (config or {}).get("url", "postgresql://localhost:5432/zelos")
         self._conn = None
@@ -193,6 +199,7 @@ class PostgreSQLStorageBackend(StorageBackend):
     def connect(self) -> bool:
         try:
             import psycopg2
+
             self._conn = psycopg2.connect(self._url)
             self._conn.autocommit = True
             self._create_tables()
@@ -238,7 +245,7 @@ class PostgreSQLStorageBackend(StorageBackend):
         """)
         cur.close()
 
-    def append(self, stream: str, events: List[dict]) -> int:
+    def append(self, stream: str, events: list[dict]) -> int:
         if not self._conn:
             return -1
         cur = self._conn.cursor()
@@ -249,18 +256,18 @@ class PostgreSQLStorageBackend(StorageBackend):
             pos += 1
             cur.execute(
                 "INSERT INTO zelos_events (stream, position, event_data) VALUES (%s, %s, %s)",
-                (stream, pos, json.dumps(e))
+                (stream, pos, json.dumps(e)),
             )
         cur.close()
         return pos + 1
 
-    def read(self, stream: str, from_position: int, count: int) -> List[dict]:
+    def read(self, stream: str, from_position: int, count: int) -> list[dict]:
         if not self._conn:
             return []
         cur = self._conn.cursor()
         cur.execute(
             "SELECT event_data FROM zelos_events WHERE stream = %s AND position >= %s ORDER BY position LIMIT %s",
-            (stream, from_position, count)
+            (stream, from_position, count),
         )
         rows = cur.fetchall()
         cur.close()
@@ -273,11 +280,11 @@ class PostgreSQLStorageBackend(StorageBackend):
         cur.execute(
             "INSERT INTO zelos_state (key, value, updated_at) VALUES (%s, %s, NOW()) "
             "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()",
-            (key, json.dumps(value))
+            (key, json.dumps(value)),
         )
         cur.close()
 
-    def get_state(self, key: str) -> Optional[dict]:
+    def get_state(self, key: str) -> dict | None:
         if not self._conn:
             return None
         cur = self._conn.cursor()
@@ -296,6 +303,7 @@ class PostgreSQLStorageBackend(StorageBackend):
 
 # ═══════════════════ MySQL ═══════════════════
 
+
 class MySQLStorageBackend(StorageBackend):
     """MySQL-backed storage. Same schema as PostgreSQL.
 
@@ -303,16 +311,18 @@ class MySQLStorageBackend(StorageBackend):
       url: mysql://user:pass@localhost:3306/zelos
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: dict | None = None):
         super().__init__(config)
         self._url = (config or {}).get("url", "mysql://localhost:3306/zelos")
         self._conn = None
 
     def connect(self) -> bool:
         try:
-            import mysql.connector
             # Parse URL
             from urllib.parse import urlparse
+
+            import mysql.connector
+
             parsed = urlparse(self._url)
             self._conn = mysql.connector.connect(
                 host=parsed.hostname or "localhost",
@@ -366,7 +376,7 @@ class MySQLStorageBackend(StorageBackend):
         """)
         cur.close()
 
-    def append(self, stream: str, events: List[dict]) -> int:
+    def append(self, stream: str, events: list[dict]) -> int:
         if not self._conn:
             return -1
         cur = self._conn.cursor()
@@ -376,18 +386,18 @@ class MySQLStorageBackend(StorageBackend):
             pos += 1
             cur.execute(
                 "INSERT INTO zelos_events (stream, position, event_data) VALUES (%s, %s, %s)",
-                (stream, pos, json.dumps(e))
+                (stream, pos, json.dumps(e)),
             )
         cur.close()
         return pos + 1
 
-    def read(self, stream: str, from_position: int, count: int) -> List[dict]:
+    def read(self, stream: str, from_position: int, count: int) -> list[dict]:
         if not self._conn:
             return []
         cur = self._conn.cursor()
         cur.execute(
             "SELECT event_data FROM zelos_events WHERE stream = %s AND position >= %s ORDER BY position LIMIT %s",
-            (stream, from_position, count)
+            (stream, from_position, count),
         )
         rows = cur.fetchall()
         cur.close()
@@ -399,13 +409,12 @@ class MySQLStorageBackend(StorageBackend):
             return
         cur = self._conn.cursor()
         cur.execute(
-            "INSERT INTO zelos_state (`key`, value) VALUES (%s, %s) "
-            "ON DUPLICATE KEY UPDATE value = VALUES(value)",
-            (key, json.dumps(value))
+            "INSERT INTO zelos_state (`key`, value) VALUES (%s, %s) ON DUPLICATE KEY UPDATE value = VALUES(value)",
+            (key, json.dumps(value)),
         )
         cur.close()
 
-    def get_state(self, key: str) -> Optional[dict]:
+    def get_state(self, key: str) -> dict | None:
         if not self._conn:
             return None
         cur = self._conn.cursor()
@@ -441,8 +450,5 @@ def create_storage_backend(config: dict) -> StorageBackend:
     backend_type = config.get("type", "memory").lower()
     cls = BACKENDS.get(backend_type)
     if cls is None:
-        raise ValueError(
-            f"Unsupported storage backend: '{backend_type}'. "
-            f"Supported: {', '.join(BACKENDS.keys())}"
-        )
+        raise ValueError(f"Unsupported storage backend: '{backend_type}'. Supported: {', '.join(BACKENDS.keys())}")
     return cls(config)

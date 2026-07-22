@@ -4,33 +4,35 @@ Zelos Runtime — Main entry point. Ties together all Kernel components.
 Phase 3: Fully integrated with Security, Multi-tenancy, Advanced Execution,
          Hot Reload, Container Isolation, Distributed Runtime, and CLI.
 """
-import uuid
-import time
-import threading
-from typing import Any, Callable, Dict, List, Optional
 
-from .event_bus import EventBus, Event
+import threading
+import time
+import uuid
+from typing import Any
+
+from .advanced_execution import (
+    DynamicPlanModifier,
+    HumanInTheLoop,
+    SubGoalManager,
+)
 from .capability_registry import CapabilityRegistry
-from .task_graph import Task, TaskStatus, TaskGraphEngine
-from .scheduler import Scheduler, ScoringStrategy, PolicyPlugin
-from .execution_engine import ExecutionEngine, AgentState
-from .plugin_manager import PluginLifecycleManager, PluginManifest
-from .planner import LLMPlanner, MockLLMProvider, PlannerPlan
 from .config_loader import ConfigLoader
-from .verifier import VerificationGate, SchemaVerifier
-from .policy import CompositePolicy, CostLimitPolicy, RateLimitPolicy
-from .memory import InMemoryMemoryProvider, MemoryLayer, ContextAssembler
+from .container_isolation import ContainerPluginConfig, ContainerRunner, RemotePlugin
+from .distributed import ClusterNode, LeaderElection, NodeRegistry, WorkStealing
+from .event_bus import EventBus
+from .execution_engine import AgentState, ExecutionEngine
+from .hot_reload import FileWatcher, HotReloadManager, UpgradeStrategy
+from .memory import ContextAssembler, InMemoryMemoryProvider
+from .multi_tenancy import ResourceQuota, TenantManager
+from .planner import LLMPlanner, MockLLMProvider, PlannerPlan
+from .plugin_manager import PluginLifecycleManager
+from .policy import CompositePolicy
+from .scheduler import PolicyPlugin, Scheduler, ScoringStrategy
 
 # ═══ Phase 3 imports ═══
-from .security import AccessControl, AuditLogger, APIKeyManager, TLSConfig
-from .multi_tenancy import TenantManager, Namespace, ResourceQuota
-from .advanced_execution import (
-    DynamicPlanModifier, SubGoalManager, HumanInTheLoop,
-    ApprovalStatus as HITLApprovalStatus,
-)
-from .hot_reload import HotReloadManager, FileWatcher, UpgradeStrategy
-from .distributed import LeaderElection, WorkStealing, NodeRegistry, ClusterNode
-from .container_isolation import ContainerPluginConfig, ContainerRunner, RemotePlugin
+from .security import AccessControl, APIKeyManager, AuditLogger, TLSConfig
+from .task_graph import Task, TaskGraphEngine, TaskStatus
+from .verifier import SchemaVerifier, VerificationGate
 
 
 class ZelosRuntime:
@@ -45,7 +47,7 @@ class ZelosRuntime:
     and distributed coordination (leader election + work stealing).
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         self.config = config or {}
 
         # ── Phase 1 & 2: Kernel ──
@@ -53,20 +55,20 @@ class ZelosRuntime:
         self._capability_registry = CapabilityRegistry()
         self._task_graph = TaskGraphEngine()
         self._plugin_manager = PluginLifecycleManager()
-        self._scoring_strategy: Optional[ScoringStrategy] = None
-        self._policy_plugin: Optional[PolicyPlugin] = None
-        self._policy_engine: Optional[CompositePolicy] = None
-        self._planner: Optional[LLMPlanner] = None
-        self._verifier_gate: Optional[VerificationGate] = None
-        self._memory_provider: Optional[InMemoryMemoryProvider] = None
-        self._context_assembler: Optional[ContextAssembler] = None
-        self._scheduler: Optional[Scheduler] = None
+        self._scoring_strategy: ScoringStrategy | None = None
+        self._policy_plugin: PolicyPlugin | None = None
+        self._policy_engine: CompositePolicy | None = None
+        self._planner: LLMPlanner | None = None
+        self._verifier_gate: VerificationGate | None = None
+        self._memory_provider: InMemoryMemoryProvider | None = None
+        self._context_assembler: ContextAssembler | None = None
+        self._scheduler: Scheduler | None = None
         self._execution_engine = ExecutionEngine(self._task_graph, self._event_bus)
-        self._goals: Dict[str, Dict[str, Any]] = {}
-        self._agents: Dict[str, Dict[str, Any]] = {}  # name → {agent info}
-        self._agent_instances: Dict[str, Any] = {}  # name → agent object
-        self._agent_threads: Dict[str, threading.Thread] = {}
-        self._orchestrator_thread: Optional[threading.Thread] = None
+        self._goals: dict[str, dict[str, Any]] = {}
+        self._agents: dict[str, dict[str, Any]] = {}  # name → {agent info}
+        self._agent_instances: dict[str, Any] = {}  # name → agent object
+        self._agent_threads: dict[str, threading.Thread] = {}
+        self._orchestrator_thread: threading.Thread | None = None
         self._running = False
         self._lock = threading.RLock()
         self._started_at: float = 0.0
@@ -74,8 +76,7 @@ class ZelosRuntime:
         # ── Phase 3: Security ──
         sec_cfg = self.config.get("security", {})
         self._access_control = AccessControl()
-        self._audit_logger = AuditLogger(
-            max_events=sec_cfg.get("audit_max_events", 100000))
+        self._audit_logger = AuditLogger(max_events=sec_cfg.get("audit_max_events", 100000))
         self._api_key_manager = APIKeyManager()
         self._tls_config = TLSConfig(
             cert_file=sec_cfg.get("cert_file", ""),
@@ -111,7 +112,7 @@ class ZelosRuntime:
         except ValueError:
             strategy = UpgradeStrategy.ROLLING
         self._hot_reload_manager = HotReloadManager(upgrade_strategy=strategy)
-        self._file_watcher: Optional[FileWatcher] = None
+        self._file_watcher: FileWatcher | None = None
 
         # ── Phase 3: Distributed ──
         dist_cfg = self.config.get("distributed", {})
@@ -120,8 +121,7 @@ class ZelosRuntime:
             node_id=self._node_id,
             heartbeat_interval_ms=dist_cfg.get("heartbeat_ms", 500),
         )
-        self._node_registry = NodeRegistry(
-            heartbeat_timeout_seconds=dist_cfg.get("heartbeat_timeout_s", 30.0))
+        self._node_registry = NodeRegistry(heartbeat_timeout_seconds=dist_cfg.get("heartbeat_timeout_s", 30.0))
         self._work_stealing = WorkStealing(
             node_id=self._node_id,
             max_concurrent_tasks=dist_cfg.get("max_concurrent_tasks", 50),
@@ -129,9 +129,9 @@ class ZelosRuntime:
         self._cluster_enabled = dist_cfg.get("enabled", False)
 
         # ── Phase 3: Container / Remote isolation ──
-        self._container_runners: Dict[str, ContainerRunner] = {}  # plugin_id → runner
-        self._remote_plugins: Dict[str, RemotePlugin] = {}  # plugin_id → remote
-        self._remote_health_thread: Optional[threading.Thread] = None
+        self._container_runners: dict[str, ContainerRunner] = {}  # plugin_id → runner
+        self._remote_plugins: dict[str, RemotePlugin] = {}  # plugin_id → remote
+        self._remote_health_thread: threading.Thread | None = None
 
     @classmethod
     def from_yaml(cls, path: str = "zelos.yaml") -> "ZelosRuntime":
@@ -142,8 +142,9 @@ class ZelosRuntime:
 
     # ═══════════════════ Auth Helper ═══════════════════
 
-    def _check_auth(self, auth_context: Optional[Dict[str, Any]],
-                    action: str, resource: str = "") -> Optional[Dict[str, Any]]:
+    def _check_auth(
+        self, auth_context: dict[str, Any] | None, action: str, resource: str = ""
+    ) -> dict[str, Any] | None:
         """Check permission. Returns error dict if denied, None if allowed."""
         if auth_context is None or auth_context == {}:
             return None  # Backward compat: no auth = admin
@@ -161,25 +162,22 @@ class ZelosRuntime:
         if not self._access_control.check(role, action):
             self._audit_logger.log(
                 actor=auth_context.get("actor", "unknown"),
-                action=action, resource=resource,
+                action=action,
+                resource=resource,
                 detail=f"Permission denied for role '{role}'",
-                result="denied")
-            return {
-                "status": "rejected",
-                "reason": f"Permission denied: role '{role}' cannot '{action}'"
-            }
+                result="denied",
+            )
+            return {"status": "rejected", "reason": f"Permission denied: role '{role}' cannot '{action}'"}
         return None
 
-    def _audit(self, actor: str, action: str, resource: str,
-               detail: str = "", result: str = "success", **meta) -> None:
+    def _audit(self, actor: str, action: str, resource: str, detail: str = "", result: str = "success", **meta) -> None:
         """Record an audit event (fire-and-forget)."""
         try:
-            self._audit_logger.log(actor=actor, action=action, resource=resource,
-                                   detail=detail, result=result, **meta)
+            self._audit_logger.log(actor=actor, action=action, resource=resource, detail=detail, result=result, **meta)
         except Exception:
             pass
 
-    def _resolve_tenant(self, auth_context: Optional[Dict] = None) -> str:
+    def _resolve_tenant(self, auth_context: dict | None = None) -> str:
         """Get tenant_id from auth context, or 'default'."""
         if auth_context and auth_context.get("tenant_id"):
             return auth_context["tenant_id"]
@@ -191,13 +189,13 @@ class ZelosRuntime:
         self,
         name: str,
         entrypoint: str,
-        capabilities: List[Any],
+        capabilities: list[Any],
         *,
         max_concurrent_tasks: int = 5,
         heartbeat_interval_ms: int = 30000,
         restart_policy: str = "always",
-        config: Optional[Dict] = None,
-        auth_context: Optional[Dict] = None,
+        config: dict | None = None,
+        auth_context: dict | None = None,
     ) -> str:
         """Register an agent. If Runtime is running, hot-join.
 
@@ -211,14 +209,12 @@ class ZelosRuntime:
         tenant_id = self._resolve_tenant(auth_context)
         tenant = self._tenant_manager.get_tenant(tenant_id)
         if tenant and not tenant.active:
-            return {"status": "rejected",
-                    "reason": f"Tenant '{tenant_id}' is deactivated"}
+            return {"status": "rejected", "reason": f"Tenant '{tenant_id}' is deactivated"}
 
         # Tenant agent quota
         ns = self._tenant_manager.get_namespace(tenant_id)
         if ns and not ns.check_quota("agents"):
-            return {"status": "rejected",
-                    "reason": f"Agent quota exceeded for tenant '{tenant_id}'"}
+            return {"status": "rejected", "reason": f"Agent quota exceeded for tenant '{tenant_id}'"}
 
         agent_id = str(uuid.uuid4())
         agent_info = {
@@ -240,19 +236,19 @@ class ZelosRuntime:
 
         self._audit(
             actor=auth_context.get("actor", "system") if auth_context else "system",
-            action="agent.register", resource=agent_id,
-            detail=f"Registered agent '{name}' in tenant '{tenant_id}'")
+            action="agent.register",
+            resource=agent_id,
+            detail=f"Registered agent '{name}' in tenant '{tenant_id}'",
+        )
 
         if self._running:
             self._start_agent(name, agent_info)
 
         return agent_id
 
-    def remove_agent(self, name_or_id: str,
-                     auth_context: Optional[Dict] = None) -> Optional[Dict]:
+    def remove_agent(self, name_or_id: str, auth_context: dict | None = None) -> dict | None:
         """Remove an agent (hot-leave). Phase 3: RBAC + audit."""
-        err = self._check_auth(auth_context, "agent.remove",
-                               f"agent:{name_or_id}")
+        err = self._check_auth(auth_context, "agent.remove", f"agent:{name_or_id}")
         if err:
             return err
 
@@ -262,8 +258,7 @@ class ZelosRuntime:
             for name, info in self._agents.items():
                 if name == name_or_id or info["agent_id"] == name_or_id:
                     if tenant_id != "default" and info.get("tenant_id", "default") != tenant_id:
-                        return {"status": "rejected",
-                                "reason": f"Agent not in tenant '{tenant_id}'"}
+                        return {"status": "rejected", "reason": f"Agent not in tenant '{tenant_id}'"}
                     agent_info = info
                     del self._agents[name]
                     break
@@ -275,11 +270,13 @@ class ZelosRuntime:
                 ns.remove_agent(agent_info["agent_id"])
             self._audit(
                 actor=auth_context.get("actor", "system") if auth_context else "system",
-                action="agent.remove", resource=agent_info["agent_id"],
-                detail=f"Removed agent '{name_or_id}'")
+                action="agent.remove",
+                resource=agent_info["agent_id"],
+                detail=f"Removed agent '{name_or_id}'",
+            )
         return None
 
-    def list_agents(self, auth_context: Optional[Dict] = None) -> List[Dict[str, Any]]:
+    def list_agents(self, auth_context: dict | None = None) -> list[dict[str, Any]]:
         """List agents. Phase 3: tenant-filtered."""
         tenant_id = self._resolve_tenant(auth_context)
         result = []
@@ -293,19 +290,20 @@ class ZelosRuntime:
             if tenant_id != "default" and agent_tenant != tenant_id:
                 continue
 
-            result.append({
-                "agent_id": agent.agent_id,
-                "name": agent.agent_name,
-                "status": agent.status,
-                "operational_state": agent.operational_state,
-                "current_tasks": len(agent.current_tasks),
-                "max_concurrent_tasks": agent.max_concurrent_tasks,
-                "tenant_id": agent_tenant,
-            })
+            result.append(
+                {
+                    "agent_id": agent.agent_id,
+                    "name": agent.agent_name,
+                    "status": agent.status,
+                    "operational_state": agent.operational_state,
+                    "current_tasks": len(agent.current_tasks),
+                    "max_concurrent_tasks": agent.max_concurrent_tasks,
+                    "tenant_id": agent_tenant,
+                }
+            )
         return result
 
-    def get_agent(self, name_or_id: str,
-                  auth_context: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+    def get_agent(self, name_or_id: str, auth_context: dict | None = None) -> dict[str, Any] | None:
         tenant_id = self._resolve_tenant(auth_context)
         for agent in self._execution_engine.list_agents():
             if agent.agent_id == name_or_id or agent.agent_name == name_or_id:
@@ -333,9 +331,13 @@ class ZelosRuntime:
 
     # ═══════════════════ Phase 3: Container / Remote Plugin Management ═══════════════════
 
-    def add_container_agent(self, name: str, container_config: ContainerPluginConfig,
-                            capabilities: List[Any],
-                            auth_context: Optional[Dict] = None) -> str:
+    def add_container_agent(
+        self,
+        name: str,
+        container_config: ContainerPluginConfig,
+        capabilities: list[Any],
+        auth_context: dict | None = None,
+    ) -> str:
         """Register an agent running in a Docker/Podman container.
 
         The container is actually started via subprocess. If the runtime
@@ -348,7 +350,7 @@ class ZelosRuntime:
         agent_id = str(uuid.uuid4())
         cap_dicts = []
         for c in capabilities:
-            if hasattr(c, 'to_dict'):
+            if hasattr(c, "to_dict"):
                 cap_dicts.append(c.to_dict())
             elif isinstance(c, dict):
                 cap_dicts.append(c)
@@ -362,15 +364,18 @@ class ZelosRuntime:
         started = runner.start()
         self._container_runners[agent_id] = runner
 
-        self._audit("system", "container.agent.add", agent_id,
-                     detail=f"Container agent '{name}' "
-                     f"({'started' if started else 'pending'})")
+        self._audit(
+            "system",
+            "container.agent.add",
+            agent_id,
+            detail=f"Container agent '{name}' ({'started' if started else 'pending'})",
+        )
 
         return agent_id
 
-    def add_remote_agent(self, name: str, remote_plugin: RemotePlugin,
-                         capabilities: List[Any],
-                         auth_context: Optional[Dict] = None) -> str:
+    def add_remote_agent(
+        self, name: str, remote_plugin: RemotePlugin, capabilities: list[Any], auth_context: dict | None = None
+    ) -> str:
         """Register an agent that runs on a remote host via HTTP."""
         err = self._check_auth(auth_context, "agent.register", f"remote:{name}")
         if err:
@@ -379,7 +384,7 @@ class ZelosRuntime:
         agent_id = str(uuid.uuid4())
         cap_dicts = []
         for c in capabilities:
-            if hasattr(c, 'to_dict'):
+            if hasattr(c, "to_dict"):
                 cap_dicts.append(c.to_dict())
             elif isinstance(c, dict):
                 cap_dicts.append(c)
@@ -394,12 +399,10 @@ class ZelosRuntime:
 
         # Start remote health monitor if not already running
         if self._remote_health_thread is None and self._running:
-            self._remote_health_thread = threading.Thread(
-                target=self._remote_health_loop, daemon=True)
+            self._remote_health_thread = threading.Thread(target=self._remote_health_loop, daemon=True)
             self._remote_health_thread.start()
 
-        self._audit("system", "remote.agent.add", agent_id,
-                     detail=f"Remote agent '{name}' at {remote_plugin.endpoint}")
+        self._audit("system", "remote.agent.add", agent_id, detail=f"Remote agent '{name}' at {remote_plugin.endpoint}")
 
         return agent_id
 
@@ -420,21 +423,26 @@ class ZelosRuntime:
         if not rp:
             return False
         task_dict = {
-            "task_id": task.task_id, "plan_id": task.plan_id,
+            "task_id": task.task_id,
+            "plan_id": task.plan_id,
             "description": task.description,
             "required_capability": task.required_capability,
-            "priority": task.priority, "timeout_ms": task.timeout_ms,
+            "priority": task.priority,
+            "timeout_ms": task.timeout_ms,
         }
         result = rp.dispatch(task_dict)
         if result and result.get("status") == "completed":
             self._execution_engine.submit_result(task.task_id, agent_id, result)
-            self._audit("system", "task.completed", task.task_id,
-                         detail=f"Remote dispatch to {agent_id}")
+            self._audit("system", "task.completed", task.task_id, detail=f"Remote dispatch to {agent_id}")
             return True
         elif result and result.get("status") == "failed":
             self._execution_engine.submit_result(task.task_id, agent_id, result)
-            self._audit("system", "task.failed", task.task_id,
-                         detail=f"Remote dispatch failed: {result.get('error', {}).get('message', '')}")
+            self._audit(
+                "system",
+                "task.failed",
+                task.task_id,
+                detail=f"Remote dispatch failed: {result.get('error', {}).get('message', '')}",
+            )
             return True
         return False
 
@@ -545,29 +553,34 @@ class ZelosRuntime:
                 host = dist_cfg.get("host", "127.0.0.1")
                 port = dist_cfg.get("port", 9876)
                 caps = dist_cfg.get("capabilities", [])
-                self._node_registry.register(ClusterNode(
-                    node_id=self._node_id, host=host, port=port,
-                    capabilities=caps, capacity=dist_cfg.get("capacity", 20),
-                ))
+                self._node_registry.register(
+                    ClusterNode(
+                        node_id=self._node_id,
+                        host=host,
+                        port=port,
+                        capabilities=caps,
+                        capacity=dist_cfg.get("capacity", 20),
+                    )
+                )
                 # Register peers
                 for peer in dist_cfg.get("peers", []):
-                    self._leader_election.register_peer(
-                        peer["node_id"], peer.get("priority", 0))
-                    self._node_registry.register(ClusterNode(
-                        node_id=peer["node_id"],
-                        host=peer.get("host", ""),
-                        port=peer.get("port", 9876),
-                        capabilities=peer.get("capabilities", []),
-                        capacity=peer.get("capacity", 10),
-                    ))
+                    self._leader_election.register_peer(peer["node_id"], peer.get("priority", 0))
+                    self._node_registry.register(
+                        ClusterNode(
+                            node_id=peer["node_id"],
+                            host=peer.get("host", ""),
+                            port=peer.get("port", 9876),
+                            capabilities=peer.get("capabilities", []),
+                            capacity=peer.get("capacity", 10),
+                        )
+                    )
                 self._leader_election.start()
 
             self._running = True
             self._started_at = time.time()
 
             # Start orchestrator loop (background thread)
-            self._orchestrator_thread = threading.Thread(
-                target=self._orchestrator_loop, daemon=True)
+            self._orchestrator_thread = threading.Thread(target=self._orchestrator_loop, daemon=True)
             self._orchestrator_thread.start()
 
     def shutdown(self) -> None:
@@ -583,7 +596,7 @@ class ZelosRuntime:
             self._execution_engine.cancel_task(tid)
 
         # Stop all agent threads
-        for name, thread in list(self._agent_threads.items()):
+        for _name, thread in list(self._agent_threads.items()):
             if thread.is_alive():
                 thread.join(timeout=5.0)
 
@@ -603,8 +616,7 @@ class ZelosRuntime:
         for p in self._hot_reload_manager.list_plugins():
             for v in self._hot_reload_manager.get_versions(p["plugin_id"]):
                 if v.status == "active":
-                    self._hot_reload_manager.drain_version(
-                        p["plugin_id"], v.version)
+                    self._hot_reload_manager.drain_version(p["plugin_id"], v.version)
 
     def _orchestrator_loop(self) -> None:
         """Background loop: evaluate deps → schedule → dispatch → escalate → verify.
@@ -616,7 +628,7 @@ class ZelosRuntime:
         """
         poll_interval = 0.5
         READY_TIMEOUT = 60.0
-        _stuck_since: Dict[str, float] = {}
+        _stuck_since: dict[str, float] = {}
 
         while self._running:
             try:
@@ -671,8 +683,7 @@ class ZelosRuntime:
                         if goal["status"] in ("completed", "failed", "cancelled"):
                             continue
                         plan_id = goal.get("plan_id")
-                        all_tasks = [t for t in self._task_graph.list_tasks()
-                                     if t.plan_id == plan_id]
+                        all_tasks = [t for t in self._task_graph.list_tasks() if t.plan_id == plan_id]
                         if not all_tasks:
                             continue
                         terminal = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED}
@@ -681,18 +692,24 @@ class ZelosRuntime:
                             all_completed = all(t.status == TaskStatus.COMPLETED for t in all_tasks)
                             goal["status"] = "completed" if all_completed else "failed"
                             goal["completed_at"] = now
-                            self._audit("system", "goal.completed" if all_completed else "goal.failed",
-                                        goal_id, detail=goal.get("description", ""))
+                            self._audit(
+                                "system",
+                                "goal.completed" if all_completed else "goal.failed",
+                                goal_id,
+                                detail=goal.get("description", ""),
+                            )
 
                 # 4. Phase 3: Distributed — real work stealing + dead node cleanup
                 if self._cluster_enabled:
                     # Find the most overloaded peer
-                    peers = [n for n in self._node_registry.list_nodes()
-                             if n.node_id != self._node_id and n.status == "healthy"]
-                    for peer in peers:
+                    peers = [
+                        n
+                        for n in self._node_registry.list_nodes()
+                        if n.node_id != self._node_id and n.status == "healthy"
+                    ]
+                    for _peer in peers:
                         if self._work_stealing.can_accept_more():
                             # Steal READY tasks from overloaded peers
-                            peer_queue = self._work_stealing  # In production: query peer via network
                             our_depth = self._work_stealing.queue_size()
                             # Local heuristic: steal from anyone while we have capacity
                             if our_depth < self._work_stealing.max_concurrent_tasks / 2:
@@ -701,8 +718,8 @@ class ZelosRuntime:
                                 for rt in ready:
                                     if self._work_stealing.can_accept_more():
                                         self._work_stealing.enqueue_task(
-                                            rt.task_id, rt.required_capability,
-                                            priority=rt.priority)
+                                            rt.task_id, rt.required_capability, priority=rt.priority
+                                        )
                                     else:
                                         break
 
@@ -718,8 +735,7 @@ class ZelosRuntime:
                         # Check for tasks assigned to this remote agent
                         for inflight_id, ft in list(self._execution_engine._in_flight.items()):
                             if ft.agent_id == agent_id:
-                                self._dispatch_to_remote(agent_id,
-                                    self._task_graph.get_task(inflight_id))
+                                self._dispatch_to_remote(agent_id, self._task_graph.get_task(inflight_id))
 
             except Exception:
                 pass
@@ -744,32 +760,47 @@ class ZelosRuntime:
         try:
             current_tasks = [t for t in self._task_graph.list_tasks() if t.plan_id == plan_id]
             current_plan = PlannerPlan(
-                plan_id=plan_id, goal_id=goal_id,
-                tasks=[], dependencies=[], version=1,
+                plan_id=plan_id,
+                goal_id=goal_id,
+                tasks=[],
+                dependencies=[],
+                version=1,
             )
             from .planner import PlannerTask as PT
+
             for t in current_tasks:
-                current_plan.tasks.append(PT(
-                    task_id=t.task_id, description=t.description,
-                    required_capability=t.required_capability,
-                    dependencies=list(t.dependencies),
-                ))
+                current_plan.tasks.append(
+                    PT(
+                        task_id=t.task_id,
+                        description=t.description,
+                        required_capability=t.required_capability,
+                        dependencies=list(t.dependencies),
+                    )
+                )
             current_plan.version = len([t for t in current_tasks if t.status == TaskStatus.COMPLETED]) + 1
 
             new_plan = self._planner.replan(
-                goal_description, current_plan,
-                [{"event_type": "task.failed", "task_id": failed_task.task_id,
-                  "reason": f"no agent provides capability: {failed_task.required_capability}"}]
+                goal_description,
+                current_plan,
+                [
+                    {
+                        "event_type": "task.failed",
+                        "task_id": failed_task.task_id,
+                        "reason": f"no agent provides capability: {failed_task.required_capability}",
+                    }
+                ],
             )
 
             for pt in new_plan.tasks:
                 if pt.task_id not in self._task_graph._tasks:
                     task = Task(
-                        task_id=pt.task_id, plan_id=plan_id,
+                        task_id=pt.task_id,
+                        plan_id=plan_id,
                         description=pt.description,
                         required_capability=pt.required_capability,
                         dependencies=list(pt.dependencies),
-                        priority=pt.priority, timeout_ms=pt.timeout_ms,
+                        priority=pt.priority,
+                        timeout_ms=pt.timeout_ms,
                     )
                     self._task_graph.add_task(task)
 
@@ -780,14 +811,14 @@ class ZelosRuntime:
                     pass
 
             self._task_graph.evaluate_all()
-            self._plan_modifier._log_modification("replan", plan_id,
-                                                   {"new_tasks": len(new_plan.tasks),
-                                                    "old_tasks": len(current_tasks)})
+            self._plan_modifier._log_modification(
+                "replan", plan_id, {"new_tasks": len(new_plan.tasks), "old_tasks": len(current_tasks)}
+            )
 
-        except Exception as e:
+        except Exception:
             pass
 
-    def _start_agent(self, name: str, info: Dict) -> None:
+    def _start_agent(self, name: str, info: dict) -> None:
         """Start an agent: register, heartbeat, make available."""
         agent_id = info["agent_id"]
 
@@ -801,19 +832,21 @@ class ZelosRuntime:
         caps = info["capabilities"]
         cap_dicts = []
         for c in caps:
-            if hasattr(c, 'to_dict'):
+            if hasattr(c, "to_dict"):
                 cap_dicts.append(c.to_dict())
             elif isinstance(c, dict):
                 cap_dicts.append(c)
             else:
-                cap_dicts.append({
-                    "name": getattr(c, 'name', str(c)),
-                    "version": getattr(c, 'version', '1.0.0'),
-                    "description": getattr(c, 'description', ''),
-                    "input_schema": getattr(c, 'input_schema', {}),
-                    "output_schema": getattr(c, 'output_schema', {}),
-                    "tags": getattr(c, 'tags', []),
-                })
+                cap_dicts.append(
+                    {
+                        "name": getattr(c, "name", str(c)),
+                        "version": getattr(c, "version", "1.0.0"),
+                        "description": getattr(c, "description", ""),
+                        "input_schema": getattr(c, "input_schema", {}),
+                        "output_schema": getattr(c, "output_schema", {}),
+                        "tags": getattr(c, "tags", []),
+                    }
+                )
         self._capability_registry.register(agent_id, name, cap_dicts)
         self._capability_registry.mark_available(agent_id)
 
@@ -824,6 +857,7 @@ class ZelosRuntime:
             module_path, class_name = entrypoint.split(":", 1)
             try:
                 import importlib
+
                 mod = importlib.import_module(module_path)
                 cls = getattr(mod, class_name)
                 agent_instance = cls(name=name, **info.get("config", {}))
@@ -845,8 +879,12 @@ class ZelosRuntime:
                 self._execution_engine.heartbeat(agent_id)
             except Exception:
                 pass
-            time.sleep(self._execution_engine._agents.get(
-                agent_id, AgentState(agent_id="", agent_name="")).heartbeat_interval_ms / 1000)
+            time.sleep(
+                self._execution_engine._agents.get(
+                    agent_id, AgentState(agent_id="", agent_name="")
+                ).heartbeat_interval_ms
+                / 1000
+            )
 
     def _on_dispatch(self, agent_id: str, task: Task) -> None:
         """Called when Execution Engine dispatches a task.
@@ -860,43 +898,46 @@ class ZelosRuntime:
                 # Task awaiting approval — don't execute yet
                 return
 
-        self._audit("system", "task.dispatched", task.task_id,
-                     detail=f"Dispatched to agent {agent_id}")
+        self._audit("system", "task.dispatched", task.task_id, detail=f"Dispatched to agent {agent_id}")
 
         for name, info in self._agents.items():
             if info["agent_id"] == agent_id:
                 agent = self._agent_instances.get(name)
-                if agent and hasattr(agent, 'execute'):
+                if agent and hasattr(agent, "execute"):
                     try:
                         artifact = agent.execute(task)
                         result = {
                             "status": "completed",
                             "artifact": {
-                                "content_type": getattr(artifact, 'content_type', 'application/json'),
-                                "content": getattr(artifact, 'content', artifact) if hasattr(artifact, 'content') else str(artifact),
-                            }
+                                "content_type": getattr(artifact, "content_type", "application/json"),
+                                "content": getattr(artifact, "content", artifact)
+                                if hasattr(artifact, "content")
+                                else str(artifact),
+                            },
                         }
                         self._execution_engine.submit_result(task.task_id, agent_id, result)
-                        self._audit("system", "task.completed", task.task_id,
-                                    result="success")
+                        self._audit("system", "task.completed", task.task_id, result="success")
                     except Exception as e:
-                        self._execution_engine.submit_result(task.task_id, agent_id, {
-                            "status": "failed",
-                            "error": {"code": "internal_error", "message": str(e)}
-                        })
-                        self._audit("system", "task.failed", task.task_id,
-                                    result="failed", detail=str(e))
+                        self._execution_engine.submit_result(
+                            task.task_id,
+                            agent_id,
+                            {"status": "failed", "error": {"code": "internal_error", "message": str(e)}},
+                        )
+                        self._audit("system", "task.failed", task.task_id, result="failed", detail=str(e))
                 else:
                     print(f"  🤖 [{name}] → {task.required_capability}: {task.description[:60]}...")
-                    self._execution_engine.submit_result(task.task_id, agent_id, {
-                        "status": "completed",
-                        "artifact": {
-                            "content_type": "application/json",
-                            "content": {"result": f"Task {task.task_id} completed"}
-                        }
-                    })
-                    self._audit("system", "task.completed", task.task_id,
-                                detail="auto-completed (demo mode)")
+                    self._execution_engine.submit_result(
+                        task.task_id,
+                        agent_id,
+                        {
+                            "status": "completed",
+                            "artifact": {
+                                "content_type": "application/json",
+                                "content": {"result": f"Task {task.task_id} completed"},
+                            },
+                        },
+                    )
+                    self._audit("system", "task.completed", task.task_id, detail="auto-completed (demo mode)")
 
     # ═══════════════════ Goal Submission ═══════════════════
 
@@ -904,15 +945,15 @@ class ZelosRuntime:
         self,
         description: str,
         *,
-        budget: Optional[float] = None,
-        deadline: Optional[str] = None,
+        budget: float | None = None,
+        deadline: str | None = None,
         priority: str = "medium",
-        project_id: Optional[str] = None,
-        metadata: Optional[Dict] = None,
-        auth_context: Optional[Dict] = None,
+        project_id: str | None = None,
+        metadata: dict | None = None,
+        auth_context: dict | None = None,
         require_approval: bool = False,
-        approvers: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        approvers: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Submit a Goal. Phase 3: RBAC + tenant quota + audit.
 
         Args:
@@ -920,16 +961,18 @@ class ZelosRuntime:
             approvers: List of approver IDs for HITL.
         """
         if not description or not description.strip():
-            return {"goal_id": str(uuid.uuid4()), "status": "rejected",
-                    "reason": "Description is required"}
+            return {"goal_id": str(uuid.uuid4()), "status": "rejected", "reason": "Description is required"}
 
         if priority not in ("low", "medium", "high", "critical"):
-            return {"goal_id": str(uuid.uuid4()), "status": "rejected",
-                    "reason": f"Invalid priority: {priority}",
-                    "validation_errors": [f"priority must be one of: low, medium, high, critical"]}
+            return {
+                "goal_id": str(uuid.uuid4()),
+                "status": "rejected",
+                "reason": f"Invalid priority: {priority}",
+                "validation_errors": ["priority must be one of: low, medium, high, critical"],
+            }
 
         # Auth
-        err = self._check_auth(auth_context, "goal.submit", f"goal:new")
+        err = self._check_auth(auth_context, "goal.submit", "goal:new")
         if err:
             return err
 
@@ -937,17 +980,26 @@ class ZelosRuntime:
         tenant_id = self._resolve_tenant(auth_context)
         tenant = self._tenant_manager.get_tenant(tenant_id)
         if tenant and not tenant.active:
-            return {"goal_id": str(uuid.uuid4()), "status": "rejected",
-                    "reason": f"Tenant '{tenant_id}' is deactivated"}
+            return {
+                "goal_id": str(uuid.uuid4()),
+                "status": "rejected",
+                "reason": f"Tenant '{tenant_id}' is deactivated",
+            }
 
         ns = self._tenant_manager.get_namespace(tenant_id)
         if ns and not ns.check_quota("goals"):
-            return {"goal_id": str(uuid.uuid4()), "status": "rejected",
-                    "reason": f"Goal quota exceeded for tenant '{tenant_id}'"}
+            return {
+                "goal_id": str(uuid.uuid4()),
+                "status": "rejected",
+                "reason": f"Goal quota exceeded for tenant '{tenant_id}'",
+            }
 
         if budget and ns and not ns.quotas.check_budget(budget):
-            return {"goal_id": str(uuid.uuid4()), "status": "rejected",
-                    "reason": f"Budget ${budget} exceeds per-goal limit ${ns.quotas.budget_per_goal}"}
+            return {
+                "goal_id": str(uuid.uuid4()),
+                "status": "rejected",
+                "reason": f"Budget ${budget} exceeds per-goal limit ${ns.quotas.budget_per_goal}",
+            }
 
         goal_id = str(uuid.uuid4())
         plan_id = str(uuid.uuid4())
@@ -966,9 +1018,15 @@ class ZelosRuntime:
             "created_at": time.time(),
             "updated_at": time.time(),
             "completed_at": None,
-            "progress": {"total_tasks": 0, "completed_tasks": 0, "failed_tasks": 0,
-                         "ready_tasks": 0, "in_flight_tasks": 0, "blocked_tasks": 0,
-                         "percent_complete": 0.0},
+            "progress": {
+                "total_tasks": 0,
+                "completed_tasks": 0,
+                "failed_tasks": 0,
+                "ready_tasks": 0,
+                "in_flight_tasks": 0,
+                "blocked_tasks": 0,
+                "percent_complete": 0.0,
+            },
         }
         with self._lock:
             self._goals[goal_id] = goal
@@ -988,9 +1046,12 @@ class ZelosRuntime:
 
         self._audit(
             actor=auth_context.get("actor", "system") if auth_context else "system",
-            action="goal.submit", resource=goal_id,
+            action="goal.submit",
+            resource=goal_id,
             detail=f"'{description[:60]}' in tenant '{tenant_id}'",
-            budget=budget, priority=priority)
+            budget=budget,
+            priority=priority,
+        )
 
         # Planner: decompose Goal → Tasks
         if self._planner is not None and self._running:
@@ -999,15 +1060,20 @@ class ZelosRuntime:
                 planner_plan.plan_id = plan_id
             except Exception:
                 from .planner import PlannerTask as PT
+
                 planner_plan = PlannerPlan(
-                    plan_id=plan_id, goal_id=goal_id,
-                    tasks=[], planner_id="fallback",
+                    plan_id=plan_id,
+                    goal_id=goal_id,
+                    tasks=[],
+                    planner_id="fallback",
                 )
-                planner_plan.tasks.append(PT(
-                    task_id=f"{goal_id}-t1",
-                    description=description,
-                    required_capability="code-generation.python",
-                ))
+                planner_plan.tasks.append(
+                    PT(
+                        task_id=f"{goal_id}-t1",
+                        description=description,
+                        required_capability="code-generation.python",
+                    )
+                )
 
             for pt in planner_plan.tasks:
                 task = Task(
@@ -1033,15 +1099,17 @@ class ZelosRuntime:
             goal["plan_id"] = plan_id
             goal["updated_at"] = time.time()
 
-        task_count = len(
-            [t for t in self._task_graph.list_tasks() if t.plan_id == plan_id])
+        task_count = len([t for t in self._task_graph.list_tasks() if t.plan_id == plan_id])
 
-        return {"goal_id": goal_id, "status": goal["status"],
-                "created_at": goal["created_at"],
-                "plan_id": plan_id, "task_count": task_count}
+        return {
+            "goal_id": goal_id,
+            "status": goal["status"],
+            "created_at": goal["created_at"],
+            "plan_id": plan_id,
+            "task_count": task_count,
+        }
 
-    def get_goal_status(self, goal_id: str,
-                        auth_context: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+    def get_goal_status(self, goal_id: str, auth_context: dict | None = None) -> dict[str, Any] | None:
         """Get goal status. Phase 3: tenant-filtered."""
         goal = self._goals.get(goal_id)
         if not goal:
@@ -1084,8 +1152,7 @@ class ZelosRuntime:
             "tenant_id": goal.get("tenant_id", "default"),
         }
 
-    def cancel_goal(self, goal_id: str,
-                    auth_context: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+    def cancel_goal(self, goal_id: str, auth_context: dict | None = None) -> dict[str, Any] | None:
         """Cancel a goal. Phase 3: RBAC + audit."""
         err = self._check_auth(auth_context, "goal.cancel", goal_id)
         if err:
@@ -1096,23 +1163,24 @@ class ZelosRuntime:
             return None
         tenant_id = self._resolve_tenant(auth_context)
         if tenant_id != "default" and goal.get("tenant_id", "default") != tenant_id:
-            return {"goal_id": goal_id, "status": "rejected",
-                    "reason": "Goal not in this tenant"}
+            return {"goal_id": goal_id, "status": "rejected", "reason": "Goal not in this tenant"}
 
         if goal["status"] in ("completed", "failed", "cancelled"):
             return {
-                "goal_id": goal_id, "status": goal["status"],
+                "goal_id": goal_id,
+                "status": goal["status"],
                 "error": {"code": "conflict", "message": "Goal is already in a terminal state"},
             }
         goal["status"] = "cancelled"
         goal["completed_at"] = time.time()
         self._audit(
             actor=auth_context.get("actor", "system") if auth_context else "system",
-            action="goal.cancel", resource=goal_id)
+            action="goal.cancel",
+            resource=goal_id,
+        )
         return {"goal_id": goal_id, "status": "cancelled"}
 
-    def wait_for_goal(self, goal_id: str, timeout_seconds: float = 600,
-                      poll_interval: float = 1.0) -> Dict[str, Any]:
+    def wait_for_goal(self, goal_id: str, timeout_seconds: float = 600, poll_interval: float = 1.0) -> dict[str, Any]:
         """Block until goal reaches a terminal state."""
         deadline = time.time() + timeout_seconds
         while time.time() < deadline:
@@ -1127,7 +1195,7 @@ class ZelosRuntime:
 
     # ═══════════════════ Phase 3: Advanced Execution API ═══════════════════
 
-    def modify_plan(self, plan_id: str, operation: str, **kwargs) -> Dict[str, Any]:
+    def modify_plan(self, plan_id: str, operation: str, **kwargs) -> dict[str, Any]:
         """Dynamically modify a running plan.
 
         Operations: add_task, remove_task, modify_task, add_dependency, remove_dependency
@@ -1140,20 +1208,16 @@ class ZelosRuntime:
             elif operation == "remove_task":
                 ok = self._plan_modifier.remove_task(kwargs["task_id"])
                 if not ok:
-                    return {"status": "failed",
-                            "reason": f"Task '{kwargs['task_id']}' not found"}
+                    return {"status": "failed", "reason": f"Task '{kwargs['task_id']}' not found"}
             elif operation == "modify_task":
                 task_id = kwargs.pop("task_id")
                 self._plan_modifier.modify_task(task_id, **kwargs)
             elif operation == "add_dependency":
-                self._plan_modifier.add_dependency(
-                    kwargs["from_task_id"], kwargs["to_task_id"])
+                self._plan_modifier.add_dependency(kwargs["from_task_id"], kwargs["to_task_id"])
             elif operation == "remove_dependency":
-                self._plan_modifier.remove_dependency(
-                    kwargs["from_task_id"], kwargs["to_task_id"])
+                self._plan_modifier.remove_dependency(kwargs["from_task_id"], kwargs["to_task_id"])
             else:
-                return {"status": "rejected",
-                        "reason": f"Unknown operation: {operation}"}
+                return {"status": "rejected", "reason": f"Unknown operation: {operation}"}
             self._audit("system", f"plan.{operation}", plan_id, detail=str(kwargs))
             return {"status": "ok", "operation": operation}
         except (ValueError, KeyError) as e:
@@ -1161,10 +1225,14 @@ class ZelosRuntime:
         except Exception as e:
             return {"status": "failed", "reason": str(e)}
 
-    def spawn_sub_goal(self, parent_task_id: str, description: str,
-                       budget: Optional[float] = None,
-                       required_capability: str = "code-generation.python",
-                       num_tasks: int = 1) -> Dict[str, Any]:
+    def spawn_sub_goal(
+        self,
+        parent_task_id: str,
+        description: str,
+        budget: float | None = None,
+        required_capability: str = "code-generation.python",
+        num_tasks: int = 1,
+    ) -> dict[str, Any]:
         """Spawn a sub-goal from a parent task."""
         sub = self._sub_goal_manager.spawn_sub_goal(
             parent_task_id=parent_task_id,
@@ -1173,15 +1241,13 @@ class ZelosRuntime:
             required_capability=required_capability,
             num_tasks=num_tasks,
         )
-        self._audit("system", "sub_goal.spawned", sub["sub_goal_id"],
-                     detail=description[:60])
+        self._audit("system", "sub_goal.spawned", sub["sub_goal_id"], detail=description[:60])
         return sub
 
-    def get_sub_goal_status(self, sub_goal_id: str) -> Optional[Dict[str, Any]]:
+    def get_sub_goal_status(self, sub_goal_id: str) -> dict[str, Any] | None:
         return self._sub_goal_manager.get_sub_goal(sub_goal_id)
 
-    def approve_task(self, task_id: str, approver: str,
-                     comment: str = "") -> Dict[str, Any]:
+    def approve_task(self, task_id: str, approver: str, comment: str = "") -> dict[str, Any]:
         """Approve a HITL request for a task."""
         pending = [r for r in self._hitl.list_pending() if r.task_id == task_id]
         if not pending:
@@ -1198,8 +1264,7 @@ class ZelosRuntime:
             return {"status": "approved"}
         return {"status": "failed", "reason": "Approval rejected — approver not authorized"}
 
-    def reject_task(self, task_id: str, approver: str,
-                    reason: str = "") -> Dict[str, Any]:
+    def reject_task(self, task_id: str, approver: str, reason: str = "") -> dict[str, Any]:
         """Reject a HITL request for a task."""
         pending = [r for r in self._hitl.list_pending() if r.task_id == task_id]
         if not pending:
@@ -1230,13 +1295,12 @@ class ZelosRuntime:
                     if task_id.startswith(gid + "-approval"):
                         goal["status"] = "failed"
                         goal["completed_at"] = time.time()
-                        self._audit(approver, "goal.failed", gid,
-                                     detail=f"Rejected: {reason}")
+                        self._audit(approver, "goal.failed", gid, detail=f"Rejected: {reason}")
                         break
             return {"status": "rejected"}
         return {"status": "failed", "reason": "Rejection denied — approver not authorized"}
 
-    def list_pending_approvals(self) -> List[Dict[str, Any]]:
+    def list_pending_approvals(self) -> list[dict[str, Any]]:
         """List all pending HITL approval requests."""
         return [
             {
@@ -1253,8 +1317,7 @@ class ZelosRuntime:
 
     # ═══════════════════ Phase 3: Hot Reload API ═══════════════════
 
-    def reload_plugin(self, plugin_id: str, new_entrypoint: str,
-                      new_version: str) -> Dict[str, Any]:
+    def reload_plugin(self, plugin_id: str, new_entrypoint: str, new_version: str) -> dict[str, Any]:
         """Hot-reload a plugin to a new version."""
         current = self._hot_reload_manager.get_active_version(plugin_id)
         if current and current.version == new_version:
@@ -1266,8 +1329,8 @@ class ZelosRuntime:
 
         # Register new version (auto-activates as latest)
         self._hot_reload_manager.register_version(
-            plugin_id, new_version, new_entrypoint,
-            checksum=f"reload-{int(time.time())}")
+            plugin_id, new_version, new_entrypoint, checksum=f"reload-{int(time.time())}"
+        )
 
         # Reload in plugin manager
         for inst in self._plugin_manager.list_plugins():
@@ -1277,41 +1340,38 @@ class ZelosRuntime:
                 self._plugin_manager.start_plugin(plugin_id)
                 break
 
-        self._audit("system", "plugin.reload", plugin_id,
-                     detail=f"Reloaded to {new_version} ({new_entrypoint})")
+        self._audit("system", "plugin.reload", plugin_id, detail=f"Reloaded to {new_version} ({new_entrypoint})")
         return {"status": "ok", "plugin_id": plugin_id, "version": new_version}
 
-    def rollback_plugin(self, plugin_id: str,
-                        target_version: str) -> Dict[str, Any]:
+    def rollback_plugin(self, plugin_id: str, target_version: str) -> dict[str, Any]:
         """Rollback a plugin to a previous version."""
         target = self._hot_reload_manager.get_version(plugin_id, target_version)
         if not target:
-            return {"status": "failed",
-                    "reason": f"Version {target_version} not found for {plugin_id}"}
+            return {"status": "failed", "reason": f"Version {target_version} not found for {plugin_id}"}
 
         ok = self._hot_reload_manager.rollback(plugin_id, target_version)
         if ok:
-            self._audit("system", "plugin.rollback", plugin_id,
-                         detail=f"Rolled back to {target_version}")
+            self._audit("system", "plugin.rollback", plugin_id, detail=f"Rolled back to {target_version}")
             return {"status": "ok", "plugin_id": plugin_id, "version": target_version}
         return {"status": "failed", "reason": "Rollback failed"}
 
-    def set_upgrade_strategy(self, strategy_name: str) -> Dict[str, Any]:
+    def set_upgrade_strategy(self, strategy_name: str) -> dict[str, Any]:
         """Change the hot reload upgrade strategy."""
         try:
             strategy = UpgradeStrategy(strategy_name)
         except ValueError:
-            return {"status": "failed",
-                    "reason": f"Unknown strategy: {strategy_name}. "
-                    f"Available: {[s.value for s in UpgradeStrategy]}"}
+            return {
+                "status": "failed",
+                "reason": f"Unknown strategy: {strategy_name}. Available: {[s.value for s in UpgradeStrategy]}",
+            }
         self._hot_reload_manager.set_upgrade_strategy(strategy)
         return {"status": "ok", "strategy": strategy.value}
 
-    def get_plugin_versions(self, plugin_id: str) -> List[Dict[str, Any]]:
+    def get_plugin_versions(self, plugin_id: str) -> list[dict[str, Any]]:
         """Get version history for a plugin."""
         return [v.to_dict() for v in self._hot_reload_manager.get_versions(plugin_id)]
 
-    def _on_plugin_file_change(self, change_event: Dict[str, Any]) -> None:
+    def _on_plugin_file_change(self, change_event: dict[str, Any]) -> None:
         """Handle file watcher events for hot reload.
 
         Implements real strategy differentiation:
@@ -1344,29 +1404,22 @@ class ZelosRuntime:
             if strategy == UpgradeStrategy.CANARY:
                 new_ver = f"canary-{timestamp}"
                 self._hot_reload_manager.register_version(
-                    plugin_id, new_ver,
-                    self._get_plugin_entrypoint(plugin_id),
-                    canary_percent=10)
+                    plugin_id, new_ver, self._get_plugin_entrypoint(plugin_id), canary_percent=10
+                )
                 # Old version still gets 90% via _route_canary()
 
             elif strategy == UpgradeStrategy.BLUE_GREEN:
                 new_ver = f"bg-{timestamp}"
-                self._hot_reload_manager.register_version(
-                    plugin_id, new_ver,
-                    self._get_plugin_entrypoint(plugin_id))
+                self._hot_reload_manager.register_version(plugin_id, new_ver, self._get_plugin_entrypoint(plugin_id))
                 # Old version stays active — explicit cutover via reload_plugin()
 
             elif strategy == UpgradeStrategy.INSTANT:
                 new_ver = f"instant-{timestamp}"
-                self.reload_plugin(plugin_id,
-                                   self._get_plugin_entrypoint(plugin_id),
-                                   new_ver)
+                self.reload_plugin(plugin_id, self._get_plugin_entrypoint(plugin_id), new_ver)
 
             else:  # ROLLING (default)
                 new_ver = f"rolling-{timestamp}"
-                self.reload_plugin(plugin_id,
-                                   self._get_plugin_entrypoint(plugin_id),
-                                   new_ver)
+                self.reload_plugin(plugin_id, self._get_plugin_entrypoint(plugin_id), new_ver)
 
     def _get_plugin_entrypoint(self, plugin_id: str) -> str:
         """Get the current entrypoint of a plugin by its ID."""
@@ -1375,7 +1428,7 @@ class ZelosRuntime:
                 return inst.manifest.entrypoint or f"plugins.{plugin_id}:unknown"
         return f"plugins.{plugin_id}:unknown"
 
-    def _route_canary(self, plugin_id: str) -> Optional[str]:
+    def _route_canary(self, plugin_id: str) -> str | None:
         """CANARY routing: return which version to use based on canary_percent.
 
         This is called before dispatching a task to a plugin. Returns the
@@ -1396,43 +1449,49 @@ class ZelosRuntime:
 
         # Route based on canary_percent
         import random
+
         if random.randint(1, 100) <= canary_version.canary_percent:
             return canary_version.version  # Route to canary
         return active_version.version if active_version else None  # Route to stable
 
     # ═══════════════════ Phase 3: Security API ═══════════════════
 
-    def validate_api_key(self, key: str) -> Optional[Dict[str, Any]]:
+    def validate_api_key(self, key: str) -> dict[str, Any] | None:
         """Validate an API key. Returns role info or None."""
         return self._api_key_manager.validate(key)
 
-    def generate_api_key(self, role: str, description: str = "",
-                         ttl_seconds: Optional[float] = None,
-                         auth_context: Optional[Dict] = None) -> str:
+    def generate_api_key(
+        self, role: str, description: str = "", ttl_seconds: float | None = None, auth_context: dict | None = None
+    ) -> str:
         """Generate a new API key (admin only)."""
         err = self._check_auth(auth_context, "admin.api_key.generate", "")
         if err:
             return ""
         key = self._api_key_manager.generate_key(role, description, ttl_seconds)
-        self._audit(auth_context.get("actor", "system") if auth_context else "system",
-                     "api_key.generate", role[:8],
-                     detail=f"Generated key for role '{role}' ({description})")
+        self._audit(
+            auth_context.get("actor", "system") if auth_context else "system",
+            "api_key.generate",
+            role[:8],
+            detail=f"Generated key for role '{role}' ({description})",
+        )
         return key
 
-    def revoke_api_key(self, key: str,
-                       auth_context: Optional[Dict] = None) -> bool:
+    def revoke_api_key(self, key: str, auth_context: dict | None = None) -> bool:
         """Revoke an API key (admin only)."""
         err = self._check_auth(auth_context, "admin.api_key.revoke", "")
         if err:
             return False
         ok = self._api_key_manager.revoke(key)
         if ok:
-            self._audit(auth_context.get("actor", "system") if auth_context else "system",
-                         "api_key.revoke", "", detail="Key revoked")
+            self._audit(
+                auth_context.get("actor", "system") if auth_context else "system",
+                "api_key.revoke",
+                "",
+                detail="Key revoked",
+            )
         return ok
 
-    def get_audit_log(self, auth_context: Optional[Dict] = None,
-                      **filters) -> List[Dict[str, Any]]:
+    def get_audit_log(self, auth_context: dict | None = None, **filters) -> list[dict[str, Any]]:
         """Query audit log (admin/operator only)."""
         err = self._check_auth(auth_context or {}, "admin.audit.read", "")
         if err:
@@ -1440,39 +1499,43 @@ class ZelosRuntime:
         events = self._audit_logger.query(**filters)
         return [e.to_dict() for e in events]
 
-    def add_role(self, name: str, permissions: List[str],
-                 description: str = "",
-                 auth_context: Optional[Dict] = None) -> Dict[str, Any]:
+    def add_role(
+        self, name: str, permissions: list[str], description: str = "", auth_context: dict | None = None
+    ) -> dict[str, Any]:
         """Add a custom RBAC role."""
         err = self._check_auth(auth_context, "admin.role.manage", name)
         if err:
             return err
         self._access_control.add_role(name, permissions, description)
-        self._audit(auth_context.get("actor", "system") if auth_context else "system",
-                     "role.add", name)
+        self._audit(auth_context.get("actor", "system") if auth_context else "system", "role.add", name)
         return {"status": "ok", "role": name}
 
     # ═══════════════════ Phase 3: Multi-tenancy API ═══════════════════
 
-    def register_tenant(self, tenant_id: str, name: str = "",
-                        quotas: Optional[Dict] = None,
-                        metadata: Optional[Dict] = None,
-                        auth_context: Optional[Dict] = None) -> Dict[str, Any]:
+    def register_tenant(
+        self,
+        tenant_id: str,
+        name: str = "",
+        quotas: dict | None = None,
+        metadata: dict | None = None,
+        auth_context: dict | None = None,
+    ) -> dict[str, Any]:
         """Register a new tenant."""
         err = self._check_auth(auth_context, "admin.tenant.manage", tenant_id)
         if err:
             return err
         rq = ResourceQuota(**(quotas or {}))
         self._tenant_manager.register_tenant(tenant_id, name, rq, metadata)
-        self._audit(auth_context.get("actor", "system") if auth_context else "system",
-                     "tenant.register", tenant_id, detail=name)
+        self._audit(
+            auth_context.get("actor", "system") if auth_context else "system", "tenant.register", tenant_id, detail=name
+        )
         return {"status": "ok", "tenant_id": tenant_id}
 
-    def list_tenants(self, auth_context: Optional[Dict] = None) -> List[Dict[str, Any]]:
+    def list_tenants(self, auth_context: dict | None = None) -> list[dict[str, Any]]:
         """List all tenants."""
         return [t.to_dict() for t in self._tenant_manager.list_tenants()]
 
-    def get_tenant_usage(self, auth_context: Optional[Dict] = None) -> Dict[str, Any]:
+    def get_tenant_usage(self, auth_context: dict | None = None) -> dict[str, Any]:
         """Get usage report across all tenants."""
         return self._tenant_manager.get_usage_report()
 
@@ -1482,7 +1545,7 @@ class ZelosRuntime:
         """Check if this node is the cluster leader."""
         return self._leader_election.is_leader()
 
-    def get_cluster_status(self) -> Dict[str, Any]:
+    def get_cluster_status(self) -> dict[str, Any]:
         """Get cluster-wide status."""
         status = self._node_registry.cluster_status()
         status["this_node"] = self._node_id
@@ -1496,10 +1559,9 @@ class ZelosRuntime:
 
     # ═══════════════════ Admin ═══════════════════
 
-    def get_health(self) -> Dict[str, Any]:
+    def get_health(self) -> dict[str, Any]:
         agent_count = len(self._execution_engine.list_agents())
-        connected = sum(1 for a in self._execution_engine.list_agents()
-                        if a.status == "heartbeating")
+        connected = sum(1 for a in self._execution_engine.list_agents() if a.status == "heartbeating")
         plugin_statuses = {}
         for inst in self._plugin_manager.list_plugins():
             plugin_statuses[inst.manifest.plugin_id] = inst.status.value if inst.status else "unknown"
@@ -1520,23 +1582,22 @@ class ZelosRuntime:
                     "degraded": sum(1 for s in plugin_statuses.values() if s == "ERROR"),
                     "error": sum(1 for s in plugin_statuses.values() if s == "ERROR"),
                 },
-                "agents": {"total": agent_count, "connected": connected,
-                           "disconnected": agent_count - connected},
+                "agents": {"total": agent_count, "connected": connected, "disconnected": agent_count - connected},
                 "security": {"audit_events": audit_count, "mTLS_configured": self._tls_config.is_configured()},
                 "multi_tenancy": {"tenants": tenant_count},
                 "hitl": {"pending_approvals": pending_approvals},
-                "cluster": {"enabled": self._cluster_enabled,
-                            "is_leader": self._leader_election.is_leader()},
+                "cluster": {"enabled": self._cluster_enabled, "is_leader": self._leader_election.is_leader()},
             },
             "version": "0.3.0",
         }
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         tasks = self._task_graph.list_tasks()
         return {
             "goals": {
-                "active": sum(1 for g in self._goals.values()
-                              if g["status"] not in ("completed", "failed", "cancelled")),
+                "active": sum(
+                    1 for g in self._goals.values() if g["status"] not in ("completed", "failed", "cancelled")
+                ),
                 "completed_total": sum(1 for g in self._goals.values() if g["status"] == "completed"),
                 "failed_total": sum(1 for g in self._goals.values() if g["status"] == "failed"),
                 "cancelled_total": sum(1 for g in self._goals.values() if g["status"] == "cancelled"),
@@ -1550,20 +1611,25 @@ class ZelosRuntime:
             },
             "agents": {
                 "registered": len(self._execution_engine.list_agents()),
-                "connected": sum(1 for a in self._execution_engine.list_agents()
-                                 if a.status == "heartbeating"),
+                "connected": sum(1 for a in self._execution_engine.list_agents() if a.status == "heartbeating"),
                 "avg_success_rate": 0.9,
                 "total_tasks_dispatched": 0,
             },
             "events": {"published_total": self._event_bus.total_events(), "events_per_second": 0},
             # Phase 3
-            "security": {"audit_events": self._audit_logger.total_events(),
-                         "active_api_keys": len(self._api_key_manager.list_keys())},
-            "multi_tenancy": {"tenants": self._tenant_manager.tenant_count(),
-                              "usage": self._tenant_manager.get_usage_report()},
+            "security": {
+                "audit_events": self._audit_logger.total_events(),
+                "active_api_keys": len(self._api_key_manager.list_keys()),
+            },
+            "multi_tenancy": {
+                "tenants": self._tenant_manager.tenant_count(),
+                "usage": self._tenant_manager.get_usage_report(),
+            },
             "hitl": {"pending_approvals": self._hitl.get_pending_count()},
             "hot_reload": {"plugins_tracked": len(self._hot_reload_manager.list_plugins())},
-            "cluster": {"enabled": self._cluster_enabled,
-                        "nodes": self._node_registry.node_count() if self._cluster_enabled else 0,
-                        "is_leader": self._leader_election.is_leader()},
+            "cluster": {
+                "enabled": self._cluster_enabled,
+                "nodes": self._node_registry.node_count() if self._cluster_enabled else 0,
+                "is_leader": self._leader_election.is_leader(),
+            },
         }

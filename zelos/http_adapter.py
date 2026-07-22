@@ -7,13 +7,13 @@ Phase 3:
   - Full REST API: goals, agents, audit, tenants, cluster, approvals.
   - CORS headers for browser-based Dashboard access.
 """
+
 import json
 import ssl
-import os
 import threading
 import uuid
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Optional, Dict, Any
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any
 from urllib.parse import urlparse
 
 # ═══════════════════ Inline Dashboard HTML ═══════════════════
@@ -139,7 +139,7 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
     """HTTP request handler that translates REST calls to Runtime API."""
 
     _runtime: Any = None
-    _api_keys: Dict[str, str] = {}
+    _api_keys: dict[str, str] = {}
 
     def log_message(self, format, *args):
         pass
@@ -150,7 +150,7 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-    def _authenticate(self) -> Optional[str]:
+    def _authenticate(self) -> str | None:
         keys = self._api_keys
         if not keys:
             return "admin"
@@ -174,8 +174,7 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(data).encode())
 
     def _send_error(self, status: int, code: str, message: str):
-        self._send_json(status, {"error_code": code, "message": message,
-                                  "correlation_id": str(uuid.uuid4())})
+        self._send_json(status, {"error_code": code, "message": message, "correlation_id": str(uuid.uuid4())})
 
     def _read_body(self) -> dict:
         length = int(self.headers.get("Content-Length", 0))
@@ -184,7 +183,7 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length)
         return json.loads(raw) if raw else {}
 
-    def _check_auth(self) -> Optional[str]:
+    def _check_auth(self) -> str | None:
         role = self._authenticate()
         if role is None:
             self._send_error(401, "unauthorized", "Missing or invalid API key")
@@ -222,7 +221,7 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
 
             elif path == "/api/v1/goals":
                 goals_list = []
-                for gid, g in self._runtime._goals.items():
+                for gid, _g in self._runtime._goals.items():
                     goals_list.append(self._runtime.get_goal_status(gid))
                 self._send_json(200, goals_list)
 
@@ -261,8 +260,7 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
 
                     elif parts[2] == "approvals":
                         if parts[3] == "pending":
-                            self._send_json(200,
-                                self._runtime.list_pending_approvals() or [])
+                            self._send_json(200, self._runtime.list_pending_approvals() or [])
                         else:
                             self._send_error(404, "not_found", "Not found")
 
@@ -286,8 +284,9 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
             if path == "/api/v1/goals":
                 body = self._read_body()
                 if not body.get("description"):
-                    self._send_json(400, {"goal_id": str(uuid.uuid4()),
-                        "status": "rejected", "reason": "Description is required"})
+                    self._send_json(
+                        400, {"goal_id": str(uuid.uuid4()), "status": "rejected", "reason": "Description is required"}
+                    )
                     return
                 result = self._runtime.submit_goal(
                     description=body["description"],
@@ -301,30 +300,33 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
             elif path == "/api/v1/agents":
                 body = self._read_body()
                 if not body.get("capabilities"):
-                    self._send_json(400, {"status": "rejected",
-                        "reason": "At least one capability required"})
+                    self._send_json(400, {"status": "rejected", "reason": "At least one capability required"})
                     return
                 agent_id = self._runtime.add_agent(
                     name=body.get("name", "agent-" + str(uuid.uuid4())[:8]),
                     entrypoint=body.get("entrypoint", "builtin:Agent"),
                     capabilities=body.get("capabilities", []),
                 )
-                self._send_json(200, {"agent_id": agent_id, "status": "registered",
-                    "heartbeat_interval_ms": 30000, "runtime_version": "0.3.0"})
+                self._send_json(
+                    200,
+                    {
+                        "agent_id": agent_id,
+                        "status": "registered",
+                        "heartbeat_interval_ms": 30000,
+                        "runtime_version": "0.3.0",
+                    },
+                )
 
             elif len(parts) >= 5 and parts[2] == "agents":
                 agent_id = parts[3]
                 if parts[4] == "heartbeat":
                     ok = self._runtime._execution_engine.heartbeat(agent_id)
-                    self._send_json(200, {"status": "ok" if ok else "re-register",
-                                          "pending_tasks": 0})
+                    self._send_json(200, {"status": "ok" if ok else "re-register", "pending_tasks": 0})
                 elif len(parts) >= 7 and parts[4] == "tasks" and parts[6] == "result":
                     task_id = parts[5]
                     body = self._read_body()
-                    ok = self._runtime._execution_engine.submit_result(
-                        task_id, agent_id, body.get("result", body))
-                    self._send_json(200 if ok else 400,
-                                    {"status": "accepted" if ok else "rejected"})
+                    ok = self._runtime._execution_engine.submit_result(task_id, agent_id, body.get("result", body))
+                    self._send_json(200 if ok else 400, {"status": "accepted" if ok else "rejected"})
                 else:
                     self._send_error(404, "not_found", "Not found")
 
@@ -332,16 +334,14 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
             elif len(parts) >= 5 and parts[2] == "approvals" and parts[4] == "approve":
                 req_id = parts[3]
                 body = self._read_body()
-                result = self._runtime.approve_task(
-                    req_id, body.get("approver", "admin"), body.get("comment", ""))
+                result = self._runtime.approve_task(req_id, body.get("approver", "admin"), body.get("comment", ""))
                 self._send_json(200, result)
 
             # POST /api/v1/approvals/{id}/reject
             elif len(parts) >= 5 and parts[2] == "approvals" and parts[4] == "reject":
                 req_id = parts[3]
                 body = self._read_body()
-                result = self._runtime.reject_task(
-                    req_id, body.get("approver", "admin"), body.get("reason", ""))
+                result = self._runtime.reject_task(req_id, body.get("approver", "admin"), body.get("reason", ""))
                 self._send_json(200, result)
 
             else:
@@ -380,15 +380,16 @@ class HTTPAdapter:
       - CORS headers for browser access
     """
 
-    def __init__(self, runtime, host: str = "127.0.0.1", port: int = 9876,
-                 api_keys: Optional[dict] = None, tls_config=None):
+    def __init__(
+        self, runtime, host: str = "127.0.0.1", port: int = 9876, api_keys: dict | None = None, tls_config=None
+    ):
         self.runtime = runtime
         self.host = host
         self.port = port
         self._api_keys = api_keys or {}
         self._tls_config = tls_config
-        self._server: Optional[HTTPServer] = None
-        self._thread: Optional[threading.Thread] = None
+        self._server: HTTPServer | None = None
+        self._thread: threading.Thread | None = None
 
         adapter_runtime = runtime
         adapter_api_keys = api_keys or {}
@@ -411,19 +412,15 @@ class HTTPAdapter:
             )
             if self._tls_config.ca_file:
                 ctx.load_verify_locations(cafile=self._tls_config.ca_file)
-                ctx.verify_mode = (
-                    ssl.CERT_REQUIRED if self._tls_config.require_client_cert
-                    else ssl.CERT_OPTIONAL)
+                ctx.verify_mode = ssl.CERT_REQUIRED if self._tls_config.require_client_cert else ssl.CERT_OPTIONAL
             min_v = self._tls_config.min_tls_version
             if min_v == "TLSv1.3":
                 ctx.minimum_version = ssl.TLSVersion.TLSv1_3
             elif min_v == "TLSv1.2":
                 ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-            self._server.socket = ctx.wrap_socket(
-                self._server.socket, server_side=True)
+            self._server.socket = ctx.wrap_socket(self._server.socket, server_side=True)
 
-        self._thread = threading.Thread(
-            target=self._server.serve_forever, daemon=True)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
 
     def stop(self) -> None:

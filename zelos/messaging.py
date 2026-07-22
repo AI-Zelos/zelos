@@ -8,15 +8,15 @@ Message queue integration for distributed Zelos clusters:
 
 All adapters follow the same interface as InMemoryEventStore for drop-in use.
 """
+
 import json
-import time
 import threading
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
-
+from collections.abc import Callable
+from dataclasses import dataclass
 
 # ═══════════════════ Abstract Message Bus ═══════════════════
+
 
 class MessageBusAdapter(ABC):
     """Abstract interface for message queue adapters."""
@@ -39,9 +39,11 @@ class MessageBusAdapter(ABC):
 
 # ═══════════════════ Kafka Adapter ═══════════════════
 
+
 @dataclass
 class KafkaConfig:
     """Kafka connection configuration."""
+
     bootstrap_servers: str = "localhost:9092"
     topic_prefix: str = "zelos"
     consumer_group: str = "zelos-runtime"
@@ -66,7 +68,7 @@ class KafkaEventBus(MessageBusAdapter):
     if kafka-python is not installed.
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: dict | None = None):
         cfg = config or {}
         self._kafka_config = KafkaConfig(
             bootstrap_servers=cfg.get("bootstrap_servers", "localhost:9092"),
@@ -76,15 +78,14 @@ class KafkaEventBus(MessageBusAdapter):
         self._producer = None
         self._consumer = None
         self._connected = False
-        self._handlers: Dict[str, List[Callable]] = {}
-        self._consumer_thread: Optional[threading.Thread] = None
+        self._handlers: dict[str, list[Callable]] = {}
+        self._consumer_thread: threading.Thread | None = None
         self._running = False
 
     def connect(self) -> bool:
         """Connect to Kafka broker."""
         try:
-            from kafka import KafkaProducer, KafkaConsumer
-            from kafka.errors import KafkaError
+            from kafka import KafkaConsumer, KafkaProducer  # noqa: F401
 
             self._producer = KafkaProducer(
                 bootstrap_servers=self._kafka_config.bootstrap_servers,
@@ -140,8 +141,7 @@ class KafkaEventBus(MessageBusAdapter):
         if not self._consumer:
             return
         self._running = True
-        self._consumer_thread = threading.Thread(
-            target=self._consume_loop, daemon=True)
+        self._consumer_thread = threading.Thread(target=self._consume_loop, daemon=True)
         self._consumer_thread.start()
 
     def _consume_loop(self) -> None:
@@ -169,6 +169,7 @@ class KafkaEventBus(MessageBusAdapter):
 
 # ═══════════════════ NATS Adapter ═══════════════════
 
+
 class NATSEventBus(MessageBusAdapter):
     """NATS-backed event bus for lightweight, high-throughput messaging.
 
@@ -181,17 +182,18 @@ class NATSEventBus(MessageBusAdapter):
     Phase 3 provides the complete adapter logic.
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: dict | None = None):
         cfg = config or {}
         self._url = cfg.get("url", "nats://localhost:4222")
         self._subject_prefix = cfg.get("subject_prefix", "zelos")
         self._client = None
         self._connected = False
-        self._subscriptions: List[tuple] = []
+        self._subscriptions: list[tuple] = []
 
     def connect(self) -> bool:
         try:
             import nats
+
             self._client = nats.connect(self._url)
             self._connected = True
             return True
@@ -236,7 +238,7 @@ class NATSEventBus(MessageBusAdapter):
         else:
             self._subscriptions.append((subject, handler))
 
-    def request(self, topic: str, message: dict, timeout: float = 5.0) -> Optional[dict]:
+    def request(self, topic: str, message: dict, timeout: float = 5.0) -> dict | None:
         """NATS request-reply pattern."""
         subject = f"{self._subject_prefix}.rpc.{topic}"
         try:
@@ -261,6 +263,7 @@ class NATSEventBus(MessageBusAdapter):
 
 # ═══════════════════ etcd Coordinator ═══════════════════
 
+
 class EtcdCoordinator:
     """etcd-backed distributed coordination.
 
@@ -273,7 +276,7 @@ class EtcdCoordinator:
     Phase 3 provides the complete adapter logic.
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: dict | None = None):
         cfg = config or {}
         self._host = cfg.get("host", "localhost")
         self._port = cfg.get("port", 2379)
@@ -282,12 +285,13 @@ class EtcdCoordinator:
         self._connected = False
         self._lease = None
         self._leader_key = f"{self._prefix}/leader"
-        self._simulated_store: Dict[str, str] = {}  # In-memory fallback
-        self._simulated_leader: Optional[str] = None
+        self._simulated_store: dict[str, str] = {}  # In-memory fallback
+        self._simulated_leader: str | None = None
 
     def connect(self) -> bool:
         try:
             import etcd3
+
             self._client = etcd3.client(host=self._host, port=self._port)
             self._connected = True
             return True
@@ -332,7 +336,7 @@ class EtcdCoordinator:
         except Exception:
             return False
 
-    def get_leader(self) -> Optional[str]:
+    def get_leader(self) -> str | None:
         """Get the current leader's node ID."""
         try:
             if self._client:
@@ -354,7 +358,7 @@ class EtcdCoordinator:
         except Exception:
             return False
 
-    def get_config(self, key: str) -> Optional[dict]:
+    def get_config(self, key: str) -> dict | None:
         """Retrieve configuration from etcd."""
         full_key = f"{self._prefix}/config/{key}"
         try:
@@ -379,7 +383,7 @@ class EtcdCoordinator:
         except Exception:
             return False
 
-    def discover_nodes(self) -> List[dict]:
+    def discover_nodes(self) -> list[dict]:
         """Discover all registered nodes."""
         nodes_prefix = f"{self._prefix}/nodes/"
         try:
@@ -416,12 +420,10 @@ MESSAGING_BACKENDS = {
 }
 
 
-def create_messaging_backend(backend_type: str, config: Optional[Dict] = None) -> MessageBusAdapter:
+def create_messaging_backend(backend_type: str, config: dict | None = None) -> MessageBusAdapter:
     """Factory: create a messaging backend from configuration."""
     cls = MESSAGING_BACKENDS.get(backend_type.lower())
     if cls is None:
         supported = ", ".join(MESSAGING_BACKENDS.keys())
-        raise ValueError(
-            f"Unsupported messaging backend: '{backend_type}'. "
-            f"Supported: {supported}")
+        raise ValueError(f"Unsupported messaging backend: '{backend_type}'. Supported: {supported}")
     return cls(config)

@@ -6,17 +6,18 @@ Production-grade execution features beyond basic task dispatch:
   - SubGoalManager: Spawn sub-goals from within task execution
   - HumanInTheLoop: Approval workflows for critical actions
 """
+
+import threading
 import time
 import uuid
-import threading
-from enum import Enum
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from enum import Enum
+from typing import Any
 
-from .task_graph import Task, TaskStatus, TaskGraphEngine
-
+from .task_graph import Task, TaskGraphEngine, TaskStatus
 
 # ═══════════════════ Dynamic Plan Modification ═══════════════════
+
 
 class DynamicPlanModifier:
     """Modify an Execution Plan while it's running.
@@ -30,13 +31,20 @@ class DynamicPlanModifier:
 
     def __init__(self, task_graph: TaskGraphEngine):
         self._tg = task_graph
-        self._modification_log: List[Dict[str, Any]] = []
+        self._modification_log: list[dict[str, Any]] = []
         self._lock = threading.RLock()
 
-    def add_task(self, task_id: str, plan_id: str, description: str,
-                 required_capability: str, dependencies: Optional[List[str]] = None,
-                 priority: str = "medium", timeout_ms: int = 30000,
-                 fallback_capability: Optional[str] = None) -> Task:
+    def add_task(
+        self,
+        task_id: str,
+        plan_id: str,
+        description: str,
+        required_capability: str,
+        dependencies: list[str] | None = None,
+        priority: str = "medium",
+        timeout_ms: int = 30000,
+        fallback_capability: str | None = None,
+    ) -> Task:
         """Add a new task to a running plan."""
         task = Task(
             task_id=task_id,
@@ -72,14 +80,20 @@ class DynamicPlanModifier:
         task = self._tg.get_task(task_id)
         if not task:
             raise KeyError(f"Task not found: {task_id}")
-        if task.status in (TaskStatus.STARTED, TaskStatus.COMPLETED,
-                           TaskStatus.CANCELLED):
+        if task.status in (TaskStatus.STARTED, TaskStatus.COMPLETED, TaskStatus.CANCELLED):
             raise ValueError(f"Cannot modify task in '{task.status.value}' state")
 
         allowed_fields = {
-            "description", "required_capability", "priority", "timeout_ms",
-            "max_retries", "fallback_capability", "preferred_agent_id",
-            "min_success_rate", "max_cost_per_call", "max_latency_ms",
+            "description",
+            "required_capability",
+            "priority",
+            "timeout_ms",
+            "max_retries",
+            "fallback_capability",
+            "preferred_agent_id",
+            "min_success_rate",
+            "max_cost_per_call",
+            "max_latency_ms",
         }
 
         for key, value in updates.items():
@@ -96,8 +110,7 @@ class DynamicPlanModifier:
         """Add edge: from → to (to depends on from completing)."""
         with self._lock:
             self._tg.add_dependency(from_task_id, to_task_id)
-            self._log_modification("add_dependency", to_task_id,
-                                   {"depends_on": from_task_id})
+            self._log_modification("add_dependency", to_task_id, {"depends_on": from_task_id})
 
     def remove_dependency(self, from_task_id: str, to_task_id: str) -> None:
         """Remove dependency: to no longer depends on from."""
@@ -114,23 +127,24 @@ class DynamicPlanModifier:
 
             with self._lock:
                 self._tg.evaluate_all()
-                self._log_modification("remove_dependency", to_task_id,
-                                       {"removed_dep": from_task_id})
+                self._log_modification("remove_dependency", to_task_id, {"removed_dep": from_task_id})
 
-    def _log_modification(self, operation: str, target_id: str,
-                          details: Dict[str, Any]) -> None:
-        self._modification_log.append({
-            "operation": operation,
-            "target_id": target_id,
-            "details": details,
-            "timestamp": time.time(),
-        })
+    def _log_modification(self, operation: str, target_id: str, details: dict[str, Any]) -> None:
+        self._modification_log.append(
+            {
+                "operation": operation,
+                "target_id": target_id,
+                "details": details,
+                "timestamp": time.time(),
+            }
+        )
 
-    def get_modification_log(self) -> List[Dict[str, Any]]:
+    def get_modification_log(self) -> list[dict[str, Any]]:
         return list(self._modification_log)
 
 
 # ═══════════════════ Sub-Goal Spawning ═══════════════════
+
 
 class SubGoalManager:
     """Manage sub-goals spawned during task execution.
@@ -144,14 +158,18 @@ class SubGoalManager:
 
     def __init__(self, task_graph: TaskGraphEngine):
         self._tg = task_graph
-        self._sub_goals: Dict[str, Dict[str, Any]] = {}
+        self._sub_goals: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
 
-    def spawn_sub_goal(self, parent_task_id: str, description: str,
-                       budget: Optional[float] = None,
-                       priority: str = "medium",
-                       required_capability: str = "code-generation.python",
-                       num_tasks: int = 1) -> Dict[str, Any]:
+    def spawn_sub_goal(
+        self,
+        parent_task_id: str,
+        description: str,
+        budget: float | None = None,
+        priority: str = "medium",
+        required_capability: str = "code-generation.python",
+        num_tasks: int = 1,
+    ) -> dict[str, Any]:
         """Spawn a sub-goal from a parent task.
 
         Creates a mini plan with one or more tasks. Parent task should
@@ -196,7 +214,7 @@ class SubGoalManager:
 
         return sub_goal
 
-    def get_sub_goal(self, sub_goal_id: str) -> Optional[Dict[str, Any]]:
+    def get_sub_goal(self, sub_goal_id: str) -> dict[str, Any] | None:
         return self._sub_goals.get(sub_goal_id)
 
     def mark_sub_goal_failed(self, sub_goal_id: str) -> None:
@@ -213,11 +231,10 @@ class SubGoalManager:
             sg["status"] = "completed"
             sg["completed_at"] = time.time()
 
-    def list_sub_goals(self, parent_task_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_sub_goals(self, parent_task_id: str | None = None) -> list[dict[str, Any]]:
         """List all sub-goals, optionally filtered by parent."""
         if parent_task_id:
-            return [sg for sg in self._sub_goals.values()
-                    if sg["parent_task_id"] == parent_task_id]
+            return [sg for sg in self._sub_goals.values() if sg["parent_task_id"] == parent_task_id]
         return list(self._sub_goals.values())
 
     def are_all_completed(self, parent_task_id: str) -> bool:
@@ -234,6 +251,7 @@ class SubGoalManager:
 
 # ═══════════════════ Human-in-the-Loop ═══════════════════
 
+
 class ApprovalStatus(Enum):
     PENDING = "pending"
     APPROVED = "approved"
@@ -246,16 +264,17 @@ class ApprovalStatus(Enum):
 @dataclass
 class ApprovalRequest:
     """A request for human approval on a task action."""
+
     request_id: str
     task_id: str
     description: str
-    context: Dict[str, Any] = field(default_factory=dict)
-    approvers: List[str] = field(default_factory=list)
+    context: dict[str, Any] = field(default_factory=dict)
+    approvers: list[str] = field(default_factory=list)
     require_all: bool = False
     status: ApprovalStatus = ApprovalStatus.PENDING
     timeout_seconds: float = 3600.0
     created_at: float = field(default_factory=time.time)
-    resolved_at: Optional[float] = None
+    resolved_at: float | None = None
     resolution_comment: str = ""
 
 
@@ -270,15 +289,19 @@ class HumanInTheLoop:
     """
 
     def __init__(self):
-        self._requests: Dict[str, ApprovalRequest] = {}
-        self._history: Dict[str, List[Dict[str, Any]]] = {}
+        self._requests: dict[str, ApprovalRequest] = {}
+        self._history: dict[str, list[dict[str, Any]]] = {}
         self._lock = threading.RLock()
 
-    def create_request(self, task_id: str, description: str,
-                       approvers: List[str],
-                       context: Optional[Dict] = None,
-                       require_all: bool = False,
-                       timeout_seconds: float = 3600.0) -> ApprovalRequest:
+    def create_request(
+        self,
+        task_id: str,
+        description: str,
+        approvers: list[str],
+        context: dict | None = None,
+        require_all: bool = False,
+        timeout_seconds: float = 3600.0,
+    ) -> ApprovalRequest:
         """Create a new approval request."""
         req = ApprovalRequest(
             request_id=f"approval-{uuid.uuid4().hex[:12]}",
@@ -291,11 +314,13 @@ class HumanInTheLoop:
         )
         with self._lock:
             self._requests[req.request_id] = req
-            self._history[req.request_id] = [{
-                "action": "created",
-                "timestamp": req.created_at,
-                "detail": f"Approval requested from: {', '.join(approvers)}",
-            }]
+            self._history[req.request_id] = [
+                {
+                    "action": "created",
+                    "timestamp": req.created_at,
+                    "detail": f"Approval requested from: {', '.join(approvers)}",
+                }
+            ]
         return req
 
     def approve(self, request_id: str, approver: str, comment: str = "") -> bool:
@@ -307,19 +332,18 @@ class HumanInTheLoop:
             return False
 
         with self._lock:
-            self._history[request_id].append({
-                "action": "approved",
-                "approver": approver,
-                "comment": comment,
-                "timestamp": time.time(),
-            })
+            self._history[request_id].append(
+                {
+                    "action": "approved",
+                    "approver": approver,
+                    "comment": comment,
+                    "timestamp": time.time(),
+                }
+            )
 
             if req.require_all:
                 # Check if all approvers have approved
-                approved_set = {
-                    h["approver"] for h in self._history[request_id]
-                    if h["action"] == "approved"
-                }
+                approved_set = {h["approver"] for h in self._history[request_id] if h["action"] == "approved"}
                 if set(req.approvers).issubset(approved_set):
                     req.status = ApprovalStatus.APPROVED
                     req.resolved_at = time.time()
@@ -343,16 +367,17 @@ class HumanInTheLoop:
             req.status = ApprovalStatus.REJECTED
             req.resolved_at = time.time()
             req.resolution_comment = reason
-            self._history[request_id].append({
-                "action": "rejected",
-                "approver": approver,
-                "comment": reason,
-                "timestamp": time.time(),
-            })
+            self._history[request_id].append(
+                {
+                    "action": "rejected",
+                    "approver": approver,
+                    "comment": reason,
+                    "timestamp": time.time(),
+                }
+            )
         return True
 
-    def request_changes(self, request_id: str, approver: str,
-                        feedback: str = "") -> bool:
+    def request_changes(self, request_id: str, approver: str, feedback: str = "") -> bool:
         """Request changes — task goes back with feedback."""
         req = self._requests.get(request_id)
         if not req or req.status != ApprovalStatus.PENDING:
@@ -361,12 +386,14 @@ class HumanInTheLoop:
         with self._lock:
             req.status = ApprovalStatus.CHANGES_REQUESTED
             req.resolution_comment = feedback
-            self._history[request_id].append({
-                "action": "changes_requested",
-                "approver": approver,
-                "comment": feedback,
-                "timestamp": time.time(),
-            })
+            self._history[request_id].append(
+                {
+                    "action": "changes_requested",
+                    "approver": approver,
+                    "comment": feedback,
+                    "timestamp": time.time(),
+                }
+            )
         return True
 
     def cancel_request(self, request_id: str) -> bool:
@@ -378,25 +405,26 @@ class HumanInTheLoop:
         with self._lock:
             req.status = ApprovalStatus.CANCELLED
             req.resolved_at = time.time()
-            self._history[request_id].append({
-                "action": "cancelled",
-                "timestamp": time.time(),
-            })
+            self._history[request_id].append(
+                {
+                    "action": "cancelled",
+                    "timestamp": time.time(),
+                }
+            )
         return True
 
-    def get_request(self, request_id: str) -> Optional[ApprovalRequest]:
+    def get_request(self, request_id: str) -> ApprovalRequest | None:
         return self._requests.get(request_id)
 
-    def get_history(self, request_id: str) -> List[Dict[str, Any]]:
+    def get_history(self, request_id: str) -> list[dict[str, Any]]:
         """Get the full audit trail for a request."""
         return self._history.get(request_id, [])
 
-    def list_pending(self) -> List[ApprovalRequest]:
+    def list_pending(self) -> list[ApprovalRequest]:
         """List all pending approval requests."""
-        return [r for r in self._requests.values()
-                if r.status == ApprovalStatus.PENDING]
+        return [r for r in self._requests.values() if r.status == ApprovalStatus.PENDING]
 
-    def check_timeouts(self) -> List[ApprovalRequest]:
+    def check_timeouts(self) -> list[ApprovalRequest]:
         """Check and auto-reject timed-out requests."""
         now = time.time()
         timed_out = []

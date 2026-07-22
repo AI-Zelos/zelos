@@ -3,13 +3,11 @@ Phase 2 Plugin Isolation — Sub-process mode.
 
 Supports running plugins in separate processes with JSON stdin/stdout communication.
 """
+
 import json
 import subprocess
-import threading
-import time
-import os
 import sys
-from typing import Any, Dict, Optional
+import threading
 
 
 class SubProcessPlugin:
@@ -19,7 +17,7 @@ class SubProcessPlugin:
         self.command = command
         self.plugin_id = plugin_id
         self.timeout = timeout
-        self._process: Optional[subprocess.Popen] = None
+        self._process: subprocess.Popen | None = None
         self._running = False
         self._lock = threading.Lock()
 
@@ -54,7 +52,7 @@ class SubProcessPlugin:
             return False
         return self._process.poll() is None
 
-    def send(self, msg: dict) -> Optional[dict]:
+    def send(self, msg: dict) -> dict | None:
         """Send a JSON message and wait for response."""
         if not self._process or not self.is_running():
             return None
@@ -73,7 +71,7 @@ class SubProcessPlugin:
             self._process.stdin.write(json.dumps(msg) + "\n")
             self._process.stdin.flush()
 
-    def _recv_msg(self) -> Optional[dict]:
+    def _recv_msg(self) -> dict | None:
         if self._process and self._process.stdout:
             line = self._process.stdout.readline()
             if line:

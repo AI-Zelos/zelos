@@ -1,10 +1,10 @@
 """
 Capability Registry — Index of all registered Capabilities and their Agent providers.
 """
-import uuid
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
+from typing import Any
 
 
 class CapabilityStatus(Enum):
@@ -20,9 +20,9 @@ class CapabilityEntry:
     name: str
     version: str
     description: str = ""
-    input_schema: Dict[str, Any] = field(default_factory=dict)
-    output_schema: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
+    input_schema: dict[str, Any] = field(default_factory=dict)
+    output_schema: dict[str, Any] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
     status: str = "registered"
     agent_id: str = ""
     agent_name: str = ""
@@ -34,8 +34,8 @@ class CapabilityRegistry:
     """Kernel component — indexes all registered Capabilities."""
 
     def __init__(self):
-        self._capabilities: Dict[str, CapabilityEntry] = {}  # key = f"{name}@{version}@{agent_id}"
-        self._by_agent: Dict[str, List[str]] = {}  # agent_id → [cap_keys]
+        self._capabilities: dict[str, CapabilityEntry] = {}  # key = f"{name}@{version}@{agent_id}"
+        self._by_agent: dict[str, list[str]] = {}  # agent_id → [cap_keys]
 
     # ── Registration ──
 
@@ -43,8 +43,8 @@ class CapabilityRegistry:
         self,
         agent_id: str,
         agent_name: str,
-        capabilities: List[Dict[str, Any]],
-    ) -> List[str]:
+        capabilities: list[dict[str, Any]],
+    ) -> list[str]:
         """Register capabilities for an agent. Returns list of cap keys."""
         keys = []
         for cap in capabilities:
@@ -90,7 +90,7 @@ class CapabilityRegistry:
 
     # ── Query ──
 
-    def find_by_name(self, name: str, version_req: Optional[str] = None) -> List[CapabilityEntry]:
+    def find_by_name(self, name: str, version_req: str | None = None) -> list[CapabilityEntry]:
         results = []
         for entry in self._capabilities.values():
             if entry.name == name and entry.status != "removed":
@@ -98,26 +98,23 @@ class CapabilityRegistry:
                     results.append(entry)
         return results
 
-    def find_by_prefix(self, prefix: str) -> List[CapabilityEntry]:
-        return [e for e in self._capabilities.values()
-                if e.name.startswith(prefix) and e.status != "removed"]
+    def find_by_prefix(self, prefix: str) -> list[CapabilityEntry]:
+        return [e for e in self._capabilities.values() if e.name.startswith(prefix) and e.status != "removed"]
 
-    def find_by_tag(self, tags: List[str]) -> List[CapabilityEntry]:
+    def find_by_tag(self, tags: list[str]) -> list[CapabilityEntry]:
         """AND logic: all required tags must be present."""
         tag_set = set(tags)
-        return [e for e in self._capabilities.values()
-                if e.status != "removed" and tag_set.issubset(set(e.tags))]
+        return [e for e in self._capabilities.values() if e.status != "removed" and tag_set.issubset(set(e.tags))]
 
-    def find_providers_for(self, name: str, version_req: Optional[str] = None) -> List[str]:
+    def find_providers_for(self, name: str, version_req: str | None = None) -> list[str]:
         """Returns list of agent_ids providing this capability."""
         entries = self.find_by_name(name, version_req)
-        return list(set(e.agent_id for e in entries if e.status == "available"))
+        return list({e.agent_id for e in entries if e.status == "available"})
 
-    def get_by_agent(self, agent_id: str) -> List[CapabilityEntry]:
-        return [self._capabilities[k] for k in self._by_agent.get(agent_id, [])
-                if k in self._capabilities]
+    def get_by_agent(self, agent_id: str) -> list[CapabilityEntry]:
+        return [self._capabilities[k] for k in self._by_agent.get(agent_id, []) if k in self._capabilities]
 
-    def list_all(self) -> List[CapabilityEntry]:
+    def list_all(self) -> list[CapabilityEntry]:
         return [e for e in self._capabilities.values() if e.status != "removed"]
 
     def get_stats(self) -> dict:

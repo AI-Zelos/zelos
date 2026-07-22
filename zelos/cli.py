@@ -17,11 +17,10 @@ Usage:
     zelos plugin list
     zelos namespace list
 """
-import sys
-import json
-import argparse
-from typing import Any, Dict, List, Optional
 
+import argparse
+import json
+import sys
 
 __version__ = "0.3.0"
 
@@ -42,21 +41,16 @@ Examples:
         """,
     )
 
-    parser.add_argument("--version", action="store_true",
-                        help="Show version and exit")
-    parser.add_argument("--config", "-c", default="zelos.yaml",
-                        help="Path to configuration file (default: zelos.yaml)")
+    parser.add_argument("--version", action="store_true", help="Show version and exit")
+    parser.add_argument("--config", "-c", default="zelos.yaml", help="Path to configuration file (default: zelos.yaml)")
 
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
     # ── start ──
     start_parser = sub.add_parser("start", help="Start the Zelos Runtime server")
-    start_parser.add_argument("--host", default="127.0.0.1",
-                              help="Bind host (default: 127.0.0.1)")
-    start_parser.add_argument("--port", type=int, default=9876,
-                              help="Bind port (default: 9876)")
-    start_parser.add_argument("--daemon", action="store_true",
-                              help="Run as daemon (background)")
+    start_parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
+    start_parser.add_argument("--port", type=int, default=9876, help="Bind port (default: 9876)")
+    start_parser.add_argument("--daemon", action="store_true", help="Run as daemon (background)")
 
     # ── stop ──
     sub.add_parser("stop", help="Stop the Zelos Runtime server")
@@ -66,27 +60,25 @@ Examples:
     goal_sub = goal_parser.add_subparsers(dest="goal_command")
 
     goal_submit = goal_sub.add_parser("submit", help="Submit a new goal")
-    goal_submit.add_argument("--description", "-d", required=True,
-                             help="Goal description (natural language)")
-    goal_submit.add_argument("--priority", "-p", default="medium",
-                             choices=["low", "medium", "high", "critical"],
-                             help="Goal priority (default: medium)")
-    goal_submit.add_argument("--budget", "-b", type=float, default=None,
-                             help="Maximum budget for this goal")
-    goal_submit.add_argument("--deadline", default=None,
-                             help="Deadline (ISO 8601 format)")
-    goal_submit.add_argument("--tenant", "-t", default=None,
-                             help="Tenant ID for multi-tenant deployments")
+    goal_submit.add_argument("--description", "-d", required=True, help="Goal description (natural language)")
+    goal_submit.add_argument(
+        "--priority",
+        "-p",
+        default="medium",
+        choices=["low", "medium", "high", "critical"],
+        help="Goal priority (default: medium)",
+    )
+    goal_submit.add_argument("--budget", "-b", type=float, default=None, help="Maximum budget for this goal")
+    goal_submit.add_argument("--deadline", default=None, help="Deadline (ISO 8601 format)")
+    goal_submit.add_argument("--tenant", "-t", default=None, help="Tenant ID for multi-tenant deployments")
 
     goal_status = goal_sub.add_parser("status", help="Get goal status")
-    goal_status.add_argument("--goal-id", "-g", required=True,
-                             help="Goal ID to query")
+    goal_status.add_argument("--goal-id", "-g", required=True, help="Goal ID to query")
 
     goal_sub.add_parser("list", help="List all goals")
 
     goal_cancel = goal_sub.add_parser("cancel", help="Cancel a goal")
-    goal_cancel.add_argument("--goal-id", "-g", required=True,
-                             help="Goal ID to cancel")
+    goal_cancel.add_argument("--goal-id", "-g", required=True, help="Goal ID to cancel")
 
     # ── agent ──
     agent_parser = sub.add_parser("agent", help="Agent management")
@@ -95,8 +87,7 @@ Examples:
     agent_sub.add_parser("list", help="List all registered agents")
 
     agent_info = agent_sub.add_parser("info", help="Get agent details")
-    agent_info.add_argument("--agent-id", "-a", required=True,
-                            help="Agent ID or name")
+    agent_info.add_argument("--agent-id", "-a", required=True, help="Agent ID or name")
 
     # ── health ──
     sub.add_parser("health", help="Check Runtime health")
@@ -117,8 +108,8 @@ Examples:
     # ── config ──
     config_parser = sub.add_parser("config", help="Configuration management")
     config_sub = config_parser.add_subparsers(dest="config_command")
-    config_show = config_sub.add_parser("show", help="Show current configuration")
-    config_validate = config_sub.add_parser("validate", help="Validate configuration file")
+    config_sub.add_parser("show", help="Show current configuration")
+    config_sub.add_parser("validate", help="Validate configuration file")
 
     return parser
 
@@ -135,7 +126,7 @@ class ZelosCLI:
         self.runtime = runtime
         self.parser = build_argument_parser()
 
-    def run(self, args: Optional[List[str]] = None) -> str:
+    def run(self, args: list[str] | None = None) -> str:
         """Parse args and dispatch to the appropriate handler.
 
         Returns a formatted output string.
@@ -168,20 +159,17 @@ class ZelosCLI:
     def _cmd_start(self, args) -> str:
         host = args.host
         port = args.port
-        config = args.config if hasattr(args, 'config') else "zelos.yaml"
-        daemon = args.daemon if hasattr(args, 'daemon') else False
+        config = args.config if hasattr(args, "config") else "zelos.yaml"
+        daemon = args.daemon if hasattr(args, "daemon") else False
 
         if self.runtime:
             self.runtime.start()
-            return (f"Zelos Runtime started on {host}:{port}\n"
-                    f"  Config: {config}\n"
-                    f"  Version: {__version__}")
+            return f"Zelos Runtime started on {host}:{port}\n  Config: {config}\n  Version: {__version__}"
 
         mode = "daemon" if daemon else "foreground"
-        return (f"Zelos Runtime would start on {host}:{port}\n"
-                f"  Config: {config}\n"
-                f"  Mode: {mode}\n"
-                f"  Version: {__version__}")
+        return (
+            f"Zelos Runtime would start on {host}:{port}\n  Config: {config}\n  Mode: {mode}\n  Version: {__version__}"
+        )
 
     def _cmd_stop(self, args) -> str:
         if self.runtime:
@@ -191,7 +179,7 @@ class ZelosCLI:
 
     def _cmd_goal(self, args) -> str:
         """Goal subcommand dispatcher."""
-        subcmd = getattr(args, 'goal_command', None)
+        subcmd = getattr(args, "goal_command", None)
         if subcmd == "submit":
             return self._goal_submit(args)
         elif subcmd == "status":
@@ -208,29 +196,34 @@ class ZelosCLI:
         budget = args.budget
 
         if self.runtime:
-            result = self.runtime.submit_goal(
-                description=desc, priority=priority, budget=budget)
-            return (f"Goal submitted\n"
-                    f"  Goal ID: {result.get('goal_id', 'N/A')}\n"
-                    f"  Status: {result.get('status', 'N/A')}\n"
-                    f"  Tasks: {result.get('task_count', 0)}")
+            result = self.runtime.submit_goal(description=desc, priority=priority, budget=budget)
+            return (
+                f"Goal submitted\n"
+                f"  Goal ID: {result.get('goal_id', 'N/A')}\n"
+                f"  Status: {result.get('status', 'N/A')}\n"
+                f"  Tasks: {result.get('task_count', 0)}"
+            )
 
-        return (f"Goal submitted (simulation)\n"
-                f"  Description: {desc}\n"
-                f"  Priority: {priority}\n"
-                f"  Budget: {budget or 'unlimited'}")
+        return (
+            f"Goal submitted (simulation)\n"
+            f"  Description: {desc}\n"
+            f"  Priority: {priority}\n"
+            f"  Budget: {budget or 'unlimited'}"
+        )
 
     def _goal_status(self, args) -> str:
-        goal_id = getattr(args, 'goal_id', None)
+        goal_id = getattr(args, "goal_id", None)
         if self.runtime:
             status = self.runtime.get_goal_status(goal_id)
             if status:
                 progress = status.get("progress", {})
-                return (f"Goal: {goal_id}\n"
-                        f"  Status: {status.get('status', 'N/A')}\n"
-                        f"  Progress: {progress.get('percent_complete', 0):.0f}% "
-                        f"({progress.get('completed_tasks', 0)}/"
-                        f"{progress.get('total_tasks', 0)} tasks)")
+                return (
+                    f"Goal: {goal_id}\n"
+                    f"  Status: {status.get('status', 'N/A')}\n"
+                    f"  Progress: {progress.get('percent_complete', 0):.0f}% "
+                    f"({progress.get('completed_tasks', 0)}/"
+                    f"{progress.get('total_tasks', 0)} tasks)"
+                )
         return f"Goal: {goal_id}\n  Status: not found"
 
     def _goal_list(self, args) -> str:
@@ -238,13 +231,12 @@ class ZelosCLI:
             goals = self.runtime._goals
             lines = [f"Goals ({len(goals)} total):"]
             for gid, g in list(goals.items())[:10]:
-                lines.append(f"  {gid}: {g.get('status', 'unknown')} — "
-                           f"{g.get('description', '')[:60]}")
+                lines.append(f"  {gid}: {g.get('status', 'unknown')} — {g.get('description', '')[:60]}")
             return "\n".join(lines)
         return "Goals (simulation):\n  No active goals"
 
     def _goal_cancel(self, args) -> str:
-        goal_id = getattr(args, 'goal_id', None)
+        goal_id = getattr(args, "goal_id", None)
         if self.runtime:
             result = self.runtime.cancel_goal(goal_id)
             if result:
@@ -253,7 +245,7 @@ class ZelosCLI:
 
     def _cmd_agent(self, args) -> str:
         """Agent subcommand dispatcher."""
-        subcmd = getattr(args, 'agent_command', None)
+        subcmd = getattr(args, "agent_command", None)
         if subcmd == "list":
             return self._agent_list(args)
         elif subcmd == "info":
@@ -265,34 +257,40 @@ class ZelosCLI:
             agents = self.runtime.list_agents()
             lines = [f"Agents ({len(agents)} total):"]
             for a in agents:
-                lines.append(f"  {a.get('name', 'N/A')} ({a.get('agent_id', '')[:8]}...): "
-                           f"{a.get('status', 'unknown')} — "
-                           f"{a.get('current_tasks', 0)} tasks")
+                lines.append(
+                    f"  {a.get('name', 'N/A')} ({a.get('agent_id', '')[:8]}...): "
+                    f"{a.get('status', 'unknown')} — "
+                    f"{a.get('current_tasks', 0)} tasks"
+                )
             return "\n".join(lines)
         return "Agents (simulation):\n  No registered agents"
 
     def _agent_info(self, args) -> str:
-        agent_id = getattr(args, 'agent_id', None)
+        agent_id = getattr(args, "agent_id", None)
         if self.runtime:
             agent = self.runtime.get_agent(agent_id)
             if agent:
                 caps = [c.get("name", c) for c in agent.get("capabilities", [])]
-                return (f"Agent: {agent.get('name', agent_id)}\n"
-                        f"  ID: {agent.get('agent_id', 'N/A')}\n"
-                        f"  Status: {agent.get('status', 'N/A')}\n"
-                        f"  Capabilities: {', '.join(caps) if caps else 'none'}\n"
-                        f"  Tasks: {agent.get('current_tasks', 0)} current / "
-                        f"{agent.get('max_concurrent_tasks', 0)} max\n"
-                        f"  Success Rate: {agent.get('historical_success_rate', 0):.0%}")
+                return (
+                    f"Agent: {agent.get('name', agent_id)}\n"
+                    f"  ID: {agent.get('agent_id', 'N/A')}\n"
+                    f"  Status: {agent.get('status', 'N/A')}\n"
+                    f"  Capabilities: {', '.join(caps) if caps else 'none'}\n"
+                    f"  Tasks: {agent.get('current_tasks', 0)} current / "
+                    f"{agent.get('max_concurrent_tasks', 0)} max\n"
+                    f"  Success Rate: {agent.get('historical_success_rate', 0):.0%}"
+                )
         return f"Agent: {agent_id}\n  Status: not found (simulation)"
 
     def _cmd_health(self, args) -> str:
         if self.runtime:
             health = self.runtime.get_health()
-            return (f"Zelos Runtime Health: {health.get('status', 'unknown')}\n"
-                    f"  Uptime: {health.get('uptime_seconds', 0):.0f}s\n"
-                    f"  Version: {health.get('version', 'N/A')}\n"
-                    f"  Kernel: {health.get('components', {}).get('kernel', 'N/A')}")
+            return (
+                f"Zelos Runtime Health: {health.get('status', 'unknown')}\n"
+                f"  Uptime: {health.get('uptime_seconds', 0):.0f}s\n"
+                f"  Version: {health.get('version', 'N/A')}\n"
+                f"  Kernel: {health.get('components', {}).get('kernel', 'N/A')}"
+            )
         return "Zelos Runtime Health: healthy (simulation)\n  Version: 0.3.0"
 
     def _cmd_metrics(self, args) -> str:
@@ -302,43 +300,49 @@ class ZelosCLI:
             tasks = metrics.get("tasks", {})
             agents = metrics.get("agents", {})
             events = metrics.get("events", {})
-            return (f"Zelos Metrics:\n"
-                    f"  Goals: {goals.get('active', 0)} active, "
-                    f"{goals.get('completed_total', 0)} completed, "
-                    f"{goals.get('failed_total', 0)} failed\n"
-                    f"  Tasks: {tasks.get('in_flight', 0)} in-flight, "
-                    f"{tasks.get('completed_total', 0)} completed, "
-                    f"{tasks.get('failed_total', 0)} failed\n"
-                    f"  Agents: {agents.get('registered', 0)} registered, "
-                    f"{agents.get('connected', 0)} connected\n"
-                    f"  Events: {events.get('published_total', 0)} total")
-        return ("Zelos Metrics (simulation):\n"
-                "  Goals: 0 active\n"
-                "  Tasks: 0 in-flight\n"
-                "  Agents: 0 registered\n"
-                "  Events: 0 total")
+            return (
+                f"Zelos Metrics:\n"
+                f"  Goals: {goals.get('active', 0)} active, "
+                f"{goals.get('completed_total', 0)} completed, "
+                f"{goals.get('failed_total', 0)} failed\n"
+                f"  Tasks: {tasks.get('in_flight', 0)} in-flight, "
+                f"{tasks.get('completed_total', 0)} completed, "
+                f"{tasks.get('failed_total', 0)} failed\n"
+                f"  Agents: {agents.get('registered', 0)} registered, "
+                f"{agents.get('connected', 0)} connected\n"
+                f"  Events: {events.get('published_total', 0)} total"
+            )
+        return (
+            "Zelos Metrics (simulation):\n"
+            "  Goals: 0 active\n"
+            "  Tasks: 0 in-flight\n"
+            "  Agents: 0 registered\n"
+            "  Events: 0 total"
+        )
 
     def _cmd_plugin(self, args) -> str:
-        subcmd = getattr(args, 'plugin_command', None)
+        subcmd = getattr(args, "plugin_command", None)
         if subcmd == "list":
             if self.runtime:
                 plugins = self.runtime._plugin_manager.list_plugins()
                 lines = [f"Plugins ({len(plugins)} total):"]
                 for p in plugins:
-                    lines.append(f"  {p.manifest.plugin_id}: {p.manifest.plugin_type} "
-                               f"({p.status.value if p.status else 'unknown'})")
+                    lines.append(
+                        f"  {p.manifest.plugin_id}: {p.manifest.plugin_type} "
+                        f"({p.status.value if p.status else 'unknown'})"
+                    )
                 return "\n".join(lines)
             return "Plugins (simulation):\n  No active plugins"
         return "Usage: zelos plugin list"
 
     def _cmd_namespace(self, args) -> str:
-        subcmd = getattr(args, 'namespace_command', None)
+        subcmd = getattr(args, "namespace_command", None)
         if subcmd == "list":
             return "Namespaces (simulation):\n  default — Default Namespace"
         return "Usage: zelos namespace list"
 
     def _cmd_config(self, args) -> str:
-        subcmd = getattr(args, 'config_command', None)
+        subcmd = getattr(args, "config_command", None)
         if subcmd == "show":
             if self.runtime:
                 return f"Configuration:\n{json.dumps(self.runtime.config, indent=2)}"

@@ -1,0 +1,39 @@
+# Zelos Runtime + Dashboard
+services:
+  runtime:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+    image: zelos:0.3.0
+    container_name: zelos-runtime
+    ports:
+      - "9876:9876"
+    volumes:
+      - ./zelos.yaml:/app/zelos.yaml:ro
+      - zelos-data:/app/data
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9876/api/v1/health')"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Optional: Redis for persistent event storage
+  redis:
+    image: redis:7-alpine
+    container_name: zelos-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    profiles:
+      - storage
+
+volumes:
+  zelos-data:
+  redis-data:

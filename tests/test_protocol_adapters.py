@@ -1,27 +1,50 @@
 """Protocol Adapters — Acceptance Tests: gRPC, WebSocket, MCP, A2A."""
-import sys, os
+
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from zelos.protocol_adapters import GRPCAdapter, WebSocketAdapter, MCPAdapter, A2AAdapter
-from zelos.runtime import ZelosRuntime
 from zelos.event_bus import Event
+from zelos.protocol_adapters import A2AAdapter, GRPCAdapter, MCPAdapter, WebSocketAdapter
+from zelos.runtime import ZelosRuntime
 
-PASS = 0; FAIL = 0
+PASS = 0
+FAIL = 0
+
 
 def t(name, condition):
     global PASS, FAIL
     if condition:
-        PASS += 1; print(f"  ✅ {name}")
+        PASS += 1
+        print(f"  ✅ {name}")
     else:
-        FAIL += 1; print(f"  ❌ {name}")
+        FAIL += 1
+        print(f"  ❌ {name}")
+
 
 def test_protocol_adapters():
     print("\n🌐 Protocol Adapters")
 
     rt = ZelosRuntime()
-    rt.add_agent("TestAgent", "test:Agent", [
-        type('C', (), {'name': 'code-generation.python', 'version': '1.0.0', 'description': 'test', 'input_schema': {}, 'output_schema': {}, 'tags': []})
-    ])
+    rt.add_agent(
+        "TestAgent",
+        "test:Agent",
+        [
+            type(
+                "C",
+                (),
+                {
+                    "name": "code-generation.python",
+                    "version": "1.0.0",
+                    "description": "test",
+                    "input_schema": {},
+                    "output_schema": {},
+                    "tags": [],
+                },
+            )
+        ],
+    )
     rt.start()
 
     # ── gRPC Adapter ──
@@ -29,12 +52,15 @@ def test_protocol_adapters():
 
     # PROT-01: SubmitGoal via gRPC
     result = grpc.SubmitGoal({"description": "Test gRPC goal", "priority": "high"})
-    t("PROT-01: gRPC SubmitGoal", result.get("status") in ("accepted", "planned") and len(result.get("goal_id", "")) > 0)
+    t(
+        "PROT-01: gRPC SubmitGoal",
+        result.get("status") in ("accepted", "planned") and len(result.get("goal_id", "")) > 0,
+    )
 
     # PROT-02: RegisterAgent via gRPC
-    agent_result = grpc.RegisterAgent({"name": "GRPCAgent", "capabilities": [
-        {"name": "code-generation.python", "version": "1.0.0"}
-    ]})
+    agent_result = grpc.RegisterAgent(
+        {"name": "GRPCAgent", "capabilities": [{"name": "code-generation.python", "version": "1.0.0"}]}
+    )
     t("PROT-02: gRPC RegisterAgent", "agent_id" in agent_result and agent_result["status"] == "registered")
 
     # PROT-02b: GetGoalStatus
@@ -59,11 +85,19 @@ def test_protocol_adapters():
     ws.watch_goal("client-1", result["goal_id"])
 
     # Publish a goal event
-    import uuid, time as _t
-    rt._event_bus.publish(Event(
-        str(uuid.uuid4()), "goal.planned", "test", _t.time(), result["goal_id"],
-        payload={"goal_id": result["goal_id"]}
-    ))
+    import time as _t
+    import uuid
+
+    rt._event_bus.publish(
+        Event(
+            str(uuid.uuid4()),
+            "goal.planned",
+            "test",
+            _t.time(),
+            result["goal_id"],
+            payload={"goal_id": result["goal_id"]},
+        )
+    )
 
     events = ws.get_events("client-1")
     t("PROT-07: WebSocket goal events", len(events) >= 1)
@@ -74,14 +108,22 @@ def test_protocol_adapters():
 
     # ── MCP Adapter ──
     mcp = MCPAdapter(rt)
-    mcp.register_tool("read_file", "http://tool-server:3000", {
-        "description": "Read a file from the filesystem",
-        "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}},
-    })
-    mcp.register_tool("web_search", "http://tool-server:3000", {
-        "description": "Search the web",
-        "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}},
-    })
+    mcp.register_tool(
+        "read_file",
+        "http://tool-server:3000",
+        {
+            "description": "Read a file from the filesystem",
+            "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}},
+        },
+    )
+    mcp.register_tool(
+        "web_search",
+        "http://tool-server:3000",
+        {
+            "description": "Search the web",
+            "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}},
+        },
+    )
 
     tools = mcp.list_tools()
     t("PROT-03: MCP list tools", len(tools) == 2)

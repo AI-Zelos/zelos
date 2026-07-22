@@ -7,11 +7,14 @@ SchemaVerifier → CodeReviewer → SecurityScanner → FactChecker
 
 用法: python3 demo/11_verifier_pipeline.py
 """
-import sys, os
+
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from zelos.verifier import SchemaVerifier, VerificationGate, VerificationCriteria
-from zelos.verifier_v2 import CodeReviewer, SecurityScanner, FactChecker
+from zelos.verifier import SchemaVerifier, VerificationCriteria, VerificationGate
+from zelos.verifier_v2 import CodeReviewer, FactChecker, SecurityScanner
 
 
 def main():
@@ -38,21 +41,21 @@ def main():
     # 测试 1: 干净代码 — 全部通过
     clean = {"code": "def hello():\n    return 'Hello, World!'"}
     v1 = gate.verify(clean, criteria)
-    print(f"\n🔹 干净代码:")
+    print("\n🔹 干净代码:")
     print(f"   结果: {v1.verdict} | 分数: {v1.score} | {v1.summary}")
 
     # 测试 2: eval 漏洞 — SecurityScanner 拦截
     dangerous = {"code": "x = eval(input())"}
     v2 = gate.verify(dangerous, criteria)
-    print(f"\n🔸 eval() 代码:")
+    print("\n🔸 eval() 代码:")
     print(f"   结果: {v2.verdict} | 分数: {v2.score}")
     for i in v2.issues[:3]:
-        print(f"   · [{i['severity']}] {i['message']} ({i.get('location','')})")
+        print(f"   · [{i['severity']}] {i['message']} ({i.get('location', '')})")
 
     # 测试 3: SQL 注入 — SecurityScanner 拦截
     sql_inject = {"code": 'query = "SELECT * FROM users WHERE id=" + user_id'}
     v3 = gate.verify(sql_inject, criteria)
-    print(f"\n🔸 SQL 注入:")
+    print("\n🔸 SQL 注入:")
     print(f"   结果: {v3.verdict} | 分数: {v3.score}")
     for i in v3.issues:
         print(f"   · [{i['severity']}] {i['message']}")
@@ -60,7 +63,7 @@ def main():
     # 测试 4: 硬编码密码 + XSS — 多重告警
     bad_code = {"code": 'password = "admin123"\nel.innerHTML = user_input'}
     v4 = gate.verify(bad_code, criteria)
-    print(f"\n🔸 硬编码密码 + XSS:")
+    print("\n🔸 硬编码密码 + XSS:")
     print(f"   结果: {v4.verdict} | 问题数: {len(v4.issues)}")
     for i in v4.issues:
         print(f"   · [{i['severity']}] {i['message']}")
@@ -68,10 +71,10 @@ def main():
     # 测试 5: 未来声明 — FactChecker 标记
     prediction = {"code": "# Prediction: Zelos will reach 1 million users by 2028\nprint('hello')"}
     v5 = gate.verify(prediction, criteria)
-    print(f"\n🔹 未来声明:")
+    print("\n🔹 未来声明:")
     print(f"   结果: {v5.verdict} | {v5.summary}")
 
-    print(f"\n✅ Demo 11 完成 — 四级验证链全部通过测试")
+    print("\n✅ Demo 11 完成 — 四级验证链全部通过测试")
 
 
 if __name__ == "__main__":

@@ -7,21 +7,23 @@ Production-grade security infrastructure:
   - API Key generation, validation, revocation, expiration
   - mTLS configuration support
 """
-import time
-import uuid
-import json
+
 import hashlib
+import json
 import secrets
 import threading
+import time
+import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
-
+from typing import Any
 
 # ═══════════════════ Access Control ═══════════════════
+
 
 @dataclass
 class Permission:
     """A single permission — dot-separated action path."""
+
     action: str
     description: str = ""
 
@@ -29,8 +31,9 @@ class Permission:
 @dataclass
 class Role:
     """A named role with a set of permissions. '*' means all permissions."""
+
     name: str
-    permissions: Set[str] = field(default_factory=set)
+    permissions: set[str] = field(default_factory=set)
     description: str = ""
 
 
@@ -51,10 +54,16 @@ class AccessControl:
         },
         "operator": {
             "permissions": [
-                "goal.submit", "goal.cancel", "goal.read",
-                "task.create", "task.cancel", "task.read",
-                "agent.read", "agent.register",
-                "plugin.read", "plugin.configure",
+                "goal.submit",
+                "goal.cancel",
+                "goal.read",
+                "task.create",
+                "task.cancel",
+                "task.read",
+                "agent.read",
+                "agent.register",
+                "plugin.read",
+                "plugin.configure",
                 "metrics.read",
             ],
             "description": "Operational control — manage goals and tasks",
@@ -69,14 +78,17 @@ class AccessControl:
         },
         "viewer": {
             "permissions": [
-                "goal.read", "task.read", "agent.read", "metrics.read",
+                "goal.read",
+                "task.read",
+                "agent.read",
+                "metrics.read",
             ],
             "description": "Read-only access to all resources",
         },
     }
 
     def __init__(self):
-        self.roles: Dict[str, Role] = {}
+        self.roles: dict[str, Role] = {}
         self._lock = threading.RLock()
         self._init_defaults()
 
@@ -84,15 +96,16 @@ class AccessControl:
         for name, spec in self.DEFAULT_ROLES.items():
             self.add_role(name, spec["permissions"], spec["description"])
 
-    def add_role(self, name: str, permissions: List[str], description: str = "") -> Role:
+    def add_role(self, name: str, permissions: list[str], description: str = "") -> Role:
         """Add or replace a role."""
         role = Role(name=name, permissions=set(permissions), description=description)
         with self._lock:
             self.roles[name] = role
         return role
 
-    def update_role(self, name: str, add_permissions: Optional[List[str]] = None,
-                    remove_permissions: Optional[List[str]] = None) -> Optional[Role]:
+    def update_role(
+        self, name: str, add_permissions: list[str] | None = None, remove_permissions: list[str] | None = None
+    ) -> Role | None:
         """Update an existing role's permissions."""
         with self._lock:
             role = self.roles.get(name)
@@ -139,17 +152,17 @@ class AccessControl:
             if perm.endswith(".*"):
                 prefix = perm[:-2]
                 perm_parts = prefix.split(".")
-                if action_parts[:len(perm_parts)] == perm_parts:
+                if action_parts[: len(perm_parts)] == perm_parts:
                     return True
 
         return False
 
-    def list_permissions(self, role_name: str) -> List[str]:
+    def list_permissions(self, role_name: str) -> list[str]:
         """List all permissions for a role."""
         role = self.roles.get(role_name)
         return sorted(role.permissions) if role else []
 
-    def list_roles(self) -> List[Dict[str, Any]]:
+    def list_roles(self) -> list[dict[str, Any]]:
         """List all roles with their permissions."""
         return [
             {"name": r.name, "permissions": sorted(r.permissions), "description": r.description}
@@ -159,9 +172,11 @@ class AccessControl:
 
 # ═══════════════════ Audit Logging ═══════════════════
 
+
 @dataclass
 class AuditEvent:
     """Immutable audit log entry."""
+
     event_id: str
     timestamp: float
     actor: str
@@ -169,7 +184,7 @@ class AuditEvent:
     resource: str
     detail: str = ""
     result: str = "success"
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -196,12 +211,13 @@ class AuditLogger:
     """
 
     def __init__(self, max_events: int = 100000):
-        self._events: List[AuditEvent] = []
+        self._events: list[AuditEvent] = []
         self._max_events = max_events
         self._lock = threading.RLock()
 
-    def log(self, actor: str, action: str, resource: str,
-            detail: str = "", result: str = "success", **metadata) -> AuditEvent:
+    def log(
+        self, actor: str, action: str, resource: str, detail: str = "", result: str = "success", **metadata
+    ) -> AuditEvent:
         """Record an audit event. Thread-safe."""
         event = AuditEvent(
             event_id=str(uuid.uuid4()),
@@ -219,10 +235,16 @@ class AuditLogger:
             self._events.append(event)
         return event
 
-    def query(self, actor: Optional[str] = None, action: Optional[str] = None,
-              resource: Optional[str] = None, result: Optional[str] = None,
-              start_time: Optional[float] = None, end_time: Optional[float] = None,
-              limit: int = 1000) -> List[AuditEvent]:
+    def query(
+        self,
+        actor: str | None = None,
+        action: str | None = None,
+        resource: str | None = None,
+        result: str | None = None,
+        start_time: float | None = None,
+        end_time: float | None = None,
+        limit: int = 1000,
+    ) -> list[AuditEvent]:
         """Query audit events with multiple filter dimensions."""
         results = []
         with self._lock:
@@ -260,16 +282,18 @@ class AuditLogger:
 
 # ═══════════════════ API Key Manager ═══════════════════
 
+
 @dataclass
 class _APIKeyEntry:
     """Internal API key record."""
+
     key_hash: str
     role: str
     description: str
     created_at: float
-    expires_at: Optional[float]
+    expires_at: float | None
     revoked: bool = False
-    last_used_at: Optional[float] = None
+    last_used_at: float | None = None
 
 
 class APIKeyManager:
@@ -283,11 +307,10 @@ class APIKeyManager:
     KEY_BYTES = 32  # 256 bits of entropy
 
     def __init__(self):
-        self._keys: Dict[str, _APIKeyEntry] = {}  # key_hash → entry
+        self._keys: dict[str, _APIKeyEntry] = {}  # key_hash → entry
         self._lock = threading.RLock()
 
-    def generate_key(self, role: str, description: str = "",
-                     ttl_seconds: Optional[float] = None) -> str:
+    def generate_key(self, role: str, description: str = "", ttl_seconds: float | None = None) -> str:
         """Generate a new API key. Returns the plaintext key (show once!)."""
         random_bytes = secrets.token_bytes(self.KEY_BYTES)
         key_plaintext = self.KEY_PREFIX + random_bytes.hex()
@@ -308,7 +331,7 @@ class APIKeyManager:
 
         return key_plaintext
 
-    def validate(self, key_plaintext: str) -> Optional[Dict[str, Any]]:
+    def validate(self, key_plaintext: str) -> dict[str, Any] | None:
         """Validate an API key. Returns {role, description, ...} or None."""
         if not key_plaintext or not key_plaintext.startswith(self.KEY_PREFIX):
             return None
@@ -343,7 +366,7 @@ class APIKeyManager:
                 return True
         return False
 
-    def list_keys(self) -> List[Dict[str, Any]]:
+    def list_keys(self) -> list[dict[str, Any]]:
         """List all keys (hashes only, never plaintext)."""
         with self._lock:
             return [
@@ -366,9 +389,11 @@ class APIKeyManager:
 
 # ═══════════════════ mTLS Configuration ═══════════════════
 
+
 @dataclass
 class TLSConfig:
     """mTLS configuration for secure Runtime communication."""
+
     cert_file: str = ""
     key_file: str = ""
     ca_file: str = ""
