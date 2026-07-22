@@ -2,7 +2,7 @@
 
 > An Open Multi-Agent Orchestration Runtime.
 
-**Status:** Phase 3 Complete · **Version:** 0.3.0
+**Status:** Phase 4 Complete · **Version:** 0.4.0
 
 ---
 
@@ -529,6 +529,21 @@ After reading these, you should understand the entire Runtime architecture witho
 | **Phase 1** | Runtime Kernel (single-node) | ✅ Complete |
 | **Phase 2** | Developer Platform (plugins, SDKs) | ✅ Complete |
 | **Phase 3** | Runtime Ecosystem (distributed) | ✅ Complete |
+| **Phase 4** | Engineering Completeness (CI/CD, Docker, TS SDK, mTLS) | ✅ Complete |
+
+### Phase 4 Deliverables
+
+| Module | Components | Tests |
+|--------|-----------|-------|
+| **CI/CD & DevOps** | GitHub Actions (Python matrix + lint), Docker multi-stage, Docker Compose, Makefile, Pre-commit hooks | — |
+| **Storage Verification** | Integration tests against real Redis + PostgreSQL (connect, CRUD, snapshots, stream isolation) | 30 |
+| **Event Persistence** | PersistentEventStore (WAL), crash recovery, state persistence (Goal/Agent save + restore) | 9 |
+| **Distributed Testing** | Multi-node cluster tests (leader election, work stealing, node registry, dead node detection) | 9 |
+| **TypeScript SDK** | `zelos-ts/` — schema types, BaseAgent, ZelosClient, DemoAgent | — |
+| **Security Verification** | mTLS integration tests (self-signed CA, mutual TLS handshake, client rejection) | 3 |
+| **Observability** | Prometheus /metrics HTTP endpoint (text exposition format) | — |
+| **Performance** | Benchmark suite (EventBus 1.4M/s, TaskGraph 2.5M/s, Capability matching, Scheduler scoring) | 5 |
+| **Documentation** | CHANGELOG.md, pdoc API docs, ROADMAP Phase 4/5/6 | — |
 
 ### Phase 2 Deliverables
 

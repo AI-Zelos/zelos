@@ -1,7 +1,7 @@
 """
 Zelos — Open Multi-Agent Orchestration Runtime
 
-Phase 3: Production-grade distributed infrastructure.
+v0.4.0: Engineering completeness — CI/CD, Docker, persistence, distributed tests, TypeScript SDK, mTLS, benchmarks.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

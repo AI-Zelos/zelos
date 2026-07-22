@@ -67,7 +67,7 @@ def main():
 
     print()
     print("=" * 55)
-    print("  Zelos Runtime v0.3.0 — Ready")
+    print("  Zelos Runtime v0.4.0 — Ready")
     if not args.no_dashboard:
         print(f"  Dashboard: {adapter.url}")
         print(f"  API:       {adapter.url}/api/v1/health")

@@ -1,5 +1,5 @@
 # zelos.yaml — Zelos Runtime Configuration
-# Version: 0.3.0 — Phase 3: Production-grade distributed infrastructure.
+# Version: 0.4.0 — Engineering completeness.
 
 runtime:
   instance_id: "zelos-dev-01"

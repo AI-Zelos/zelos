@@ -5,7 +5,7 @@ FROM python:3.12-slim AS base
 
 LABEL org.opencontainers.image.title="Zelos Runtime"
 LABEL org.opencontainers.image.description="Open Multi-Agent Orchestration Runtime"
-LABEL org.opencontainers.image.version="0.3.0"
+LABEL org.opencontainers.image.version="0.4.0"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 # Non-root user
