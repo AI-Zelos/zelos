@@ -1,6 +1,6 @@
 # Zelos 商业化路径分析
 
-> 前提：Zelos Phase 0/1/2/3 已完成，拥有完整可运行的 Runtime Kernel、Plugin 平台和分布式能力。
+> 前提：Zelos Phase 0–6 已完成（v0.6.0），拥有完整可运行的 Runtime Kernel、Plugin 平台、分布式能力、工程化基础设施、生产安全加固和丰富的 Demo。
 > 核心资产：LLM 无关的多 Agent 编排 Runtime + 不可变审计链 + 三权分立架构 + Capability 分发市场。
 
 ---

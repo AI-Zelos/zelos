@@ -1,6 +1,6 @@
 # Zelos Demo 合集
 
-可运行的端到端示例。只需配置 LLM API Key 即可运行。
+21 个可运行的端到端示例，覆盖 v0.6.0 全部功能。只需配置 LLM API Key 即可运行需要 LLM 的 Demo。
 
 ## 快速开始
 
@@ -61,6 +61,27 @@ python3 demo/01_single_agent.py
 | 17 | `17_hot_reload.py` | 零停机插件热重载（滚动/蓝绿/金丝雀升级） |
 | 18 | `18_distributed.py` | 领导者选举 + 工作窃取 + 节点注册中心 |
 | 19 | `19_cli_demo.sh` | CLI 命令行工具演示 |
+
+## Phase 5 Demo（Production Hardening）
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 20 | `20_hitl_approval_workflow.py` | HITL 审批完整流程：单人/多人审批、拒绝、变更请求、超时、审计追踪（6 个场景） |
+| 21 | `21_multi_tenant_isolation.py` | 多租户隔离：注册、配额强制、跨租户隔离、启停生命周期、用量报告（5 个场景） |
+
+---
+
+## 补充说明
+
+### 无 LLM 依赖的 Demo（可直接运行）
+下列 Demo 不依赖 LLM，无需配置 API Key 即可运行：
+- `python3 demo/13_security.py`
+- `python3 demo/14_multi_tenancy.py`
+- `python3 demo/15_advanced_execution.py`
+- `python3 demo/17_hot_reload.py`
+- `python3 demo/18_distributed.py`
+- `python3 demo/20_hitl_approval_workflow.py`
+- `python3 demo/21_multi_tenant_isolation.py`
 
 ---
 
