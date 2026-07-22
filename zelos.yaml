@@ -1,0 +1,93 @@
+# zelos.yaml — Zelos Runtime Configuration
+# Phase 1: Single-node, in-process mode.
+
+runtime:
+  instance_id: "zelos-dev-01"
+  api:
+    host: "127.0.0.1"
+    port: 9876
+  auth:
+    method: "api_key"
+    keys:
+      - key: "zk-admin-dev"
+        role: "admin"
+      - key: "zk-agent-dev"
+        role: "agent"
+      - key: "zk-client-dev"
+        role: "client"
+  limits:
+    max_goals: 100
+    max_tasks_per_goal: 50
+    global_max_tasks: 500
+  logging:
+    level: "info"
+    format: "json"
+
+plugins:
+  # Storage Backend (Phase 1: in-memory)
+  - id: "in-memory-storage"
+    type: "storage"
+    version: "0.1.0"
+    entrypoint: "zelos.storage.InMemoryStorageBackend"
+    config:
+      max_events: 10000
+
+  # Memory Provider (Phase 1: in-memory)
+  - id: "in-memory-memory"
+    type: "memory"
+    version: "0.1.0"
+    entrypoint: "zelos.memory.InMemoryMemoryProvider"
+    config:
+      max_entries_per_layer: 5000
+      ttl_seconds: 3600
+
+  # Policy Engine
+  - id: "default-policy"
+    type: "policy"
+    version: "0.1.0"
+    entrypoint: "zelos.policy.CompositePolicy"
+    config:
+      max_cost_per_goal: 100.0
+      max_tasks_per_minute: 60
+
+  # Scoring Strategy
+  - id: "default-scoring"
+    type: "scoring_strategy"
+    version: "0.1.0"
+    entrypoint: "zelos.scheduler.DefaultScoringStrategy"
+    config:
+      weights:
+        success_rate: 0.30
+        cost_efficiency: 0.20
+        load_distribution: 0.15
+        latency: 0.15
+        availability: 0.10
+        affinity: 0.05
+        recency: 0.05
+
+  # Verifier
+  - id: "schema-verifier"
+    type: "verifier"
+    version: "0.1.0"
+    entrypoint: "zelos.verifier.SchemaVerifier"
+    config:
+      strict_mode: true
+
+  # Planner (LLM-based)
+  - id: "llm-planner"
+    type: "planner"
+    version: "0.1.0"
+    entrypoint: "zelos.planner.LLMPlanner"
+    config:
+      provider: "openai"
+      model: "deepseek-v4-flash"
+      api_key: "${OPENAI_API_KEY}"
+      base_url: "https://api.deepseek.com/v1"
+      temperature: 0.3
+      max_tokens: 4000
+
+  # HTTP Adapter
+  - id: "http-adapter"
+    type: "adapter"
+    version: "0.1.0"
+    entrypoint: "zelos.http_adapter.HTTPAdapter"

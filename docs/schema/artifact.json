@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zelos.dev/schema/v1/artifact.json",
+  "title": "Artifact",
+  "description": "The structured, immutable output of a Task execution. Produced by an Agent, consumed by dependent Tasks and Verifiers. Invariant 8.",
+  "type": "object",
+  "required": ["artifact_id", "task_id", "agent_id", "content_type", "created_at", "schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for this document. Follows Semantic Versioning."
+    },
+    "artifact_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier."
+    },
+    "task_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Task that produced this Artifact."
+    },
+    "agent_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Agent that produced this Artifact."
+    },
+    "content_type": {
+      "type": "string",
+      "description": "MIME type.",
+      "examples": ["application/json", "text/markdown", "text/plain", "image/png"]
+    },
+    "content": {
+      "description": "Raw Artifact content. Null if content_ref is used for large Artifacts.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "object", "additionalProperties": true }
+      ]
+    },
+    "content_ref": {
+      "type": "string",
+      "format": "uri",
+      "description": "External reference for large Artifacts."
+    },
+    "size_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Size in bytes."
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": ["created", "validating", "validated", "rejected", "pending_review", "accepted"],
+      "default": "created",
+      "description": "Verification lifecycle state."
+    },
+    "verification_report": {
+      "type": "object",
+      "description": "Verifier output.",
+      "properties": {
+        "verifier_id": { "type": "string" },
+        "verifier_version": { "type": "string" },
+        "verdict": { "type": "string", "enum": ["passed", "failed", "needs_review"] },
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "severity": { "type": "string", "enum": ["error", "warning", "info"] },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "execution_metadata": {
+      "type": "object",
+      "description": "Execution context from Agent.",
+      "properties": {
+        "execution_time_ms": { "type": "integer" },
+        "cost": {
+          "type": "object",
+          "properties": {
+            "amount": { "type": "number" },
+            "currency": { "type": "string", "default": "USD" }
+          }
+        },
+        "tokens_used": {
+          "type": "object",
+          "properties": {
+            "input": { "type": "integer" },
+            "output": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Arbitrary extensibility metadata."
+    }
+  }
+}

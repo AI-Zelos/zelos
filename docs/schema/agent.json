@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zelos.dev/schema/v1/agent.json",
+  "title": "Agent",
+  "description": "A registered execution provider. An Agent declares Capabilities, receives Tasks, executes them, and returns Artifacts. Invariants 1, 5, 6.",
+  "type": "object",
+  "required": ["agent_id", "name", "status", "capabilities", "registered_at", "schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for this document. Follows Semantic Versioning."
+    },
+    "agent_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier assigned by the Runtime on registration."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable Agent name. Not used for dispatch."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["registered", "connected", "heartbeating", "disconnected", "shutdown"],
+      "description": "Connection lifecycle state."
+    },
+    "operational_state": {
+      "type": "string",
+      "enum": ["idle", "busy"],
+      "default": "idle",
+      "description": "Operational sub-state. 'idle' when current_tasks == 0, 'busy' otherwise."
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Capabilities declared by this Agent at registration.",
+      "items": {
+        "type": "object",
+        "required": ["name", "version"],
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["active", "deprecated"]
+          }
+        }
+      }
+    },
+    "endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "Network endpoint. Required for HTTP/gRPC Agents; null for stdio Agents."
+    },
+    "protocol": {
+      "type": "string",
+      "enum": ["http", "grpc", "stdio"],
+      "description": "Communication protocol supported by this Agent."
+    },
+    "protocol_version": {
+      "type": "string",
+      "description": "Runtime API protocol version this Agent implements."
+    },
+    "heartbeat_interval_ms": {
+      "type": "integer",
+      "minimum": 1000,
+      "default": 30000,
+      "description": "Interval between heartbeat messages. Runtime-assigned at registration."
+    },
+    "max_concurrent_tasks": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5,
+      "description": "Maximum concurrent Tasks this Agent can execute."
+    },
+    "current_tasks": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Number of Tasks currently in-flight on this Agent."
+    },
+    "current_task_ids": {
+      "type": "array",
+      "items": { "type": "string", "format": "uuid" },
+      "description": "IDs of Tasks currently assigned to this Agent."
+    },
+    "historical_success_rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Rolling success rate: completed_tasks / total_completed_or_failed."
+    },
+    "total_tasks_completed": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "total_tasks_failed": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "registered_at": { "type": "string", "format": "date-time" },
+    "last_heartbeat_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the most recent heartbeat. Null if never connected."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Arbitrary extensibility metadata."
+    }
+  }
+}

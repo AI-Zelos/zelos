@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zelos.dev/schema/v1/goal.json",
+  "title": "Goal",
+  "description": "The highest-level unit of work submitted to the Runtime. A declaration of a desired outcome — not a specification of how to achieve it. Invariant 2.",
+  "type": "object",
+  "required": ["goal_id", "description", "status", "created_at", "schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for this document. Follows Semantic Versioning."
+    },
+    "goal_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier assigned by the Runtime on submission."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable description of the desired outcome."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["submitted", "accepted", "rejected", "planned", "executing", "completed", "failed", "cancelled"],
+      "description": "Current lifecycle state. See Domain Model for transition rules."
+    },
+    "plan_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The ExecutionPlan that fulfills this Goal. Set when status reaches 'planned'."
+    },
+    "constraints": {
+      "type": "object",
+      "description": "Goal-level constraints enforced by the Runtime.",
+      "properties": {
+        "budget": {
+          "type": "object",
+          "properties": {
+            "currency": { "type": "string", "default": "USD" },
+            "max_amount": { "type": "number", "minimum": 0 }
+          }
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Latest acceptable completion time."
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "default": "medium"
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "description": "Organizational context for the Goal.",
+      "properties": {
+        "project_id": { "type": "string", "format": "uuid" },
+        "user_id": { "type": "string", "format": "uuid" },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "progress": {
+      "type": "object",
+      "description": "Real-time progress counters. Updated as Tasks transition.",
+      "properties": {
+        "total_tasks": { "type": "integer", "minimum": 0 },
+        "completed_tasks": { "type": "integer", "minimum": 0 },
+        "failed_tasks": { "type": "integer", "minimum": 0 },
+        "ready_tasks": { "type": "integer", "minimum": 0 },
+        "in_flight_tasks": { "type": "integer", "minimum": 0 },
+        "blocked_tasks": { "type": "integer", "minimum": 0 },
+        "percent_complete": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set when Goal reaches a terminal state (completed, failed, cancelled)."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Arbitrary extensibility metadata."
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zelos.dev/schema/v1/agent-registration.json",
+  "title": "AgentRegistration",
+  "description": "Registration payload sent by an Agent when connecting to the Runtime. Contains identity and declared Capabilities.",
+  "type": "object",
+  "required": ["name", "capabilities", "protocol_version", "schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for this document. Follows Semantic Versioning."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable Agent name for logging and admin interfaces."
+    },
+    "agent_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "If provided, re-registration of existing Agent. If omitted, Runtime assigns one."
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "https://zelos.dev/schema/v1/capability.json"
+      },
+      "description": "Capabilities this Agent provides."
+    },
+    "endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "Network address for Task dispatch. Required for network-based Agents.",
+      "examples": ["https://agent.example.com:8080", "http://localhost:9000"]
+    },
+    "protocol": {
+      "type": "string",
+      "enum": ["http", "grpc", "stdio"],
+      "default": "http",
+      "description": "Protocol for Runtime communication."
+    },
+    "protocol_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Runtime API version the Agent supports.",
+      "examples": ["0.1.0"]
+    },
+    "heartbeat_interval_ms": {
+      "type": "integer",
+      "minimum": 1000,
+      "default": 30000,
+      "description": "Suggested heartbeat interval. Runtime may override."
+    },
+    "max_concurrent_tasks": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5,
+      "description": "Global maximum concurrent Tasks."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Version, runtime, framework, owner, environment."
+    }
+  }
+}

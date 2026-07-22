@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zelos.dev/schema/v1/execution-plan.json",
+  "title": "ExecutionPlan",
+  "description": "A structured decomposition of a Goal into Tasks with dependencies. Produced by a Planner plugin. The single source of truth during execution.",
+  "type": "object",
+  "required": ["plan_id", "goal_id", "tasks", "planner_id", "planner_version", "created_at", "version", "schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for this document. Follows Semantic Versioning."
+    },
+    "plan_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this execution plan."
+    },
+    "goal_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The Goal this plan fulfills."
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "description": "All tasks in this execution plan.",
+      "items": {
+        "$ref": "https://zelos.dev/schema/v1/task.json"
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "description": "Dependency edges between tasks forming a DAG.",
+      "items": {
+        "type": "object",
+        "required": ["from_task_id", "to_task_id", "type"],
+        "properties": {
+          "from_task_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Task that must complete first."
+          },
+          "to_task_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Task that depends on completion."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["hard", "soft"],
+            "description": "Dependency type. 'hard' blocks the dependent until completed (Phase 1). 'soft' is a preference (Phase 2)."
+          },
+          "data_required": {
+            "type": "boolean",
+            "default": true,
+            "description": "Does the dependent Task require the Artifact from the dependency as input?"
+          }
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "description": "Plan-level constraints inherited by all Tasks. Overridable per-Task.",
+      "properties": {
+        "budget": {
+          "type": "object",
+          "properties": {
+            "currency": { "type": "string", "default": "USD" },
+            "max_amount": { "type": "number", "minimum": 0 }
+          }
+        },
+        "deadline": { "type": "string", "format": "date-time" },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "default": "medium"
+        }
+      }
+    },
+    "planner_id": {
+      "type": "string",
+      "description": "Identifier of the Planner plugin that produced this plan."
+    },
+    "planner_version": {
+      "type": "string",
+      "description": "Version of the Planner plugin."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["created", "validated", "invalid", "executing", "modified", "completed", "abandoned"],
+      "description": "Current lifecycle state."
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonic revision number. Incremented on each plan modification."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Arbitrary extensibility metadata."
+    }
+  }
+}

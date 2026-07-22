@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zelos.dev/schema/v1/capability.json",
+  "title": "Capability",
+  "description": "A named, versioned, schema-described unit of work an Agent can perform. Describes WHAT — never WHO or HOW. Invariant 14.",
+  "type": "object",
+  "required": ["name", "version", "description", "input_schema", "output_schema", "schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for this document. Follows Semantic Versioning."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+      "description": "Hierarchical capability name: domain.subdomain.specific.",
+      "examples": ["code-generation.python", "code-review.security", "research.web-search"]
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version: MAJOR.MINOR.PATCH.",
+      "examples": ["1.0.0", "2.1.3"]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable description."
+    },
+    "input_schema": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "JSON Schema for Task input."
+    },
+    "output_schema": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "JSON Schema for Artifact output."
+    },
+    "qos": {
+      "type": "object",
+      "description": "Quality of Service — declared by Agent, verified by Runtime.",
+      "properties": {
+        "max_latency_ms": { "type": "integer", "minimum": 1 },
+        "max_cost_per_call": { "type": "number", "minimum": 0 },
+        "availability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "accuracy": { "type": "number", "minimum": 0, "maximum": 1 },
+        "throughput": { "type": "number", "minimum": 0 }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Searchable tags for discovery and matching."
+    },
+    "required_resources": {
+      "type": "object",
+      "properties": {
+        "memory_mb": { "type": "integer", "minimum": 1 },
+        "cpu_cores": { "type": "number", "minimum": 0.1 },
+        "gpu_required": { "type": "boolean" },
+        "disk_mb": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "capacity": {
+      "type": "object",
+      "properties": {
+        "max_concurrent_tasks": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "provider_agent_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Agent providing this capability. Assigned at registration."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["registered", "available", "unavailable", "deprecated", "removed"],
+      "description": "Lifecycle status."
+    },
+    "registered_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Arbitrary extensibility metadata."
+    }
+  }
+}

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zelos Runtime Dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117; --card: #161b22; --border: #30363d;
+    --text: #c9d1d9; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d2991d;
+    --purple: #a371f7; --orange: #f0883e;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+  /* Sidebar */
+  nav { width: 240px; background: var(--card); border-right: 1px solid var(--border);
+    padding: 20px 0; display: flex; flex-direction: column; position: fixed;
+    top: 0; left: 0; bottom: 0; overflow-y: auto; }
+  nav .logo { padding: 0 20px 20px; font-size: 22px; font-weight: 700;
+    border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+  nav .logo span { color: var(--accent); }
+  nav a { display: block; padding: 10px 20px; color: var(--muted); text-decoration: none;
+    font-size: 14px; transition: all 0.15s; border-left: 3px solid transparent; }
+  nav a:hover, nav a.active { color: var(--text); background: rgba(88,166,255,0.06);
+    border-left-color: var(--accent); }
+  nav .section { padding: 15px 20px 5px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--muted); }
+  /* Main */
+  main { margin-left: 240px; flex: 1; padding: 30px; max-width: 1200px; }
+  h1 { font-size: 28px; margin-bottom: 8px; }
+  h2 { font-size: 20px; margin: 30px 0 15px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); }
+  .subtitle { color: var(--muted); margin-bottom: 25px; font-size: 14px; }
+  /* Status bar */
+  .status-bar { display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap; }
+  .status-card { background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 18px 22px; flex: 1; min-width: 160px; }
+  .status-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.03em; margin-bottom: 6px; }
+  .status-card .value { font-size: 28px; font-weight: 700; }
+  .status-card .detail { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .status-ok { color: var(--green); } .status-warn { color: var(--yellow); }
+  .status-err { color: var(--red); }
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.03em; }
+  tr:hover { background: rgba(88,166,255,0.03); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 11px; font-weight: 600; }
+  .badge-ok { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-warn { background: rgba(210,153,29,0.15); color: var(--yellow); }
+  .badge-err { background: rgba(248,81,73,0.15); color: var(--red); }
+  .badge-info { background: rgba(88,166,255,0.15); color: var(--accent); }
+  /* Progress bar */
+  .progress-bar { width: 100%; height: 6px; background: var(--border);
+    border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 3px;
+    transition: width 0.3s; }
+  /* Refresh */
+  .refresh { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+  .refresh .auto { font-size: 12px; color: var(--muted); }
+  button { background: var(--accent); color: #fff; border: none; padding: 8px 16px;
+    border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  button:hover { opacity: 0.9; }
+  .empty { color: var(--muted); padding: 30px; text-align: center; font-style: italic; }
+  /* JSON viewer */
+  pre { background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+    padding: 15px; overflow-x: auto; font-size: 12px; max-height: 300px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">⚡ Zel<span>os</span></div>
+  <div class="section">Overview</div>
+  <a href="#dashboard" class="active" onclick="showSection('dashboard')">Dashboard</a>
+  <a href="#goals" onclick="showSection('goals')">Goals</a>
+  <a href="#agents" onclick="showSection('agents')">Agents</a>
+  <a href="#tasks" onclick="showSection('tasks')">Tasks</a>
+  <div class="section">Operations</div>
+  <a href="#audit" onclick="showSection('audit')">Audit Log</a>
+  <a href="#tenants" onclick="showSection('tenants')">Tenants</a>
+  <a href="#cluster" onclick="showSection('cluster')">Cluster</a>
+  <a href="#plugins" onclick="showSection('plugins')">Plugins</a>
+  <div class="section">System</div>
+  <a href="#health" onclick="showSection('health')">Health & Metrics</a>
+  <a href="#api" onclick="showSection('api')">API Reference</a>
+</nav>
+
+<main>
+  <div class="refresh">
+    <button onclick="refresh()">🔄 Refresh</button>
+    <span class="auto">Auto-refresh: every 5s</span>
+  </div>
+
+  <div id="section-dashboard">
+    <h1>Zelos Runtime Dashboard</h1>
+    <p class="subtitle">Open Multi-Agent Orchestration Runtime · v0.3.0</p>
+    <div class="status-bar" id="status-cards"></div>
+    <h2>Recent Goals</h2>
+    <div id="recent-goals"></div>
+    <h2>Active Agents</h2>
+    <div id="active-agents"></div>
+  </div>
+
+  <div id="section-goals" style="display:none">
+    <h1>Goals</h1><div id="goals-list"></div>
+  </div>
+  <div id="section-agents" style="display:none">
+    <h1>Agents</h1><div id="agents-list"></div>
+  </div>
+  <div id="section-tasks" style="display:none">
+    <h1>Tasks</h1><div id="tasks-list"></div>
+  </div>
+  <div id="section-audit" style="display:none">
+    <h1>Audit Log</h1><div id="audit-list"></div>
+  </div>
+  <div id="section-tenants" style="display:none">
+    <h1>Tenants</h1><div id="tenants-list"></div>
+  </div>
+  <div id="section-cluster" style="display:none">
+    <h1>Cluster Status</h1><div id="cluster-status"></div>
+  </div>
+  <div id="section-plugins" style="display:none">
+    <h1>Plugins</h1><div id="plugins-list"></div>
+  </div>
+  <div id="section-health" style="display:none">
+    <h1>Health & Metrics</h1><pre id="health-metrics"></pre>
+  </div>
+  <div id="section-api" style="display:none">
+    <h1>API Reference</h1>
+    <pre id="api-ref">REST API Endpoints (HTTP Adapter on port 9876):
+
+GET  /api/v1/health              — Runtime health
+GET  /api/v1/metrics             — Runtime metrics
+POST /api/v1/goals               — Submit a new goal
+GET  /api/v1/goals               — List all goals
+GET  /api/v1/goals/{goal_id}     — Get goal status
+DELETE /api/v1/goals/{goal_id}   — Cancel a goal
+GET  /api/v1/agents              — List registered agents
+GET  /api/v1/agents/{agent_id}   — Get agent details
+GET  /api/v1/audit               — Query audit log (admin)
+GET  /api/v1/tenants             — List tenants
+GET  /api/v1/cluster             — Cluster status
+GET  /api/v1/approvals/pending   — Pending HITL approvals
+POST /api/v1/approvals/{id}/approve  — Approve
+POST /api/v1/approvals/{id}/reject   — Reject
+
+Auth: Bearer {api_key} header or auth_context in request body</pre>
+  </div>
+</main>
+
+<script>
+const API = 'http://127.0.0.1:9876/api/v1';
+
+function showSection(name) {
+  document.querySelectorAll('[id^="section-"]').forEach(s => s.style.display = 'none');
+  const el = document.getElementById('section-' + name);
+  if (el) el.style.display = 'block';
+  document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+  const link = document.querySelector(`nav a[href="#${name}"]`);
+  if (link) link.classList.add('active');
+}
+
+async function api(path) {
+  try { const r = await fetch(API + path); return r.ok ? r.json() : null; }
+  catch(e) { return null; }
+}
+
+async function refresh() {
+  const health = await api('/health');
+  const metrics = await api('/metrics');
+
+  // Status cards
+  let status = 'disconnected';
+  if (health) {
+    status = health.status === 'healthy' ? 'ok' : 'warn';
+    document.getElementById('status-cards').innerHTML = `
+      <div class="status-card"><div class="label">Runtime</div>
+        <div class="value status-${status}">${health.status || 'unknown'}</div>
+        <div class="detail">Uptime: ${Math.round((health.uptime_seconds||0)/60)}min</div></div>
+      <div class="status-card"><div class="label">Goals</div>
+        <div class="value">${metrics?.goals?.active||0}</div>
+        <div class="detail">${metrics?.goals?.completed_total||0} completed</div></div>
+      <div class="status-card"><div class="label">Agents</div>
+        <div class="value">${metrics?.agents?.connected||0}/${metrics?.agents?.registered||0}</div>
+        <div class="detail">connected / registered</div></div>
+      <div class="status-card"><div class="label">Events</div>
+        <div class="value">${metrics?.events?.published_total||0}</div>
+        <div class="detail">total published</div></div>
+      <div class="status-card"><div class="label">Tenants</div>
+        <div class="value">${metrics?.multi_tenancy?.tenants||0}</div>
+        <div class="detail">${health?.components?.multi_tenancy?.tenants||0} active</div></div>
+    `;
+  }
+
+  // Recent goals
+  const goals = await api('/goals');
+  if (goals && Array.isArray(goals) && goals.length > 0) {
+    document.getElementById('recent-goals').innerHTML = '<table><tr><th>Goal ID</th><th>Description</th><th>Status</th><th>Progress</th><th>Tenant</th></tr>' +
+      goals.slice(0, 10).map(g => `
+        <tr><td style="font-family:monospace;font-size:12px">${g.goal_id?.slice(0,12)}...</td>
+          <td>${(g.description||'').slice(0, 60)}</td>
+          <td><span class="badge badge-${g.status==='completed'?'ok':g.status==='failed'?'err':'info'}">${g.status}</span></td>
+          <td><div class="progress-bar"><div class="progress-fill" style="width:${g.progress?.percent_complete||0}%"></div></div>
+            <small>${g.progress?.completed_tasks||0}/${g.progress?.total_tasks||0}</small></td>
+          <td>${g.tenant_id||'default'}</td></tr>`).join('') + '</table>';
+  } else {
+    document.getElementById('recent-goals').innerHTML = '<div class="empty">No goals yet. Submit one via CLI or API.</div>';
+  }
+  document.getElementById('goals-list').innerHTML = document.getElementById('recent-goals').innerHTML;
+
+  // Agents
+  const agents = await api('/agents');
+  if (agents && Array.isArray(agents) && agents.length > 0) {
+    document.getElementById('active-agents').innerHTML = '<table><tr><th>Agent</th><th>ID</th><th>Status</th><th>Tasks</th><th>Tenant</th></tr>' +
+      agents.map(a => `
+        <tr><td>${a.name||'N/A'}</td>
+          <td style="font-family:monospace;font-size:12px">${(a.agent_id||'').slice(0,12)}...</td>
+          <td><span class="badge badge-${a.status==='heartbeating'?'ok':'warn'}">${a.status}</span></td>
+          <td>${a.current_tasks||0} / ${a.max_concurrent_tasks||0}</td>
+          <td>${a.tenant_id||'default'}</td></tr>`).join('') + '</table>';
+  } else {
+    document.getElementById('active-agents').innerHTML = '<div class="empty">No agents registered.</div>';
+  }
+  document.getElementById('agents-list').innerHTML = document.getElementById('active-agents').innerHTML;
+
+  // Audit log
+  const audit = await api('/audit');
+  if (audit && Array.isArray(audit) && audit.length > 0) {
+    document.getElementById('audit-list').innerHTML = '<table><tr><th>Time</th><th>Actor</th><th>Action</th><th>Resource</th><th>Result</th><th>Detail</th></tr>' +
+      audit.slice(-20).reverse().map(e => `
+        <tr><td style="font-size:12px">${new Date(e.timestamp*1000).toLocaleTimeString()}</td>
+          <td>${e.actor}</td><td>${e.action}</td>
+          <td style="font-family:monospace;font-size:12px">${(e.resource||'').slice(0,12)}</td>
+          <td><span class="badge badge-${e.result==='success'?'ok':'err'}">${e.result}</span></td>
+          <td>${(e.detail||'').slice(0,50)}</td></tr>`).join('') + '</table>';
+  } else {
+    document.getElementById('audit-list').innerHTML = '<div class="empty">No audit events yet.</div>';
+  }
+
+  // Tenants
+  const tenants = await api('/tenants');
+  if (tenants && Array.isArray(tenants)) {
+    document.getElementById('tenants-list').innerHTML = '<table><tr><th>Tenant ID</th><th>Name</th><th>Active</th><th>Goals</th><th>Budget/Goal</th></tr>' +
+      tenants.map(t => `
+        <tr><td>${t.tenant_id}</td><td>${t.name}</td>
+          <td><span class="badge badge-${t.active?'ok':'err'}">${t.active?'active':'inactive'}</span></td>
+          <td>${t.namespace?.goal_count||0}/${t.namespace?.quotas?.max_goals||'-'}</td>
+          <td>$${t.namespace?.quotas?.budget_per_goal||'-'}</td></tr>`).join('') + '</table>';
+  } else {
+    document.getElementById('tenants-list').innerHTML = '<div class="empty">Multi-tenancy not enabled.</div>';
+  }
+
+  // Cluster
+  const cluster = await api('/cluster');
+  if (cluster) {
+    document.getElementById('cluster-status').innerHTML = `
+      <div class="status-bar">
+        <div class="status-card"><div class="label">Nodes</div><div class="value">${cluster.total_nodes||0}</div></div>
+        <div class="status-card"><div class="label">Healthy</div><div class="value status-ok">${cluster.healthy_nodes||0}</div></div>
+        <div class="status-card"><div class="label">This Node</div><div class="value">${cluster.this_node||'N/A'}</div></div>
+        <div class="status-card"><div class="label">Leader</div><div class="value">${cluster.is_leader ? '👑 Leader' : 'Follower'}</div></div>
+      </div><pre>${JSON.stringify(cluster, null, 2)}</pre>`;
+  } else {
+    document.getElementById('cluster-status').innerHTML = '<div class="empty">Distributed mode not enabled.</div>';
+  }
+
+  // Health
+  document.getElementById('health-metrics').textContent =
+    'Health:\n' + JSON.stringify(health, null, 2) +
+    '\n\nMetrics:\n' + JSON.stringify(metrics, null, 2);
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

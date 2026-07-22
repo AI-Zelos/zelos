@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zelos.dev/schema/v1/event.json",
+  "title": "Event",
+  "description": "An immutable record of a state transition. The sole communication mechanism between all components. Invariants 7, 9.",
+  "type": "object",
+  "required": ["event_id", "event_type", "source", "timestamp", "correlation_id", "data_version", "payload", "schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for this document. Follows Semantic Versioning."
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Globally unique identifier. Also serves as idempotency key."
+    },
+    "event_type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*\\.[a-z][a-z0-9]*\\.[a-z][a-z0-9_]*$",
+      "description": "Fully qualified: domain.entity.action.",
+      "examples": ["task.completed", "goal.submitted", "agent.registered"]
+    },
+    "source": {
+      "type": "string",
+      "description": "Publishing component identifier."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Publication time (RFC 3339)."
+    },
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Groups related events. All events for one Task/Goal share the same ID."
+    },
+    "causation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Event that directly caused this one. Forms a causal chain."
+    },
+    "data_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Schema version of the payload.",
+      "examples": ["1.0.0"]
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Event-type-specific data. Varies by event_type."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Observability and tracing context.",
+      "properties": {
+        "trace_id": { "type": "string", "description": "OpenTelemetry trace ID." },
+        "span_id": { "type": "string", "description": "OpenTelemetry span ID." }
+      },
+      "additionalProperties": true
+    }
+  }
+}

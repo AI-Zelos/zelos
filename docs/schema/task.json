@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zelos.dev/schema/v1/task.json",
+  "title": "Task",
+  "description": "The atomic unit of dispatch. One Task = one Agent invocation. Managed by the Task Graph Engine (Kernel).",
+  "type": "object",
+  "required": ["task_id", "plan_id", "description", "required_capability", "status", "attempt", "created_at", "schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for this document. Follows Semantic Versioning."
+    },
+    "task_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier."
+    },
+    "plan_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Parent Execution Plan."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What this task should accomplish."
+    },
+    "required_capability": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Capability name, e.g., code-generation.python."
+        },
+        "version": {
+          "type": "string",
+          "description": "Version requirement, e.g., >=1.0.0, <2.0.0."
+        }
+      }
+    },
+    "input": {
+      "$ref": "https://zelos.dev/schema/v1/artifact.json",
+      "description": "Input Artifact from dependency outputs or initial context."
+    },
+    "expected_output_schema": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "JSON Schema the output Artifact should conform to."
+    },
+    "constraints": {
+      "type": "object",
+      "description": "Per-Task execution constraints.",
+      "properties": {
+        "timeout_ms": { "type": "integer", "minimum": 1000 },
+        "max_retries": { "type": "integer", "minimum": 0, "default": 3 },
+        "backoff_base_ms": { "type": "integer", "minimum": 100, "default": 1000 },
+        "max_cost_per_call": { "type": "number", "minimum": 0 },
+        "max_latency_ms": { "type": "integer", "minimum": 100 },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "fallback_capability": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" }
+          }
+        },
+        "preferred_agent_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Admin override. Use only for debugging."
+        },
+        "excluded_agent_ids": {
+          "type": "array",
+          "items": { "type": "string", "format": "uuid" }
+        },
+        "min_success_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "required_tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["created", "ready", "assigned", "started", "completed", "failed", "cancelled", "timed_out"],
+      "description": "Current lifecycle state."
+    },
+    "assigned_agent_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Agent currently assigned. Null if not yet assigned."
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Current attempt number, 0-indexed."
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string", "format": "uuid" },
+      "description": "Task IDs this Task depends on."
+    },
+    "dependents": {
+      "type": "array",
+      "items": { "type": "string", "format": "uuid" },
+      "description": "Task IDs that depend on this Task."
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "timeout_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Deadline for completion."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Arbitrary extensibility metadata."
+    }
+  }
+}
