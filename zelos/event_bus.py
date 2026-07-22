@@ -189,3 +189,50 @@ class InMemoryEventStore:
 
     def __len__(self):
         return len(self._events)
+
+
+class PersistentEventStore:
+    """Phase 2: Event store backed by a pluggable StorageBackend for durability.
+
+    Wraps an InMemoryEventStore for fast reads and syncs writes to the backend.
+    On init, replays persisted events into memory for crash recovery.
+    """
+
+    def __init__(self, storage_backend, max_events: int = 10000):
+        self._backend = storage_backend
+        self._memory = InMemoryEventStore(max_events=max_events)
+        self._stream = "zelos-events"
+
+    def append(self, event: Event) -> None:
+        self._memory.append(event)
+        try:
+            self._backend.append(self._stream, [event.to_dict()])
+        except Exception:
+            pass  # Best-effort durability; memory is authoritative
+
+    def read_from(self, from_position: int) -> list[Event]:
+        return self._memory.read_from(from_position)
+
+    def recover(self) -> int:
+        """Replay persisted events into memory after restart. Returns count recovered."""
+        try:
+            raw = self._backend.read(self._stream, 0, 100000)
+            for r in raw:
+                event = Event(
+                    event_id=r["event_id"],
+                    event_type=r["event_type"],
+                    source=r.get("source", ""),
+                    timestamp=r.get("timestamp", 0),
+                    correlation_id=r.get("correlation_id", ""),
+                    data_version=r.get("data_version", "1.0.0"),
+                    payload=r.get("payload", {}),
+                    causation_id=r.get("causation_id"),
+                    metadata=r.get("metadata", {}),
+                )
+                self._memory.append(event)
+            return len(raw)
+        except Exception:
+            return 0
+
+    def __len__(self):
+        return len(self._memory)

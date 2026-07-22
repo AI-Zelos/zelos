@@ -1,0 +1,32 @@
+{
+  "name": "@zelos/sdk",
+  "version": "0.3.0",
+  "description": "Zelos TypeScript SDK — Build Agents and submit Goals on Zelos Runtime",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "keywords": [
+    "multi-agent",
+    "orchestration",
+    "runtime",
+    "ai",
+    "agent",
+    "zelos"
+  ],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

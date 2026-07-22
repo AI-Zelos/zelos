@@ -11,6 +11,7 @@ Phase 3:
 import json
 import ssl
 import threading
+import time
 import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
@@ -173,6 +174,48 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
 
+    def _send_prometheus_metrics(self):
+        """Export metrics in Prometheus text exposition format."""
+        m = self._runtime.get_metrics()
+        lines = []
+        ts = int(time.time() * 1000)
+
+        # Goal metrics
+        goals = m.get("goals", {})
+        lines.append("# HELP zelos_goals_active Number of active goals")
+        lines.append("# TYPE zelos_goals_active gauge")
+        lines.append(f"zelos_goals_active {goals.get('active', 0)} {ts}")
+
+        lines.append("# HELP zelos_goals_completed_total Total completed goals")
+        lines.append("# TYPE zelos_goals_completed_total counter")
+        lines.append(f"zelos_goals_completed_total {goals.get('completed', 0)} {ts}")
+
+        # Task metrics
+        tasks = m.get("tasks", {})
+        lines.append("# HELP zelos_tasks_completed_total Total completed tasks")
+        lines.append("# TYPE zelos_tasks_completed_total counter")
+        lines.append(f"zelos_tasks_completed_total {tasks.get('completed_total', 0)} {ts}")
+
+        lines.append("# HELP zelos_tasks_failed_total Total failed tasks")
+        lines.append("# TYPE zelos_tasks_failed_total counter")
+        lines.append(f"zelos_tasks_failed_total {tasks.get('failed_total', 0)} {ts}")
+
+        # Agent metrics
+        agents = m.get("agents", {})
+        lines.append("# HELP zelos_agents_connected Connected agents")
+        lines.append("# TYPE zelos_agents_connected gauge")
+        lines.append(f"zelos_agents_connected {agents.get('connected', 0)} {ts}")
+
+        lines.append("# HELP zelos_agents_disconnected Disconnected agents")
+        lines.append("# TYPE zelos_agents_disconnected gauge")
+        lines.append(f"zelos_agents_disconnected {agents.get('disconnected', 0)} {ts}")
+
+        body = "\n".join(lines) + "\n"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; version=0.0.4")
+        self.end_headers()
+        self.wfile.write(body.encode())
+
     def _send_error(self, status: int, code: str, message: str):
         self._send_json(status, {"error_code": code, "message": message, "correlation_id": str(uuid.uuid4())})
 
@@ -205,6 +248,11 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
         # ── Dashboard: GET / ──
         if path == "/" or path == "/dashboard":
             self._send_html(200, _DASHBOARD_HTML)
+            return
+
+        # ── Prometheus metrics endpoint (no auth required) ──
+        if path == "/metrics":
+            self._send_prometheus_metrics()
             return
 
         # ── API routes require auth ──
