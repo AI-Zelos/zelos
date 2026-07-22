@@ -1588,7 +1588,7 @@ class ZelosRuntime:
                 "hitl": {"pending_approvals": pending_approvals},
                 "cluster": {"enabled": self._cluster_enabled, "is_leader": self._leader_election.is_leader()},
             },
-            "version": "0.5.0",
+            "version": "0.6.0",
         }
 
     def get_metrics(self) -> dict[str, Any]:

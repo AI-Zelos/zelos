@@ -2,7 +2,7 @@
 
 > An Open Multi-Agent Orchestration Runtime.
 
-**Status:** Phase 5 Complete · **Version:** 0.5.0
+**Status:** Phase 6 Complete · **Version:** 0.6.0
 
 ---
 
@@ -531,6 +531,15 @@ After reading these, you should understand the entire Runtime architecture witho
 | **Phase 3** | Runtime Ecosystem (distributed) | ✅ Complete |
 | **Phase 4** | Engineering Completeness (CI/CD, Docker, TS SDK, mTLS) | ✅ Complete |
 | **Phase 5** | Production Hardening (Anomaly Detection, K8s Probes, Operations) | ✅ Complete |
+| **Phase 6** | Demo Enrichment & Documentation (HITL, Multi-tenancy, Docs) | ✅ Complete |
+
+### Phase 6 Deliverables
+
+| Module | Components |
+|--------|-----------|
+| **HITL Demos** | Single/multi approver, rejection, change request, timeout, audit trail (6 scenarios) |
+| **Multi-tenancy Demos** | Registration, quotas, isolation, lifecycle, usage report (5 scenarios) |
+| **Documentation** | CHANGELOG v0.1.0–v0.6.0, ROADMAP all phases, Operations manual, API docs |
 
 ### Phase 5 Deliverables
 

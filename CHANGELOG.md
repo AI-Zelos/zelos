@@ -4,6 +4,19 @@ All notable changes to Zelos will be documented in this file.
 
 ---
 
+## [0.6.0] — 2026-07-22
+
+### Added — Demo Enrichment & Docs
+- HITL approval workflow demo (6 scenarios: single/multi approver, reject, changes, timeout, audit)
+- Multi-tenant isolation demo (5 scenarios: registration, quotas, isolation, lifecycle, usage report)
+- Demo verification: 9 existing demos verified, 2 new demos (HITL + multi-tenancy)
+
+### Changed
+- Version bumped: 0.5.0 → 0.6.0
+- ROADMAP: Phase 6 marked Complete
+
+---
+
 ## [0.5.0] — 2026-07-22
 
 ### Added — Production Hardening
@@ -12,10 +25,11 @@ All notable changes to Zelos will be documented in this file.
 - Audit log file export: `export_json_file()` method
 - Grafana dashboard JSON template (`deploy/grafana/zelos-dashboard.json`)
 - Operations manual (`docs/guide/operations.md`)
+- Phase 5 acceptance tests (7 tests)
 
 ### Changed
 - Version bumped: 0.4.0 → 0.5.0
-- Test count: 62 → 66 (62 passed, 4 integration-skipped)
+- Test count: 62 → 66
 
 ---
 

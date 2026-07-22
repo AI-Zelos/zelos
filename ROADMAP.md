@@ -163,22 +163,45 @@ Production security hardening, K8s readiness, operational tooling.
 
 ---
 
-## Phase 6: Performance & Ecosystem
+## Phase 6: Demo Enrichment & Documentation
+
+**Status:** Complete
+**Timeline:** July 2026
+
+### Goal
+
+Comprehensive demos, verified correctness, complete documentation coverage.
+
+### Scope
+
+- [x] HITL approval workflow demo (6 scenarios)
+- [x] Multi-tenant isolation demo (5 scenarios)
+- [x] Demo correctness verification (11 demos verified)
+- [x] CHANGELOG full history (v0.1.0–v0.6.0)
+- [x] ROADMAP updated with all phases
+
+### Deferred to Phase 7
+
+- [ ] etcd integration
+- [ ] Message queue integration (NATS/Kafka)
+- [ ] OpenTelemetry (Jaeger/Zipkin)
+- [ ] Go SDK
+- [ ] Performance optimization (benchmark-driven)
+
+---
+
+## Phase 7: Advanced Production
 
 **Status:** Not Started
 **Timeline:** TBD
 
-### Goal
-
-Optimize for scale, complete SDK ecosystem.
-
 ### Scope
 
-- [ ] TaskGraph incremental evaluation (avoid full scans)
-- [ ] Scheduler candidate caching
-- [ ] EventBus batch publish
+- [ ] etcd integration (replace in-memory leader election)
+- [ ] Message queue integration (NATS/Kafka for cross-node EventBus)
+- [ ] OpenTelemetry actual integration (Jaeger/Zipkin exporters)
 - [ ] Go SDK
-- [ ] End-to-end examples (real LLM calls + AgentCity integration)
+- [ ] Performance optimization (TaskGraph incremental eval, Scheduler caching)
 
 ---
 
@@ -196,4 +219,4 @@ Explicitly NOT part of Zelos core. Future ecosystem:
 
 ## Versioning
 
-Semantic Versioning. Current version: **v0.5.0** (Phase 5 Complete).
+Semantic Versioning. Current version: **v0.6.0** (Phase 6 Complete).

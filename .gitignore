@@ -12,3 +12,4 @@ build/
 venv/
 data/
 docs/api/
+.idea/vcs.xml

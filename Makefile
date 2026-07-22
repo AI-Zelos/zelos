@@ -37,7 +37,7 @@ check: lint test
 
 # ── Docker ──
 build:
-	docker build -t zelos:0.5.0 .
+	docker build -t zelos:0.6.0 .
 	docker build --target dev -t zelos:dev .
 
 run:

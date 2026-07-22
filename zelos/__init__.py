@@ -1,7 +1,7 @@
 """
 Zelos — Open Multi-Agent Orchestration Runtime
 
-v0.5.0: Production hardening — Key anomaly detection, K8s probes, audit export, Grafana, operations guide.
+v0.6.0: Demo enrichment — HITL approval workflow, multi-tenant isolation, full docs coverage.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
