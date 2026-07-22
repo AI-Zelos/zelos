@@ -2,7 +2,7 @@
 
 > An Open Multi-Agent Orchestration Runtime.
 
-**Status:** Phase 4 Complete · **Version:** 0.4.0
+**Status:** Phase 5 Complete · **Version:** 0.5.0
 
 ---
 
@@ -530,6 +530,15 @@ After reading these, you should understand the entire Runtime architecture witho
 | **Phase 2** | Developer Platform (plugins, SDKs) | ✅ Complete |
 | **Phase 3** | Runtime Ecosystem (distributed) | ✅ Complete |
 | **Phase 4** | Engineering Completeness (CI/CD, Docker, TS SDK, mTLS) | ✅ Complete |
+| **Phase 5** | Production Hardening (Anomaly Detection, K8s Probes, Operations) | ✅ Complete |
+
+### Phase 5 Deliverables
+
+| Module | Components | Tests |
+|--------|-----------|-------|
+| **Security Hardening** | API Key anomaly detection (brute-force tracking, sliding window, auto-revoke), audit log file export | 4 |
+| **K8s Probes** | `/live` liveness + `/ready` readiness endpoints (no auth) | 3 |
+| **Operations** | Grafana dashboard JSON template, Operations manual (deploy guide, troubleshooting, backup/recovery) | — |
 
 ### Phase 4 Deliverables
 

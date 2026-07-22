@@ -1,0 +1,52 @@
+{
+  "title": "Zelos Runtime",
+  "uid": "zelos-runtime",
+  "panels": [
+    {
+      "title": "Active Goals",
+      "type": "stat",
+      "targets": [{"expr": "zelos_goals_active"}],
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4}
+    },
+    {
+      "title": "Completed Goals",
+      "type": "stat",
+      "targets": [{"expr": "zelos_goals_completed_total"}],
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4}
+    },
+    {
+      "title": "Connected Agents",
+      "type": "stat",
+      "targets": [{"expr": "zelos_agents_connected"}],
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4}
+    },
+    {
+      "title": "Disconnected Agents",
+      "type": "stat",
+      "targets": [{"expr": "zelos_agents_disconnected"}],
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4}
+    },
+    {
+      "title": "Tasks Completed (rate)",
+      "type": "graph",
+      "targets": [{"expr": "rate(zelos_tasks_completed_total[1m])"}],
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8}
+    },
+    {
+      "title": "Tasks Failed (rate)",
+      "type": "graph",
+      "targets": [{"expr": "rate(zelos_tasks_failed_total[1m])"}],
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8}
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {"text": "Prometheus", "value": "Prometheus"}
+      }
+    ]
+  }
+}

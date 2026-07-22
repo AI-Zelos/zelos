@@ -4,52 +4,37 @@ All notable changes to Zelos will be documented in this file.
 
 ---
 
+## [0.5.0] — 2026-07-22
+
+### Added — Production Hardening
+- API Key anomaly detection: brute-force tracking, sliding window, auto-revoke
+- K8s readiness/liveness probes: `/live`, `/ready` HTTP endpoints
+- Audit log file export: `export_json_file()` method
+- Grafana dashboard JSON template (`deploy/grafana/zelos-dashboard.json`)
+- Operations manual (`docs/guide/operations.md`)
+
+### Changed
+- Version bumped: 0.4.0 → 0.5.0
+- Test count: 62 → 66 (62 passed, 4 integration-skipped)
+
+---
+
 ## [0.4.0] — 2026-07-22
 
 ### Added — Engineering Completeness
-
-#### CI/CD & DevOps
-- GitHub Actions CI: Python 3.10/3.11/3.12 matrix test + Ruff lint
-- Docker multi-stage build (base ~80MB, dev with test tools)
-- Docker Compose (Runtime + optional Redis)
-- Makefile: dev/test/lint/format/check/build/run/clean
-- Pre-commit hooks: Ruff format + lint
-
-#### Storage & Persistence
-- Storage backend integration tests (InMemory/Redis/PostgreSQL, 30 test cases)
-- `PersistentEventStore` for durable event storage with crash recovery
-- State persistence: Goal/Agent save + restore after restart
-
-#### Distributed Runtime
-- Multi-node cluster tests: leader election, work stealing, node registry
-- Dead node detection verification
-
-#### TypeScript SDK (`zelos-ts/`)
-- Schema types: `CapabilityDeclaration`, `Task`, `Artifact`, `MemoryContext`
-- `BaseAgent` abstract class with `declareCapabilities()` + `execute()`
-- `ZelosClient` HTTP client for remote Runtime access
-- `DemoAgent` reference implementation
-
-#### Security
-- mTLS verification tests: self-signed CA, mutual TLS handshake, client rejection
-
-#### Observability
-- Prometheus `/metrics` HTTP endpoint (text exposition format)
-- Metrics: `zelos_goals_active`, `zelos_tasks_completed_total`, `zelos_agents_connected`, etc.
-
-#### Performance
-- Benchmark suite: EventBus 1.4M events/s, TaskGraph 2.5M ops/s
-
-#### Documentation
-- API docs auto-generated via pdoc (`docs/api/`)
-- CHANGELOG.md (this file)
-- ROADMAP updated with Phase 4/5/6
+- CI/CD: GitHub Actions (Python matrix + lint), Docker, Docker Compose, Makefile, Pre-commit
+- Storage verification: Redis/PostgreSQL integration tests (30 cases)
+- Event persistence: PersistentEventStore, state persistence, crash recovery
+- Distributed cluster tests: leader election, work stealing, node registry
+- TypeScript SDK: `zelos-ts/` (schema, BaseAgent, ZelosClient, DemoAgent)
+- mTLS verification tests
+- Prometheus `/metrics` HTTP endpoint
+- Benchmark suite (EventBus 1.4M/s, TaskGraph 2.5M/s)
+- API docs (pdoc), CHANGELOG.md
 
 ### Changed
 - Version bumped: 0.3.0 → 0.4.0
-- Ruff formatted all 63 source files
-- Lint: zero errors across entire codebase
-- Test count: 47 → 62 (59 passed, 4 integration-skipped)
+- Test count: 47 → 62
 
 ---
 

@@ -59,7 +59,7 @@ button:hover{opacity:.9}
 pre{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:15px;overflow-x:auto;font-size:12px;max-height:300px}
 </style></head><body>
 <nav>
-<div class="logo">⚡ Zel<span>os</span> <small style="color:var(--muted);font-size:11px">v0.4.0</small></div>
+<div class="logo">⚡ Zel<span>os</span> <small style="color:var(--muted);font-size:11px">v0.5.0</small></div>
 <div class="section">Overview</div>
 <a class="active" onclick="show('dashboard')">Dashboard</a>
 <a onclick="show('goals')">Goals</a>
@@ -248,6 +248,16 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
         # ── Dashboard: GET / ──
         if path == "/" or path == "/dashboard":
             self._send_html(200, _DASHBOARD_HTML)
+            return
+
+        # ── K8s probes (no auth required) ──
+        if path == "/live":
+            self._send_json(200, {"status": "alive"})
+            return
+        if path == "/ready":
+            health = self._runtime.get_health()
+            ready = health.get("status") == "healthy"
+            self._send_json(200 if ready else 503, {"status": "ready" if ready else "not_ready", "details": health})
             return
 
         # ── Prometheus metrics endpoint (no auth required) ──

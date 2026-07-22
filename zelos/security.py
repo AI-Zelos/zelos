@@ -271,11 +271,17 @@ class AuditLogger:
         with self._lock:
             return json.dumps([e.to_dict() for e in self._events], indent=2)
 
+    def export_json_file(self, filepath: str) -> int:
+        """Export to JSON file. Returns count."""
+        data = json.dumps([e.to_dict() for e in self._events], indent=2)
+        with open(filepath, "w") as f:
+            f.write(data)
+        return len(self._events)
+
     def total_events(self) -> int:
         return len(self._events)
 
     def clear(self) -> None:
-        """Clear all audit events (admin only)."""
         with self._lock:
             self._events.clear()
 
@@ -306,9 +312,18 @@ class APIKeyManager:
     KEY_PREFIX = "zelos_"
     KEY_BYTES = 32  # 256 bits of entropy
 
-    def __init__(self):
-        self._keys: dict[str, _APIKeyEntry] = {}  # key_hash → entry
+    def __init__(
+        self,
+        max_failures: int = 10,
+        failure_window_seconds: float = 60.0,
+        auto_revoke: bool = True,
+    ):
+        self._keys: dict[str, _APIKeyEntry] = {}
         self._lock = threading.RLock()
+        self._failed_attempts: dict[str, list[float]] = {}
+        self.max_failures = max_failures
+        self.failure_window_seconds = failure_window_seconds
+        self.auto_revoke = auto_revoke
 
     def generate_key(self, role: str, description: str = "", ttl_seconds: float | None = None) -> str:
         """Generate a new API key. Returns the plaintext key (show once!)."""
@@ -381,6 +396,33 @@ class APIKeyManager:
                 }
                 for kh, e in self._keys.items()
             ]
+
+    # ── Anomaly Detection (v0.5.0) ──
+
+    def _record_failure(self, key_plaintext: str) -> bool:
+        """Record a failed auth attempt. Returns True if key was auto-revoked."""
+        key_hash = self._hash(key_plaintext)
+        now = time.time()
+        with self._lock:
+            if key_hash not in self._failed_attempts:
+                self._failed_attempts[key_hash] = []
+            self._failed_attempts[key_hash].append(now)
+            # Prune old failures
+            cutoff = now - self.failure_window_seconds
+            self._failed_attempts[key_hash] = [
+                t for t in self._failed_attempts[key_hash] if t > cutoff
+            ]
+            recent = len(self._failed_attempts[key_hash])
+            if self.auto_revoke and recent >= self.max_failures and key_hash in self._keys:
+                self._keys[key_hash].revoked = True
+                return True
+        return False
+
+    def get_failure_count(self, key_plaintext: str) -> int:
+        """Get recent failure count for a key."""
+        key_hash = self._hash(key_plaintext)
+        with self._lock:
+            return len(self._failed_attempts.get(key_hash, []))
 
     @staticmethod
     def _hash(key: str) -> str:

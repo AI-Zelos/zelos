@@ -140,23 +140,26 @@ Production-ready engineering infrastructure — CI/CD, Docker, persistence verif
 
 ## Phase 5: Production Hardening
 
-**Status:** Not Started
-**Timeline:** TBD
+**Status:** Complete
+**Timeline:** July 2026
 
 ### Goal
 
-Distributed coordination with real backends, advanced observability, production deployment.
+Production security hardening, K8s readiness, operational tooling.
 
 ### Scope
 
+- [x] API Key anomaly detection (brute-force tracking, sliding window, auto-revoke)
+- [x] Audit log file export (JSON file export)
+- [x] Kubernetes readiness/liveness probes (`/live`, `/ready` HTTP endpoints)
+- [x] Operations manual (`docs/guide/operations.md`)
+- [x] Grafana dashboard JSON template (`deploy/grafana/zelos-dashboard.json`)
+
+### Deferred to Phase 6
+
 - [ ] etcd integration (replace in-memory leader election)
 - [ ] Message queue integration (NATS/Kafka for cross-node EventBus)
-- [ ] API Key anomaly detection (brute-force auto-revoke)
-- [ ] Audit log SIEM export (Elasticsearch/Loki)
 - [ ] OpenTelemetry actual integration (Jaeger/Zipkin exporters)
-- [ ] Kubernetes readiness/liveness probes
-- [ ] Operations manual (bare-metal / Docker / K8s deployment guide)
-- [ ] Grafana dashboard JSON template
 
 ---
 
@@ -193,4 +196,4 @@ Explicitly NOT part of Zelos core. Future ecosystem:
 
 ## Versioning
 
-Semantic Versioning. Current version: **v0.4.0** (Phase 4 Complete).
+Semantic Versioning. Current version: **v0.5.0** (Phase 5 Complete).
