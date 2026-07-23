@@ -1,0 +1,1873 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zelos Manual — Zelos Documentation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:920px;margin:0 auto;padding:24px;background:#0d1117;color:#c9d1d9;line-height:1.65}
+a{color:#58a6ff;text-decoration:none}a:hover{text-decoration:underline}
+code{background:#161b22;padding:2px 6px;border-radius:4px;font-size:13px}
+pre{background:#161b22;padding:16px;border-radius:8px;overflow-x:auto;font-size:13px}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:12px 0}
+th,td{border:1px solid #30363d;padding:8px 14px;text-align:left}
+th{background:#161b22;font-weight:600}
+h1{font-size:32px;margin:24px 0 12px;color:#f0f6fc}
+h2{font-size:22px;margin:28px 0 10px;color:#f0f6fc;padding-bottom:6px;border-bottom:1px solid #21262d}
+h3{font-size:17px;margin:20px 0 8px;color:#f0f6fc}
+hr{border:none;border-top:1px solid #21262d;margin:24px 0}
+.back{margin-bottom:20px;font-size:14px}
+</style></head><body>
+<p class="back"><a href="./">← Documentation Home</a></p>
+<h1 id="zelos-user-manual-v070">Zelos User Manual v0.7.0</h1>
+<blockquote>
+<p><strong>Open Multi-Agent Orchestration Runtime</strong> — The Runtime that executes, coordinates, and governs intelligent agents.</p>
+</blockquote>
+<hr />
+<h2 id="table-of-contents">Table of Contents</h2>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Module</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#1-quick-start">1. Quick Start</a></td>
+<td>—</td>
+<td>5-minute setup, first goal, Dashboard</td>
+</tr>
+<tr>
+<td><a href="#1a-dashboard">1a. Dashboard</a></td>
+<td>—</td>
+<td>Built-in Web UI at GET /</td>
+</tr>
+<tr>
+<td><a href="#2-core-concepts">2. Core Concepts</a></td>
+<td>—</td>
+<td>Architecture &amp; design philosophy</td>
+</tr>
+<tr>
+<td><a href="#3-runtime">3. Runtime</a></td>
+<td><code>zelos.runtime</code></td>
+<td>Central entry point</td>
+</tr>
+<tr>
+<td><a href="#4-event-bus">4. Event Bus</a></td>
+<td><code>zelos.event_bus</code></td>
+<td>Pub/sub communication backbone</td>
+</tr>
+<tr>
+<td><a href="#5-capability-registry">5. Capability Registry</a></td>
+<td><code>zelos.capability_registry</code></td>
+<td>Agent capability management</td>
+</tr>
+<tr>
+<td><a href="#6-task-graph">6. Task Graph</a></td>
+<td><code>zelos.task_graph</code></td>
+<td>DAG execution engine</td>
+</tr>
+<tr>
+<td><a href="#7-scheduler">7. Scheduler</a></td>
+<td><code>zelos.scheduler</code></td>
+<td>5-phase scheduling pipeline</td>
+</tr>
+<tr>
+<td><a href="#8-execution-engine">8. Execution Engine</a></td>
+<td><code>zelos.execution_engine</code></td>
+<td>Task dispatch &amp; lifecycle</td>
+</tr>
+<tr>
+<td><a href="#9-planner">9. Planner</a></td>
+<td><code>zelos.planner</code></td>
+<td>LLM-based goal decomposition</td>
+</tr>
+<tr>
+<td><a href="#10-verifier">10. Verifier</a></td>
+<td><code>zelos.verifier</code></td>
+<td>Artifact validation gate</td>
+</tr>
+<tr>
+<td><a href="#11-policy">11. Policy</a></td>
+<td><code>zelos.policy</code></td>
+<td>Cost/rate/allowlist enforcement</td>
+</tr>
+<tr>
+<td><a href="#12-memory">12. Memory</a></td>
+<td><code>zelos.memory</code></td>
+<td>6-layer context management</td>
+</tr>
+<tr>
+<td><a href="#13-observability">13. Observability</a></td>
+<td><code>zelos.observability</code></td>
+<td>Logs, metrics, tracing</td>
+</tr>
+<tr>
+<td><a href="#14-protocol-adapters">14. Protocol Adapters</a></td>
+<td><code>zelos.protocol_adapters</code></td>
+<td>gRPC, WebSocket, MCP, A2A</td>
+</tr>
+<tr>
+<td><a href="#15-plugin-isolation">15. Plugin Isolation</a></td>
+<td><code>zelos.plugin_isolation</code></td>
+<td>Sub-process plugins</td>
+</tr>
+<tr>
+<td><a href="#16-storage">16. Storage</a></td>
+<td><code>zelos.storage</code></td>
+<td>Persistent backends</td>
+</tr>
+<tr>
+<td><a href="#17-security">17. Security</a></td>
+<td><code>zelos.security</code></td>
+<td>RBAC, Audit, API Keys, mTLS</td>
+</tr>
+<tr>
+<td><a href="#18-multi-tenancy">18. Multi-tenancy</a></td>
+<td><code>zelos.multi_tenancy</code></td>
+<td>Namespace isolation &amp; quotas</td>
+</tr>
+<tr>
+<td><a href="#19-advanced-execution">19. Advanced Execution</a></td>
+<td><code>zelos.advanced_execution</code></td>
+<td>Dynamic plans, sub-goals, HITL</td>
+</tr>
+<tr>
+<td><a href="#20-container-isolation">20. Container Isolation</a></td>
+<td><code>zelos.container_isolation</code></td>
+<td>Docker/Podman/Remote plugins</td>
+</tr>
+<tr>
+<td><a href="#21-hot-reload">21. Hot Reload</a></td>
+<td><code>zelos.hot_reload</code></td>
+<td>Zero-downtime upgrades</td>
+</tr>
+<tr>
+<td><a href="#22-distributed-runtime">22. Distributed Runtime</a></td>
+<td><code>zelos.distributed</code></td>
+<td>Leader election &amp; work stealing</td>
+</tr>
+<tr>
+<td><a href="#23-cli-tool">23. CLI Tool</a></td>
+<td><code>zelos.cli</code></td>
+<td>Command-line interface</td>
+</tr>
+<tr>
+<td><a href="#24-configuration">24. Configuration</a></td>
+<td><code>zelos.yaml</code></td>
+<td>Full config reference</td>
+</tr>
+<tr>
+<td><a href="#25-api-reference">25. API Reference</a></td>
+<td>—</td>
+<td>Complete method reference</td>
+</tr>
+<tr>
+<td><a href="#26-deployment-guide">26. Deployment Guide</a></td>
+<td>—</td>
+<td>Production deployment</td>
+</tr>
+<tr>
+<td><a href="#27-troubleshooting">27. Troubleshooting</a></td>
+<td>—</td>
+<td>Common issues &amp; solutions</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-quick-start">1. Quick Start</h2>
+<h3 id="installation">Installation</h3>
+<pre><code class="language-bash"># Clone the repository
+git clone https://github.com/zelos/runtime.git
+cd runtime/
+
+# No pip install needed — pure Python stdlib
+# Verify:
+python3 -c &quot;from zelos.runtime import ZelosRuntime; print('OK')&quot;
+</code></pre>
+<h3 id="your-first-goal">Your First Goal</h3>
+<pre><code class="language-python">from zelos.runtime import ZelosRuntime
+
+# ── 1. Create Runtime ──
+rt = ZelosRuntime({&quot;plugins&quot;: []})
+rt.start()
+
+# ── 2. Register an Agent ──
+rt.add_agent(
+    name=&quot;CodeAgent&quot;,
+    entrypoint=&quot;my_agents.coder:CodingAgent&quot;,
+    capabilities=[
+        {&quot;name&quot;: &quot;code-generation.python&quot;, &quot;version&quot;: &quot;1.0.0&quot;}
+    ],
+)
+
+# ── 3. Submit a Goal ──
+goal = rt.submit_goal(
+    description=&quot;Write a function that checks if a string is a palindrome&quot;,
+    priority=&quot;high&quot;,
+)
+print(f&quot;Goal: {goal['goal_id']} → {goal['status']}&quot;)
+
+# ── 4. Wait for completion ──
+result = rt.wait_for_goal(goal[&quot;goal_id&quot;], timeout_seconds=30)
+print(f&quot;Result: {result['status']} — {result['progress']['percent_complete']:.0f}%&quot;)
+
+# ── 5. Shutdown ──
+rt.shutdown()
+</code></pre>
+<h3 id="with-zelosyaml">With zelos.yaml</h3>
+<pre><code class="language-yaml"># zelos.yaml
+runtime:
+  api:
+    host: &quot;127.0.0.1&quot;
+    port: 9876
+
+plugins:
+  - id: &quot;llm-planner&quot;
+    type: &quot;planner&quot;
+    entrypoint: &quot;zelos.planner.LLMPlanner&quot;
+    config:
+      provider: &quot;openai&quot;
+      model: &quot;gpt-4o&quot;
+      api_key: &quot;${OPENAI_API_KEY}&quot;
+</code></pre>
+<pre><code class="language-python">rt = ZelosRuntime.from_yaml(&quot;zelos.yaml&quot;)
+# Everything loaded from config — Planner, Verifier, Policy, Memory
+rt.start()
+</code></pre>
+<hr />
+<h2 id="1a-dashboard">1a. Dashboard</h2>
+<p>Zelos 内置一个 Web Dashboard，通过 HTTP Adapter 自动提供服务。<strong>无需安装任何额外依赖</strong>。</p>
+<h3 id="runtime-dashboard">启动 Runtime + Dashboard</h3>
+<pre><code class="language-bash"># 方式 1：一行命令启动（推荐）
+python3 -c &quot;
+from zelos.runtime import ZelosRuntime
+from zelos.http_adapter import HTTPAdapter
+
+rt = ZelosRuntime({'plugins': []})
+rt.start()
+
+adapter = HTTPAdapter(rt, host='127.0.0.1', port=9876)
+adapter.start()
+print(f'✅ Dashboard: {adapter.url}')
+# 保持运行，Ctrl+C 停止
+import time
+try:
+    while True: time.sleep(1)
+except KeyboardInterrupt:
+    adapter.stop(); rt.shutdown()
+&quot;
+</code></pre>
+<pre><code class="language-bash"># 方式 2：使用启动脚本
+python3 start.py
+</code></pre>
+<h3 id="dashboard">访问 Dashboard</h3>
+<p>启动后在浏览器打开 <strong>http://127.0.0.1:9876/</strong>，即可看到：</p>
+<ul>
+<li><strong>Dashboard</strong> — Runtime 状态、活跃 Goals、活跃 Agents、事件数、租户数</li>
+<li><strong>Goals</strong> — 所有 Goal 的状态和进度条</li>
+<li><strong>Agents</strong> — 所有 Agent 的连接状态</li>
+<li><strong>Audit Log</strong> — 审计事件（时间、操作者、操作、资源、结果）</li>
+<li><strong>Tenants</strong> — 租户列表和配额使用情况</li>
+<li><strong>Cluster</strong> — 集群节点状态和领导者信息</li>
+<li><strong>Health &amp; Metrics</strong> — 原始 JSON 数据</li>
+<li><strong>API Reference</strong> — 完整 REST API 文档</li>
+</ul>
+<p>页面每 5 秒自动刷新，无需手动操作。</p>
+<h3 id="rest-api">REST API 端点</h3>
+<p>Dashboard 调用的所有 API 也可直接用 curl 访问：</p>
+<pre><code class="language-bash">curl http://127.0.0.1:9876/api/v1/health
+curl http://127.0.0.1:9876/api/v1/metrics
+curl http://127.0.0.1:9876/api/v1/goals
+curl http://127.0.0.1:9876/api/v1/agents
+curl http://127.0.0.1:9876/api/v1/audit
+curl http://127.0.0.1:9876/api/v1/tenants
+curl http://127.0.0.1:9876/api/v1/cluster
+curl http://127.0.0.1:9876/api/v1/approvals/pending
+</code></pre>
+<h3 id="https-mtls">HTTPS / mTLS</h3>
+<pre><code class="language-python">from zelos.security import TLSConfig
+
+tls = TLSConfig(
+    cert_file=&quot;/etc/zelos/certs/server.crt&quot;,
+    key_file=&quot;/etc/zelos/certs/server.key&quot;,
+    ca_file=&quot;/etc/zelos/certs/ca.crt&quot;,
+    require_client_cert=True,
+)
+
+adapter = HTTPAdapter(rt, host='0.0.0.0', port=8443, tls_config=tls)
+adapter.start()
+# Dashboard: https://your-host:8443/
+</code></pre>
+<hr />
+<h2 id="2-core-concepts">2. Core Concepts</h2>
+<h3 id="architecture">Architecture</h3>
+<pre><code>Goal → Planner → ExecutionPlan → TaskGraph → Scheduler → ExecutionEngine → Agent
+  │                                                                              │
+  └────────────────────────── Event Bus (everything) ────────────────────────────┘
+                                   │
+                    Memory / Policy / Verifier / Observability
+</code></pre>
+<h3 id="design-principles">Design Principles</h3>
+<table>
+<thead>
+<tr>
+<th>Principle</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Runtime First</strong></td>
+<td>Runtime owns scheduling, memory, lifecycle. Agents are plugins.</td>
+</tr>
+<tr>
+<td><strong>Capability First</strong></td>
+<td>Dispatch by WHAT, never by WHO. <code>"code-generation.python"</code> not <code>"Claude"</code>.</td>
+</tr>
+<tr>
+<td><strong>Execution Plan First</strong></td>
+<td>Plan exists before any agent is invoked.</td>
+</tr>
+<tr>
+<td><strong>Event Driven</strong></td>
+<td>Every state change is an immutable event. No direct calls between components.</td>
+</tr>
+<tr>
+<td><strong>Plugin Architecture</strong></td>
+<td>Everything above the Kernel is replaceable.</td>
+</tr>
+<tr>
+<td><strong>Stateless Agents</strong></td>
+<td>Agents: Receive Task → Execute → Return Artifact → Exit. Nothing more.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="agent-lifecycle">Agent Lifecycle</h3>
+<pre><code>Register → Connect → Heartbeat → Dispatch → Execute → Return → Repeat
+   │                                              │
+   └────────────── Hot-Join / Hot-Leave ──────────┘
+</code></pre>
+<hr />
+<h2 id="3-runtime">3. Runtime</h2>
+<p><strong>Module</strong>: <code>zelos.runtime</code> | <strong>Class</strong>: <code>ZelosRuntime</code></p>
+<p>The central entry point. Owns the complete lifecycle of the Kernel and all Agents.</p>
+<h3 id="basic-usage">Basic Usage</h3>
+<pre><code class="language-python">from zelos.runtime import ZelosRuntime
+
+# From dict config
+rt = ZelosRuntime({&quot;plugins&quot;: [...]})
+
+# From YAML file
+rt = ZelosRuntime.from_yaml(&quot;zelos.yaml&quot;)
+
+# Lifecycle
+rt.start()       # Initialize all components + start agents
+# ... use the runtime ...
+rt.shutdown()    # Graceful shutdown
+</code></pre>
+<h3 id="agent-management">Agent Management</h3>
+<pre><code class="language-python"># Register (hot-join if Runtime is running)
+agent_id = rt.add_agent(
+    name=&quot;ClaudeCode-v2&quot;,
+    entrypoint=&quot;my_agents.coder:CodingAgent&quot;,
+    capabilities=[
+        {&quot;name&quot;: &quot;code-generation.python&quot;, &quot;version&quot;: &quot;1.0.0&quot;},
+        {&quot;name&quot;: &quot;code-generation.typescript&quot;, &quot;version&quot;: &quot;1.0.0&quot;},
+    ],
+    max_concurrent_tasks=5,
+    auth_context={&quot;role&quot;: &quot;admin&quot;, &quot;tenant_id&quot;: &quot;eng&quot;},
+)
+
+# List agents (tenant-filtered)
+agents = rt.list_agents(auth_context={&quot;role&quot;: &quot;operator&quot;, &quot;tenant_id&quot;: &quot;eng&quot;})
+
+# Get agent details
+agent = rt.get_agent(&quot;ClaudeCode-v2&quot;)
+
+# Remove (hot-leave)
+rt.remove_agent(&quot;ClaudeCode-v2&quot;, auth_context={&quot;role&quot;: &quot;admin&quot;})
+</code></pre>
+<h3 id="goal-lifecycle">Goal Lifecycle</h3>
+<pre><code class="language-python"># Submit — Planner decomposes into Task DAG
+goal = rt.submit_goal(
+    description=&quot;Build a REST API for user management&quot;,
+    budget=50.0,
+    priority=&quot;high&quot;,
+    auth_context={&quot;role&quot;: &quot;admin&quot;, &quot;tenant_id&quot;: &quot;eng&quot;},
+    require_approval=True,          # Phase 3: HITL gate
+    approvers=[&quot;alice&quot;, &quot;bob&quot;],     # Phase 3: multi-approver
+)
+
+# Check progress
+status = rt.get_goal_status(goal[&quot;goal_id&quot;])
+
+# Block until done
+result = rt.wait_for_goal(goal[&quot;goal_id&quot;], timeout_seconds=600)
+
+# Cancel
+rt.cancel_goal(goal[&quot;goal_id&quot;], auth_context={&quot;role&quot;: &quot;admin&quot;})
+</code></pre>
+<h3 id="phase-3-advanced-apis">Phase 3: Advanced APIs</h3>
+<pre><code class="language-python"># ── Security ──
+key = rt.generate_api_key(&quot;agent&quot;, &quot;CI pipeline&quot;, ttl_seconds=86400,
+                          auth_context={&quot;role&quot;: &quot;admin&quot;})
+audit = rt.get_audit_log(actor=&quot;alice&quot;, action=&quot;goal.submit&quot;)
+
+# ── Dynamic Plan Modification ──
+rt.modify_plan(plan_id, &quot;add_task&quot;,
+               task_id=&quot;extra-1&quot;, description=&quot;Additional validation&quot;,
+               required_capability=&quot;code-review.security&quot;)
+
+# ── Sub-Goal Spawning ──
+sub = rt.spawn_sub_goal(&quot;task-123&quot;, &quot;Investigate alternatives&quot;,
+                        budget=25.0, num_tasks=3)
+
+# ── HITL Approval ──
+rt.approve_task(&quot;approval-abc123&quot;, &quot;alice&quot;, &quot;LGTM, ship it&quot;)
+rt.reject_task(&quot;approval-abc123&quot;, &quot;bob&quot;, &quot;Needs more tests&quot;)
+
+# ── Hot Reload ──
+rt.reload_plugin(&quot;verifier&quot;, &quot;zelos.verifier_v3:FullVerifier&quot;, &quot;3.0.0&quot;)
+rt.rollback_plugin(&quot;verifier&quot;, &quot;2.0.0&quot;)
+rt.set_upgrade_strategy(&quot;canary&quot;)
+
+# ── Multi-tenancy ──
+rt.register_tenant(&quot;fintech&quot;, &quot;Fintech Division&quot;,
+                   quotas={&quot;max_goals&quot;: 100, &quot;budget_per_goal&quot;: 5000})
+usage = rt.get_tenant_usage()
+
+# ── Distributed ──
+is_leader = rt.is_leader()
+cluster = rt.get_cluster_status()
+</code></pre>
+<h3 id="api-reference">API Reference</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Parameters</th>
+<th>Returns</th>
+<th>Auth Required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>submit_goal(description, ...)</code></td>
+<td><code>budget, priority, tenant_id, auth_context, require_approval, approvers</code></td>
+<td><code>{goal_id, status, plan_id, task_count}</code></td>
+<td><code>goal.submit</code></td>
+</tr>
+<tr>
+<td><code>get_goal_status(goal_id)</code></td>
+<td><code>auth_context</code></td>
+<td><code>{status, progress, ...}</code></td>
+<td><code>goal.read</code></td>
+</tr>
+<tr>
+<td><code>cancel_goal(goal_id)</code></td>
+<td><code>auth_context</code></td>
+<td><code>{goal_id, status}</code></td>
+<td><code>goal.cancel</code></td>
+</tr>
+<tr>
+<td><code>wait_for_goal(goal_id, timeout)</code></td>
+<td><code>timeout_seconds, poll_interval</code></td>
+<td><code>{status, progress, ...}</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>add_agent(name, entrypoint, caps)</code></td>
+<td><code>max_concurrent_tasks, auth_context</code></td>
+<td><code>agent_id</code></td>
+<td><code>agent.register</code></td>
+</tr>
+<tr>
+<td><code>remove_agent(name_or_id)</code></td>
+<td><code>auth_context</code></td>
+<td><code>None</code> or error dict</td>
+<td><code>agent.remove</code></td>
+</tr>
+<tr>
+<td><code>list_agents()</code></td>
+<td><code>auth_context</code></td>
+<td><code>[{agent_id, name, status, ...}]</code></td>
+<td><code>agent.read</code></td>
+</tr>
+<tr>
+<td><code>get_agent(name_or_id)</code></td>
+<td><code>auth_context</code></td>
+<td><code>{agent_id, capabilities, ...}</code></td>
+<td><code>agent.read</code></td>
+</tr>
+<tr>
+<td><code>modify_plan(plan_id, op, **kw)</code></td>
+<td><code>operation: add_task\|remove_task\|modify_task\|add_dependency\|remove_dependency</code></td>
+<td><code>{status, operation}</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>spawn_sub_goal(parent_id, desc)</code></td>
+<td><code>budget, required_capability, num_tasks</code></td>
+<td><code>{sub_goal_id, task_ids, ...}</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>approve_task(task_id, approver)</code></td>
+<td><code>comment</code></td>
+<td><code>{status}</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>reject_task(task_id, approver)</code></td>
+<td><code>reason</code></td>
+<td><code>{status}</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>reload_plugin(plugin_id, entry, ver)</code></td>
+<td>—</td>
+<td><code>{status, plugin_id, version}</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>rollback_plugin(plugin_id, version)</code></td>
+<td>—</td>
+<td><code>{status}</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>set_upgrade_strategy(name)</code></td>
+<td><code>"rolling"\|"blue_green"\|"canary"\|"instant"</code></td>
+<td><code>{status, strategy}</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>generate_api_key(role, desc, ttl)</code></td>
+<td><code>auth_context</code></td>
+<td><code>key_string</code></td>
+<td><code>admin.api_key.generate</code></td>
+</tr>
+<tr>
+<td><code>revoke_api_key(key)</code></td>
+<td><code>auth_context</code></td>
+<td><code>bool</code></td>
+<td><code>admin.api_key.revoke</code></td>
+</tr>
+<tr>
+<td><code>validate_api_key(key)</code></td>
+<td>—</td>
+<td><code>{role, ...}</code> or <code>None</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>get_audit_log(**filters)</code></td>
+<td><code>actor, action, resource, start_time, end_time</code></td>
+<td><code>[{event_id, actor, ...}]</code></td>
+<td><code>admin.audit.read</code></td>
+</tr>
+<tr>
+<td><code>register_tenant(id, name, quotas)</code></td>
+<td><code>auth_context</code></td>
+<td><code>{status, tenant_id}</code></td>
+<td><code>admin.tenant.manage</code></td>
+</tr>
+<tr>
+<td><code>list_tenants()</code></td>
+<td>—</td>
+<td><code>[{tenant_id, namespace, ...}]</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>get_health()</code></td>
+<td>—</td>
+<td><code>{status, uptime, components, ...}</code></td>
+<td><code>metrics.read</code></td>
+</tr>
+<tr>
+<td><code>get_metrics()</code></td>
+<td>—</td>
+<td><code>{goals, tasks, agents, events, ...}</code></td>
+<td><code>metrics.read</code></td>
+</tr>
+<tr>
+<td><code>is_leader()</code></td>
+<td>—</td>
+<td><code>bool</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>get_cluster_status()</code></td>
+<td>—</td>
+<td><code>{total_nodes, is_leader, ...}</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-event-bus">4. Event Bus</h2>
+<p><strong>Module</strong>: <code>zelos.event_bus</code> | <strong>Classes</strong>: <code>EventBus</code>, <code>Event</code>, <code>InMemoryEventStore</code></p>
+<p>The central communication backbone. Every state change in Zelos is an Event. Components never call each other directly.</p>
+<h3 id="key-concepts">Key Concepts</h3>
+<pre><code class="language-python">from zelos.event_bus import EventBus, Event, HandlerResult
+
+bus = EventBus(max_events=10000)
+
+# ── Immutable Events ──
+event = Event(
+    event_id=&quot;evt-001&quot;,
+    event_type=&quot;task.completed&quot;,
+    source=&quot;execution-engine&quot;,
+    timestamp=time.time(),
+    correlation_id=&quot;goal-g-001&quot;,
+    payload={&quot;task_id&quot;: &quot;t-1&quot;, &quot;agent_id&quot;: &quot;agent-1&quot;, &quot;duration_ms&quot;: 1234},
+)
+bus.publish(event)
+
+# ── Subscribe by exact type ──
+def on_task_completed(event: Event):
+    print(f&quot;Task done: {event.payload['task_id']}&quot;)
+    return HandlerResult.ACK
+
+bus.subscribe(&quot;task.completed&quot;, on_task_completed)
+
+# ── Subscribe by pattern ──
+bus.subscribe_pattern(&quot;task.*&quot;, lambda e: print(f&quot;Task event: {e.event_type}&quot;))
+
+# ── Subscribe by correlation ──
+bus.subscribe_correlation(&quot;goal-g-001&quot;, lambda e: print(f&quot;Goal event: {e}&quot;))
+# All events with correlation_id=&quot;goal-g-001&quot; are delivered here
+
+# ── Replay ──
+count = bus.replay_from(0, lambda e: print(e.event_type))
+# count: number of events replayed
+</code></pre>
+<h3 id="event-schema">Event Schema</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>event_id</code></td>
+<td><code>str</code></td>
+<td>UUID v4 — globally unique</td>
+</tr>
+<tr>
+<td><code>event_type</code></td>
+<td><code>str</code></td>
+<td>Dot-separated: <code>task.completed</code>, <code>goal.submitted</code></td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td><code>str</code></td>
+<td>Component that emitted the event</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td><code>float</code></td>
+<td>Unix timestamp (seconds)</td>
+</tr>
+<tr>
+<td><code>correlation_id</code></td>
+<td><code>str</code></td>
+<td>Links events to a Goal or Task</td>
+</tr>
+<tr>
+<td><code>payload</code></td>
+<td><code>dict</code></td>
+<td>Event-specific data</td>
+</tr>
+<tr>
+<td><code>causation_id</code></td>
+<td><code>str?</code></td>
+<td>ID of the event that caused this one</td>
+</tr>
+<tr>
+<td><code>data_version</code></td>
+<td><code>str</code></td>
+<td>Schema version (semver)</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td><code>dict</code></td>
+<td>Extra annotations</td>
+</tr>
+</tbody>
+</table>
+<h3 id="handler-results">Handler Results</h3>
+<table>
+<thead>
+<tr>
+<th>Result</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HandlerResult.ACK</code></td>
+<td>Event processed, stop retries</td>
+</tr>
+<tr>
+<td><code>HandlerResult.RETRY</code></td>
+<td>Retry delivery (max 3 times)</td>
+</tr>
+<tr>
+<td><code>HandlerResult.SKIP</code></td>
+<td>Skip this event</td>
+</tr>
+<tr>
+<td>Any other</td>
+<td>Treated as ACK</td>
+</tr>
+</tbody>
+</table>
+<h3 id="event-taxonomy">Event Taxonomy</h3>
+<pre><code>goal.submitted  goal.planned  goal.started  goal.completed  goal.failed  goal.cancelled
+task.created  task.ready  task.assigned  task.started  task.completed  task.failed  task.timed_out
+agent.registered  agent.connected  agent.heartbeating  agent.disconnected  agent.removed
+artifact.created  artifact.verified
+verification.passed  verification.failed
+plugin.loaded  plugin.started  plugin.stopped  plugin.error
+</code></pre>
+<hr />
+<h2 id="5-capability-registry">5. Capability Registry</h2>
+<p><strong>Module</strong>: <code>zelos.capability_registry</code> | <strong>Classes</strong>: <code>CapabilityRegistry</code>, <code>CapabilityEntry</code></p>
+<p>The WHAT registry. Agents register their capabilities. The Runtime discovers providers automatically. Never dispatch by agent name.</p>
+<h3 id="usage">Usage</h3>
+<pre><code class="language-python">from zelos.capability_registry import CapabilityRegistry
+
+reg = CapabilityRegistry()
+
+# ── Register capabilities ──
+reg.register(
+    agent_id=&quot;agent-1&quot;,
+    agent_name=&quot;CodeAgent&quot;,
+    capabilities=[
+        {
+            &quot;name&quot;: &quot;code-generation.python&quot;,
+            &quot;version&quot;: &quot;1.0.0&quot;,
+            &quot;description&quot;: &quot;Generate Python code from specifications&quot;,
+            &quot;input_schema&quot;: {&quot;type&quot;: &quot;object&quot;, &quot;properties&quot;: {&quot;spec&quot;: {&quot;type&quot;: &quot;string&quot;}}},
+            &quot;output_schema&quot;: {&quot;type&quot;: &quot;object&quot;, &quot;properties&quot;: {&quot;code&quot;: {&quot;type&quot;: &quot;string&quot;}}},
+            &quot;tags&quot;: [&quot;production&quot;, &quot;python&quot;, &quot;soc2-compliant&quot;],
+        }
+    ]
+)
+
+reg.mark_available(&quot;agent-1&quot;)
+
+# ── Query by capability ──
+providers = reg.find_providers_for(&quot;code-generation.python&quot;)
+# → [&quot;agent-1&quot;]
+
+# ── Query by name pattern ──
+providers = reg.find_by_name_pattern(&quot;code-generation.*&quot;)
+# → [&quot;agent-1&quot;]
+
+# ── Query by tags (AND logic) ──
+providers = reg.find_by_tags([&quot;production&quot;, &quot;python&quot;])
+# → [&quot;agent-1&quot;]
+
+# ── Query by version constraint ──
+providers = reg.find_by_version(&quot;code-generation.python&quot;, &quot;&gt;=1.0,&lt;2.0&quot;)
+# → providers with matching version
+
+# ── Lifecycle ──
+reg.mark_deprecated(&quot;agent-1&quot;)  # Stop routing new tasks
+reg.mark_unavailable(&quot;agent-1&quot;) # Agent is down
+</code></pre>
+<hr />
+<h2 id="6-task-graph">6. Task Graph</h2>
+<p><strong>Module</strong>: <code>zelos.task_graph</code> | <strong>Classes</strong>: <code>TaskGraphEngine</code>, <code>Task</code>, <code>TaskStatus</code></p>
+<p>Manages the Task state machine and DAG dependency resolution. Every Goal becomes a Plan, every Plan is a DAG of Tasks.</p>
+<h3 id="task-state-machine">Task State Machine</h3>
+<pre><code>CREATED → READY → ASSIGNED → STARTED → COMPLETED  (terminal)
+  ↓        ↓         ↓           ↓
+  ↓        ↓         ↓           ├── FAILED → READY (retry)
+  ↓        ↓         ↓           └── TIMED_OUT → READY (retry)
+  ↓        ↓         └── READY (reject)
+  ↓        └── FAILED (escalation tier 3)
+  └── CANCELLED (terminal)
+</code></pre>
+<h3 id="usage_1">Usage</h3>
+<pre><code class="language-python">from zelos.task_graph import Task, TaskStatus, TaskGraphEngine
+
+tg = TaskGraphEngine()
+
+# ── Create tasks ──
+t1 = Task(task_id=&quot;t1&quot;, plan_id=&quot;plan-1&quot;,
+          description=&quot;Design the architecture&quot;,
+          required_capability=&quot;design.architecture&quot;,
+          priority=&quot;high&quot;, timeout_ms=60000)
+t2 = Task(task_id=&quot;t2&quot;, plan_id=&quot;plan-1&quot;,
+          description=&quot;Code the implementation&quot;,
+          required_capability=&quot;code-generation.python&quot;,
+          dependencies=[&quot;t1&quot;])  # t2 depends on t1 completing
+t3 = Task(task_id=&quot;t3&quot;, plan_id=&quot;plan-1&quot;,
+          description=&quot;Review the code&quot;,
+          required_capability=&quot;code-review.security&quot;,
+          dependencies=[&quot;t2&quot;])
+
+tg.add_task(t1)
+tg.add_task(t2)
+tg.add_task(t3)
+
+# ── Evaluate dependencies ──
+ready = tg.evaluate_all()
+# t1 has no deps → READY immediately
+# t2 waits for t1
+# t3 waits for t2
+
+# ── State transitions ──
+tg.transition(&quot;t1&quot;, TaskStatus.ASSIGNED, agent_id=&quot;agent-1&quot;)
+tg.transition(&quot;t1&quot;, TaskStatus.STARTED)
+tg.transition(&quot;t1&quot;, TaskStatus.COMPLETED)
+# Now t2 becomes READY automatically
+
+ready = tg.evaluate_all()  # → [&quot;t2&quot;]
+
+# ── DAG validation ──
+tg.add_dependency(&quot;t3&quot;, &quot;t1&quot;)  # ⚠️ Would create cycle t1→t2→t3→t1
+# → ValueError: Adding edge t3→t1 would create a cycle
+
+# ── Dynamic modification (Phase 3) ──
+tg.add_task_dynamic(Task(task_id=&quot;t4&quot;, plan_id=&quot;plan-1&quot;,
+                         description=&quot;Extra step&quot;,
+                         required_capability=&quot;testing.e2e&quot;,
+                         dependencies=[&quot;t3&quot;]))
+tg.remove_task(&quot;t4&quot;)  # Only unstarted tasks
+</code></pre>
+<h3 id="task-fields">Task Fields</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_id</code></td>
+<td><code>str</code></td>
+<td>required</td>
+<td>Unique task identifier</td>
+</tr>
+<tr>
+<td><code>plan_id</code></td>
+<td><code>str</code></td>
+<td>required</td>
+<td>Parent plan ID</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td><code>str</code></td>
+<td>required</td>
+<td>What this task does</td>
+</tr>
+<tr>
+<td><code>required_capability</code></td>
+<td><code>str</code></td>
+<td>required</td>
+<td>Capability name to dispatch to</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>TaskStatus</code></td>
+<td><code>CREATED</code></td>
+<td>Current state</td>
+</tr>
+<tr>
+<td><code>dependencies</code></td>
+<td><code>List[str]</code></td>
+<td><code>[]</code></td>
+<td>Task IDs that must complete first</td>
+</tr>
+<tr>
+<td><code>priority</code></td>
+<td><code>str</code></td>
+<td><code>"medium"</code></td>
+<td><code>low</code> / <code>medium</code> / <code>high</code> / <code>critical</code></td>
+</tr>
+<tr>
+<td><code>max_retries</code></td>
+<td><code>int</code></td>
+<td><code>3</code></td>
+<td>Maximum retry attempts</td>
+</tr>
+<tr>
+<td><code>timeout_ms</code></td>
+<td><code>int</code></td>
+<td><code>30000</code></td>
+<td>Execution timeout</td>
+</tr>
+<tr>
+<td><code>fallback_capability</code></td>
+<td><code>str?</code></td>
+<td><code>None</code></td>
+<td>Alternative capability if primary unavailable</td>
+</tr>
+<tr>
+<td><code>preferred_agent_id</code></td>
+<td><code>str?</code></td>
+<td><code>None</code></td>
+<td>Affinity hint for scheduler</td>
+</tr>
+<tr>
+<td><code>excluded_agent_ids</code></td>
+<td><code>List[str]</code></td>
+<td><code>[]</code></td>
+<td>Agents to never dispatch to</td>
+</tr>
+<tr>
+<td><code>required_tags</code></td>
+<td><code>List[str]</code></td>
+<td><code>[]</code></td>
+<td>Required agent tags</td>
+</tr>
+<tr>
+<td><code>min_success_rate</code></td>
+<td><code>float</code></td>
+<td><code>0.0</code></td>
+<td>Minimum agent historical success</td>
+</tr>
+<tr>
+<td><code>max_cost_per_call</code></td>
+<td><code>float?</code></td>
+<td><code>None</code></td>
+<td>Cost ceiling</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="7-scheduler">7. Scheduler</h2>
+<p><strong>Module</strong>: <code>zelos.scheduler</code> | <strong>Classes</strong>: <code>Scheduler</code>, <code>ScoringStrategy</code>, <code>DefaultScoringStrategy</code></p>
+<p>The 5-phase scheduling pipeline that matches READY tasks to available Agents.</p>
+<h3 id="the-pipeline">The Pipeline</h3>
+<pre><code>Phase 1: ORDER   → Sort READY tasks by priority &gt; fan-out &gt; age
+Phase 2: FILTER  → Find agents matching capability + tags + constraints
+Phase 3: SCORE   → Rank agents (delegated to ScoringStrategy plugin)
+Phase 4: POLICY  → Apply policy decisions (Allow/Reject/Delay/Retry)
+Phase 5: SELECT  → Pick the best agent and mark task ASSIGNED
+</code></pre>
+<h3 id="custom-scoring-strategy">Custom Scoring Strategy</h3>
+<pre><code class="language-python">from zelos.scheduler import ScoringStrategy, AgentCandidate, ScoredCandidate
+
+class CostFirstScoring(ScoringStrategy):
+    &quot;&quot;&quot;Prioritize cheapest agents. Fail-safe with success_rate floor.&quot;&quot;&quot;
+
+    def score(self, task, candidates):
+        results = []
+        for c in candidates:
+            # Quality floor
+            if c.success_rate &lt; 0.80:
+                results.append(ScoredCandidate(c, score=0,
+                    reason=f&quot;Success rate {c.success_rate:.0%} below 80% threshold&quot;))
+                continue
+
+            # Cost-first formula
+            score = (
+                (1.0 / (c.cost_per_call + 0.01)) * 0.6 +  # Cheaper = better
+                c.success_rate * 0.3 +                      # Some quality
+                (1.0 - c.current_load) * 0.1                # Less loaded = better
+            )
+            results.append(ScoredCandidate(c, score=score,
+                reason=f&quot;Cost=${c.cost_per_call:.3f} Success={c.success_rate:.0%}&quot;))
+        return sorted(results, key=lambda r: r.score, reverse=True)
+</code></pre>
+<h3 id="default-scoring-weights">Default Scoring Weights</h3>
+<pre><code class="language-python">DefaultScoringStrategy(weights={
+    &quot;success_rate&quot;: 0.30,       # Proven reliability
+    &quot;cost_efficiency&quot;: 0.20,    # Lower cost preferred
+    &quot;load_distribution&quot;: 0.15,  # Prefer less busy agents
+    &quot;latency&quot;: 0.15,            # Faster is better
+    &quot;availability&quot;: 0.10,       # Higher uptime
+    &quot;affinity&quot;: 0.05,           # Same agent for related tasks
+    &quot;recency&quot;: 0.05,            # Recently used (context warmth)
+})
+</code></pre>
+<h3 id="retry-logic">Retry Logic</h3>
+<pre><code>Task FAILED or TIMED_OUT
+  → attempt += 1
+  → if attempt &lt;= max_retries:
+      backoff = base * 2^(attempt-1) + random(0, 500) ms
+      → READY again
+  → else:
+      → FAILED (terminal)
+</code></pre>
+<hr />
+<h2 id="8-execution-engine">8. Execution Engine</h2>
+<p><strong>Module</strong>: <code>zelos.execution_engine</code> | <strong>Classes</strong>: <code>ExecutionEngine</code>, <code>AgentState</code></p>
+<p>Dispatches tasks to agents, monitors their lifecycle, enforces timeouts, and tracks heartbeats.</p>
+<h3 id="agent-state-machine">Agent State Machine</h3>
+<pre><code>registered → connected → heartbeating → disconnected → shutdown
+                │                                      │
+                └── (after heartbeat recovers) ────────┘
+</code></pre>
+<h3 id="dispatch-flow">Dispatch Flow</h3>
+<pre><code class="language-python"># ── Agent Side ──
+engine.register_agent(agent_id=&quot;agent-1&quot;, agent_name=&quot;CodeAgent&quot;,
+                      max_concurrent_tasks=5)
+
+# Heartbeat every 30s
+engine.heartbeat(&quot;agent-1&quot;)  # → &quot;heartbeating&quot;
+
+# ── Runtime Side ──
+engine.dispatch(&quot;t1&quot;, &quot;agent-1&quot;)
+# → Task status: ASSIGNED → STARTED
+# → Agent.current_tasks: [&quot;t1&quot;]
+# → InFlight: {task_id, agent_id, started_at, timeout_at}
+
+# ── Agent returns result ──
+engine.submit_result(&quot;t1&quot;, &quot;agent-1&quot;, {
+    &quot;status&quot;: &quot;completed&quot;,
+    &quot;artifact&quot;: {&quot;content_type&quot;: &quot;application/json&quot;, &quot;content&quot;: {...}}
+})
+# → Task status: COMPLETED
+# → Agent.current_tasks: [] → &quot;idle&quot;
+
+# ── Error handling ──
+engine.submit_result(&quot;t2&quot;, &quot;agent-1&quot;, {
+    &quot;status&quot;: &quot;failed&quot;,
+    &quot;error&quot;: {&quot;code&quot;: &quot;internal_error&quot;, &quot;message&quot;: &quot;Out of memory&quot;}
+})
+# → Task status: FAILED → Scheduler retries if attempts remain
+
+# ── Cancellation ──
+engine.cancel_task(&quot;t3&quot;)
+# → Task status: CANCELLED
+</code></pre>
+<h3 id="timeout-monitor">Timeout Monitor</h3>
+<p>Background thread checks every second:
+- Tasks exceeding <code>timeout_at</code> → <code>TIMED_OUT</code>
+- Agents without heartbeat for 3× heartbeat_interval → <code>disconnected</code></p>
+<hr />
+<h2 id="9-planner">9. Planner</h2>
+<p><strong>Module</strong>: <code>zelos.planner</code> | <strong>Class</strong>: <code>LLMPlanner</code></p>
+<p>Decomposes natural-language Goals into structured Execution Plans (Task DAGs) using an LLM.</p>
+<h3 id="supported-providers">Supported Providers</h3>
+<pre><code class="language-python">from zelos.planner import LLMPlanner
+
+# OpenAI / DeepSeek / Ollama / vLLM
+planner = LLMPlanner({
+    &quot;provider&quot;: &quot;openai&quot;,
+    &quot;model&quot;: &quot;deepseek-v4-flash&quot;,
+    &quot;api_key&quot;: &quot;sk-...&quot;,
+    &quot;base_url&quot;: &quot;https://api.deepseek.com/v1&quot;,
+    &quot;temperature&quot;: 0.3,
+    &quot;max_tokens&quot;: 4000,
+})
+
+# Anthropic
+planner = LLMPlanner({
+    &quot;provider&quot;: &quot;anthropic&quot;,
+    &quot;model&quot;: &quot;claude-sonnet-5&quot;,
+    &quot;api_key&quot;: &quot;sk-ant-...&quot;,
+})
+
+# Google Gemini
+planner = LLMPlanner({
+    &quot;provider&quot;: &quot;google&quot;,
+    &quot;model&quot;: &quot;gemini-2.0-flash&quot;,
+    &quot;api_key&quot;: &quot;...&quot;,
+})
+
+# Mock (for testing)
+planner = LLMPlanner({&quot;provider&quot;: &quot;mock&quot;})
+</code></pre>
+<h3 id="plan-replan">Plan → Replan</h3>
+<pre><code class="language-python"># Initial plan
+plan = planner.plan(&quot;Build a user authentication system&quot;)
+# → ExecutionPlan with Task DAG:
+#   t1: Design auth architecture [design.architecture]
+#   t2: Implement backend [code-generation.python] ← depends on t1
+#   t3: Implement frontend [code-generation.typescript] ← depends on t1
+#   t4: Security review [code-review.security] ← depends on t2,t3
+#   t5: Integration tests [testing.e2e] ← depends on t4
+
+# Replan on failure
+new_plan = planner.replan(
+    goal_description=&quot;Build a user authentication system&quot;,
+    current_plan=plan,
+    failed_tasks=[
+        {&quot;task_id&quot;: &quot;t2&quot;, &quot;reason&quot;: &quot;no agent provides capability: code-generation.python&quot;}
+    ]
+)
+# → New alternative tasks to replace failed ones
+</code></pre>
+<hr />
+<h2 id="17-security-phase-3">17. Security (Phase 3)</h2>
+<p><strong>Module</strong>: <code>zelos.security</code> | <strong>Classes</strong>: <code>AccessControl</code>, <code>AuditLogger</code>, <code>APIKeyManager</code>, <code>TLSConfig</code></p>
+<p>Production-grade security infrastructure. Integrated into <code>ZelosRuntime</code> — all API methods enforce RBAC and log audit events.</p>
+<h3 id="role-based-access-control">Role-Based Access Control</h3>
+<pre><code class="language-python">from zelos.security import AccessControl
+
+ac = AccessControl()
+
+# ── Default Roles ──
+# admin:    * (wildcard — everything)
+# operator: goal.*, task.*, agent.read, plugin.*
+# agent:    task.execute, agent.heartbeat, artifact.create
+# viewer:   goal.read, task.read, agent.read, metrics.read
+
+# ── Permission checks ──
+ac.check(&quot;admin&quot;, &quot;goal.submit&quot;)     # → True (wildcard)
+ac.check(&quot;operator&quot;, &quot;task.create&quot;)  # → True (task.* pattern)
+ac.check(&quot;agent&quot;, &quot;goal.submit&quot;)     # → False (no permission)
+ac.check(&quot;viewer&quot;, &quot;agent.delete&quot;)   # → False
+
+# ── Custom roles ──
+ac.add_role(&quot;sre&quot;, [
+    &quot;goal.read&quot;, &quot;metrics.read&quot;, &quot;agent.read&quot;,
+    &quot;plugin.configure&quot;, &quot;audit.read&quot;,
+])
+ac.update_role(&quot;sre&quot;, add_permissions=[&quot;goal.cancel&quot;])
+ac.remove_role(&quot;sre&quot;)
+</code></pre>
+<h3 id="audit-logging">Audit Logging</h3>
+<pre><code class="language-python">from zelos.security import AuditLogger
+
+al = AuditLogger(max_events=100000)
+
+# Every operation logs automatically through ZelosRuntime
+# Manual logging:
+al.log(&quot;admin&quot;, &quot;goal.submit&quot;, &quot;g-001&quot;,
+       detail=&quot;Deploy v2.0 to production&quot;, result=&quot;success&quot;)
+
+# ── Multi-field query ──
+events = al.query(
+    actor=&quot;admin&quot;,           # Who did it
+    action=&quot;goal.submit&quot;,    # What they did
+    resource=&quot;g-001&quot;,        # On what
+    result=&quot;success&quot;,        # Outcome
+    start_time=last_hour,    # When
+    limit=100,
+)
+
+# ── Export ──
+json_str = al.export_json()
+</code></pre>
+<h3 id="api-key-management">API Key Management</h3>
+<pre><code class="language-python">from zelos.security import APIKeyManager
+
+akm = APIKeyManager()
+
+# Generate (plaintext shown once — hash stored)
+key = akm.generate_key(&quot;agent&quot;, &quot;CI/CD pipeline&quot;, ttl_seconds=86400)
+# → &quot;zelos_a1b2c3d4e5f6...&quot;
+
+# Validate → returns role info or None
+info = akm.validate(key)
+# → {&quot;role&quot;: &quot;agent&quot;, &quot;description&quot;: &quot;CI/CD pipeline&quot;, &quot;expires_at&quot;: ...}
+
+# Revoke
+akm.revoke(key)
+akm.validate(key)  # → None
+
+# List (hashes only, never plaintext)
+keys = akm.list_keys()
+</code></pre>
+<h3 id="mtls-configuration">mTLS Configuration</h3>
+<pre><code class="language-python">from zelos.security import TLSConfig
+
+tls = TLSConfig(
+    cert_file=&quot;/etc/zelos/certs/server.crt&quot;,
+    key_file=&quot;/etc/zelos/certs/server.key&quot;,
+    ca_file=&quot;/etc/zelos/certs/ca.crt&quot;,
+    require_client_cert=True,
+    min_tls_version=&quot;TLSv1.3&quot;,
+)
+
+if tls.is_configured():
+    # Apply to HTTP adapter / gRPC server
+    pass
+</code></pre>
+<h3 id="integration-with-runtime">Integration with Runtime</h3>
+<pre><code class="language-python">rt = ZelosRuntime(...)
+rt.start()
+
+# All API calls enforce RBAC:
+rt.submit_goal(&quot;...&quot;, auth_context={&quot;role&quot;: &quot;agent&quot;})
+# → {&quot;status&quot;: &quot;rejected&quot;, &quot;reason&quot;: &quot;Permission denied: role 'agent' cannot 'goal.submit'&quot;}
+
+# All state changes auto-logged:
+audit = rt.get_audit_log(actor=&quot;alice&quot;)
+# → [{event_id, timestamp, actor, action, resource, detail, result}, ...]
+
+# API key auth:
+key = rt.generate_api_key(&quot;admin&quot;, &quot;my key&quot;, auth_context={&quot;role&quot;: &quot;admin&quot;})
+rt.submit_goal(&quot;...&quot;, auth_context={&quot;api_key&quot;: key})
+</code></pre>
+<hr />
+<h2 id="18-multi-tenancy-phase-3">18. Multi-tenancy (Phase 3)</h2>
+<p><strong>Module</strong>: <code>zelos.multi_tenancy</code> | <strong>Classes</strong>: <code>Namespace</code>, <code>ResourceQuota</code>, <code>TenantManager</code></p>
+<p>Hard isolation between tenants sharing a single Runtime. Integrated into <code>ZelosRuntime</code>.</p>
+<h3 id="namespace-quotas">Namespace &amp; Quotas</h3>
+<pre><code class="language-python">from zelos.multi_tenancy import Namespace, ResourceQuota
+
+# ── Quota configuration ──
+quotas = ResourceQuota(
+    max_goals=100,              # Active goals
+    max_tasks=500,              # Active tasks
+    max_agents=20,              # Registered agents
+    budget_per_goal=5000.0,     # Max cost per goal
+    max_concurrent_tasks=50,    # Parallel execution limit
+    max_storage_mb=2048,        # Storage allocation
+)
+
+# ── Namespace isolation ──
+ns = Namespace(&quot;fintech&quot;, &quot;Fintech Division&quot;, quotas=quotas)
+
+ns.add_goal(&quot;g-1&quot;)
+ns.add_agent(&quot;agent-1&quot;)
+ns.add_task(&quot;t-1&quot;)
+
+ns.check_quota(&quot;goals&quot;)      # → True (1/100)
+ns.check_quota(&quot;agents&quot;)     # → True (1/20)
+ns.quotas.check_budget(3000) # → True (within $5000 limit)
+</code></pre>
+<h3 id="tenant-management">Tenant Management</h3>
+<pre><code class="language-python">from zelos.multi_tenancy import TenantManager
+
+tm = TenantManager()
+
+# ── Register tenants ──
+tm.register_tenant(&quot;acme-corp&quot;, &quot;ACME Corporation&quot;,
+    quotas=ResourceQuota(max_goals=500, budget_per_goal=10000),
+    metadata={&quot;org&quot;: &quot;Engineering&quot;, &quot;tier&quot;: &quot;enterprise&quot;})
+
+tm.register_tenant(&quot;dev-team&quot;, &quot;Development Team&quot;,
+    quotas=ResourceQuota(max_goals=20, budget_per_goal=200),
+    metadata={&quot;org&quot;: &quot;R&amp;D&quot;, &quot;tier&quot;: &quot;standard&quot;})
+
+# ── Lifecycle ──
+tm.deactivate_tenant(&quot;dev-team&quot;)
+tm.is_active(&quot;dev-team&quot;)    # → False
+tm.activate_tenant(&quot;dev-team&quot;)
+
+# ── Cross-tenant isolation ──
+ns_a = tm.get_namespace(&quot;acme-corp&quot;)
+ns_b = tm.get_namespace(&quot;dev-team&quot;)
+ns_a.add_goal(&quot;g-1&quot;)
+# g-1 is invisible to dev-team namespace
+
+# ── Usage report ──
+report = tm.get_usage_report()
+# → {&quot;total_tenants&quot;: 2, &quot;active_tenants&quot;: 2,
+#    &quot;tenants&quot;: {&quot;acme-corp&quot;: {&quot;goals&quot;: 1, ...}, ...}}
+</code></pre>
+<h3 id="runtime-integration">Runtime Integration</h3>
+<pre><code class="language-python">rt = ZelosRuntime({
+    &quot;multi_tenancy&quot;: {
+        &quot;enabled&quot;: True,
+        &quot;tenants&quot;: [
+            {&quot;id&quot;: &quot;eng&quot;, &quot;name&quot;: &quot;Engineering&quot;,
+             &quot;quotas&quot;: {&quot;max_goals&quot;: 100, &quot;budget_per_goal&quot;: 5000}},
+            {&quot;id&quot;: &quot;research&quot;, &quot;name&quot;: &quot;Research Lab&quot;,
+             &quot;quotas&quot;: {&quot;max_goals&quot;: 10, &quot;budget_per_goal&quot;: 2000}},
+        ]
+    }
+})
+
+# Tenant-scoped operations
+rt.submit_goal(&quot;...&quot;, auth_context={&quot;role&quot;: &quot;admin&quot;, &quot;tenant_id&quot;: &quot;eng&quot;})
+rt.add_agent(&quot;...&quot;, capabilities=[...],
+             auth_context={&quot;role&quot;: &quot;admin&quot;, &quot;tenant_id&quot;: &quot;eng&quot;})
+
+# Cross-tenant isolation enforced automatically
+rt.get_goal_status(&quot;g-from-eng&quot;, auth_context={&quot;tenant_id&quot;: &quot;research&quot;})
+# → None (not in research tenant)
+</code></pre>
+<hr />
+<h2 id="19-advanced-execution-phase-3">19. Advanced Execution (Phase 3)</h2>
+<p><strong>Module</strong>: <code>zelos.advanced_execution</code> | <strong>Classes</strong>: <code>DynamicPlanModifier</code>, <code>SubGoalManager</code>, <code>HumanInTheLoop</code></p>
+<p>Production execution features beyond basic task dispatch.</p>
+<h3 id="dynamic-plan-modification">Dynamic Plan Modification</h3>
+<pre><code class="language-python">rt.modify_plan(plan_id, &quot;add_task&quot;,
+               task_id=&quot;hotfix-1&quot;,
+               description=&quot;Emergency security patch&quot;,
+               required_capability=&quot;code-generation.python&quot;,
+               priority=&quot;critical&quot;,
+               dependencies=[&quot;existing-task-3&quot;])
+
+rt.modify_plan(plan_id, &quot;remove_task&quot;, task_id=&quot;obsolete-task&quot;)
+rt.modify_plan(plan_id, &quot;modify_task&quot;, task_id=&quot;t-2&quot;,
+               priority=&quot;critical&quot;, timeout_ms=120000)
+rt.modify_plan(plan_id, &quot;add_dependency&quot;,
+               from_task_id=&quot;t-1&quot;, to_task_id=&quot;t-4&quot;)
+rt.modify_plan(plan_id, &quot;remove_dependency&quot;,
+               from_task_id=&quot;t-1&quot;, to_task_id=&quot;t-4&quot;)
+</code></pre>
+<h3 id="sub-goal-spawning">Sub-Goal Spawning</h3>
+<pre><code class="language-python"># A task discovers it needs additional work:
+sub = rt.spawn_sub_goal(
+    parent_task_id=&quot;task-123&quot;,
+    description=&quot;Research competitor pricing strategy&quot;,
+    budget=25.0,
+    required_capability=&quot;research.analysis&quot;,
+    num_tasks=3,  # Create 3 sequential sub-tasks
+)
+# → {sub_goal_id: &quot;sub-a1b2c3d4&quot;, parent_task_id: &quot;task-123&quot;,
+#    plan_id: &quot;sub-plan-sub-a1b2c3d4&quot;, task_ids: [&quot;sub-...-t1&quot;, &quot;sub-...-t2&quot;, &quot;sub-...-t3&quot;],
+#    budget: 25.0, status: &quot;running&quot;}
+
+# Check sub-goal status
+status = rt.get_sub_goal_status(sub[&quot;sub_goal_id&quot;])
+
+# All sub-goals for a parent auto-propagate:
+# - All sub-goals completed → parent can complete
+# - Any sub-goal failed → parent fails
+</code></pre>
+<h3 id="human-in-the-loop-approval">Human-in-the-Loop Approval</h3>
+<pre><code class="language-python"># ── Require approval before goal executes ──
+goal = rt.submit_goal(
+    &quot;Deploy v3.0 to production&quot;,
+    require_approval=True,
+    approvers=[&quot;alice&quot;, &quot;bob&quot;],  # Both must approve
+    auth_context={&quot;role&quot;: &quot;admin&quot;},
+)
+# → Goal is &quot;planned&quot; but tasks won't dispatch until approved
+
+# ── Check pending approvals ──
+pending = rt.list_pending_approvals()
+# → [{request_id, task_id, description, approvers, require_all, status}, ...]
+
+# ── First approver ──
+rt.approve_task(pending[0][&quot;task_id&quot;], &quot;alice&quot;, &quot;Code review passed ✅&quot;)
+# → Still pending — needs bob too
+
+# ── Second approver ──
+rt.approve_task(pending[0][&quot;task_id&quot;], &quot;bob&quot;, &quot;Monitoring dashboards clean ✅&quot;)
+# → Approved! Tasks start dispatching
+
+# ── Alternatively: Reject ──
+rt.reject_task(task_id, &quot;alice&quot;, &quot;Security scan found 3 critical issues&quot;)
+# → Goal marked &quot;failed&quot;
+
+# ── Request changes ──
+rt._hitl.request_changes(request_id, &quot;bob&quot;, &quot;Please add integration tests&quot;)
+# → Status: &quot;changes_requested&quot; — developer sees feedback
+</code></pre>
+<hr />
+<h2 id="21-hot-reload-phase-3">21. Hot Reload (Phase 3)</h2>
+<p><strong>Module</strong>: <code>zelos.hot_reload</code> | <strong>Classes</strong>: <code>HotReloadManager</code>, <code>FileWatcher</code>, <code>UpgradeStrategy</code></p>
+<p>Zero-downtime plugin upgrades. Supports 4 strategies with distinct behaviors.</p>
+<h3 id="upgrade-strategies">Upgrade Strategies</h3>
+<table>
+<thead>
+<tr>
+<th>Strategy</th>
+<th>Behavior</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROLLING</code></td>
+<td>One instance at a time</td>
+<td>Default safe upgrade</td>
+</tr>
+<tr>
+<td><code>BLUE_GREEN</code></td>
+<td>Spin up new, keep old, then cut over</td>
+<td>Major version bumps</td>
+</tr>
+<tr>
+<td><code>CANARY</code></td>
+<td>Route X% traffic to new</td>
+<td>Test new version on subset</td>
+</tr>
+<tr>
+<td><code>INSTANT</code></td>
+<td>Immediate cut-over</td>
+<td>Hotfixes, config changes</td>
+</tr>
+</tbody>
+</table>
+<h3 id="usage_2">Usage</h3>
+<pre><code class="language-python">from zelos.hot_reload import HotReloadManager, UpgradeStrategy
+
+hrm = HotReloadManager(upgrade_strategy=UpgradeStrategy.ROLLING)
+
+# ── Version lifecycle ──
+hrm.register_version(&quot;my-plugin&quot;, &quot;1.0.0&quot;, &quot;plugins:v1&quot;, checksum=&quot;sha256:abc&quot;)
+hrm.register_version(&quot;my-plugin&quot;, &quot;1.1.0&quot;, &quot;plugins:v2&quot;, checksum=&quot;sha256:def&quot;)
+hrm.register_version(&quot;my-plugin&quot;, &quot;2.0.0&quot;, &quot;plugins:v3&quot;, checksum=&quot;sha256:ghi&quot;)
+
+active = hrm.get_active_version(&quot;my-plugin&quot;)
+# → PluginVersion(version=&quot;2.0.0&quot;, status=&quot;active&quot;)
+
+# ── Drain old ──
+hrm.drain_version(&quot;my-plugin&quot;, &quot;1.0.0&quot;)
+# → status: &quot;drained&quot; — no new tasks routed here
+
+# ── Rollback ──
+hrm.rollback(&quot;my-plugin&quot;, &quot;1.1.0&quot;)
+# → Version 1.1.0 active again
+
+# ── Canary deployment ──
+hrm.set_upgrade_strategy(UpgradeStrategy.CANARY)
+hrm.register_version(&quot;api-gateway&quot;, &quot;3.0.0&quot;, &quot;gateway:v3&quot;,
+                     canary_percent=5)
+# → 5% traffic → v3.0.0, 95% → v2.x
+
+# ── Version history ──
+history = hrm.get_version_history(&quot;my-plugin&quot;)
+# → [v1.0.0 (drained), v1.1.0 (active), v2.0.0 (rolled_back)]
+
+# ── File watcher ──
+fw = FileWatcher(&quot;/etc/zelos/plugins&quot;, patterns=[&quot;*.py&quot;])
+fw.on_change(lambda event: print(f&quot;Plugin changed: {event['filename']}&quot;))
+fw.start()
+</code></pre>
+<h3 id="runtime-integration_1">Runtime Integration</h3>
+<pre><code class="language-python"># In zelos.yaml:
+# hot_reload:
+#   plugin_dir: &quot;/etc/zelos/plugins&quot;
+#   upgrade_strategy: &quot;rolling&quot;
+
+rt.reload_plugin(&quot;verifier&quot;, &quot;zelos.verifier_v3:FullVerifier&quot;, &quot;3.0.0&quot;)
+rt.rollback_plugin(&quot;verifier&quot;, &quot;2.0.0&quot;)
+rt.set_upgrade_strategy(&quot;canary&quot;)
+rt.get_plugin_versions(&quot;verifier&quot;)
+</code></pre>
+<hr />
+<h2 id="22-distributed-runtime-phase-3">22. Distributed Runtime (Phase 3)</h2>
+<p><strong>Module</strong>: <code>zelos.distributed</code> | <strong>Classes</strong>: <code>LeaderElection</code>, <code>WorkStealing</code>, <code>NodeRegistry</code></p>
+<p>Multi-node cluster coordination. Reference implementation using in-memory coordination (production: etcd/Raft).</p>
+<h3 id="leader-election">Leader Election</h3>
+<pre><code class="language-python">from zelos.distributed import LeaderElection
+
+le = LeaderElection(node_id=&quot;zelos-01&quot;, heartbeat_interval_ms=500)
+le.register_peer(&quot;zelos-02&quot;)
+le.register_peer(&quot;zelos-03&quot;)
+le.on_leader_change(lambda new_leader: print(f&quot;New leader: {new_leader}&quot;))
+le.start()
+
+le.is_leader()       # → True/False
+le.get_leader_id()   # → &quot;zelos-01&quot; or None
+le.resign()          # Voluntary step-down
+le.stop()
+</code></pre>
+<h3 id="work-stealing">Work Stealing</h3>
+<pre><code class="language-python">from zelos.distributed import WorkStealing
+
+ws = WorkStealing(node_id=&quot;worker-1&quot;, max_concurrent_tasks=10)
+
+ws.enqueue_task(&quot;t-1&quot;, &quot;code-generation.python&quot;, priority=&quot;high&quot;)
+ws.enqueue_task(&quot;t-2&quot;, &quot;code-review.security&quot;, priority=&quot;medium&quot;)
+
+ws.queue_size()       # → 2
+ws.get_load_percent() # → 20.0%
+
+# Steal from overloaded peer
+overloaded = WorkStealing(&quot;worker-2&quot;, max_concurrent_tasks=5)
+for i in range(8):
+    overloaded.enqueue_task(f&quot;heavy-{i}&quot;, &quot;code-generation.python&quot;)
+
+stolen = ws.steal_from(overloaded, max_count=3)
+# → [{task_id, capability, priority, stolen_from, stolen_at}, ...]
+</code></pre>
+<h3 id="node-registry">Node Registry</h3>
+<pre><code class="language-python">from zelos.distributed import NodeRegistry, ClusterNode
+
+nr = NodeRegistry(heartbeat_timeout_seconds=30.0)
+
+nr.register(ClusterNode(
+    node_id=&quot;zelos-primary&quot;, host=&quot;10.0.1.10&quot;, port=9876,
+    capabilities=[&quot;code-generation.python&quot;, &quot;code-review.security&quot;],
+    capacity=20,
+))
+
+nr.heartbeat(&quot;zelos-primary&quot;)
+nr.find_by_capability(&quot;code-generation.python&quot;)  # → [ClusterNode, ...]
+nr.detect_dead_nodes()                            # → [&quot;zelos-worker-2&quot;]
+nr.cluster_status()
+# → {total_nodes: 4, healthy_nodes: 3, dead_nodes: 1, cluster_capabilities: [...]}
+</code></pre>
+<h3 id="runtime-integration_2">Runtime Integration</h3>
+<pre><code class="language-yaml"># zelos.yaml
+distributed:
+  enabled: true
+  node_id: &quot;zelos-master-1&quot;
+  host: &quot;10.0.1.10&quot;
+  port: 9876
+  capacity: 20
+  peers:
+    - node_id: &quot;zelos-worker-1&quot;
+      host: &quot;10.0.1.11&quot;
+      capabilities: [&quot;automation.browser&quot;]
+    - node_id: &quot;zelos-worker-2&quot;
+      host: &quot;10.0.1.12&quot;
+      capabilities: [&quot;code-review.security&quot;]
+</code></pre>
+<pre><code class="language-python">rt.is_leader()            # → True/False
+rt.get_cluster_status()   # → {total_nodes, healthy_nodes, is_leader, ...}
+rt.get_work_queue_depth() # → current task queue depth
+</code></pre>
+<hr />
+<h2 id="23-cli-tool-phase-3">23. CLI Tool (Phase 3)</h2>
+<p><strong>Module</strong>: <code>zelos.cli</code> | <strong>Class</strong>: <code>ZelosCLI</code></p>
+<p>Complete command-line interface.</p>
+<h3 id="available-commands">Available Commands</h3>
+<pre><code class="language-bash">zelos --version                              # 0.7.0
+zelos --help
+
+# Runtime
+zelos start --config zelos.yaml --port 9876
+zelos stop
+
+# Goals
+zelos goal submit --description &quot;Build a landing page&quot; --priority high --budget 100
+zelos goal status --goal-id g-abc123
+zelos goal list
+zelos goal cancel --goal-id g-abc123
+
+# Agents
+zelos agent list
+zelos agent info --agent-id agent-codex-1
+
+# Admin
+zelos health
+zelos metrics
+zelos plugin list
+zelos namespace list
+zelos config show
+zelos config validate
+</code></pre>
+<h3 id="programmatic-usage">Programmatic Usage</h3>
+<pre><code class="language-python">from zelos.cli import ZelosCLI
+
+cli = ZelosCLI(runtime=my_runtime)  # Connect to real runtime
+# OR
+cli = ZelosCLI()                     # Simulation mode
+
+output = cli.run([&quot;goal&quot;, &quot;submit&quot;, &quot;--description&quot;, &quot;Test&quot;])
+print(output)
+</code></pre>
+<hr />
+<h2 id="24-configuration">24. Configuration</h2>
+<p>Complete <code>zelos.yaml</code> reference:</p>
+<pre><code class="language-yaml">runtime:
+  instance_id: &quot;zelos-prod-01&quot;
+  api:
+    host: &quot;0.0.0.0&quot;
+    port: 9876
+    auth:
+      enabled: true
+      keys:
+        - key: &quot;zelos_admin_***&quot;
+          role: admin
+  limits:
+    max_goals: 1000
+    max_tasks_per_goal: 100
+
+plugins:
+  - id: &quot;llm-planner&quot;
+    type: &quot;planner&quot;
+    entrypoint: &quot;zelos.planner.LLMPlanner&quot;
+    config:
+      provider: &quot;openai&quot;
+      model: &quot;gpt-4o&quot;
+      api_key: &quot;${OPENAI_API_KEY}&quot;
+      temperature: 0.3
+
+  - id: &quot;schema-verifier&quot;
+    type: &quot;verifier&quot;
+    entrypoint: &quot;zelos.verifier.SchemaVerifier&quot;
+
+  - id: &quot;default-policy&quot;
+    type: &quot;policy&quot;
+    entrypoint: &quot;zelos.policy.CompositePolicy&quot;
+    config:
+      max_cost_per_goal: 100.0
+      max_tasks_per_minute: 60
+
+  - id: &quot;default-scoring&quot;
+    type: &quot;scoring_strategy&quot;
+    entrypoint: &quot;zelos.scheduler.DefaultScoringStrategy&quot;
+    config:
+      weights:
+        success_rate: 0.30
+        cost_efficiency: 0.20
+
+  - id: &quot;inmemory-storage&quot;
+    type: &quot;storage&quot;
+    entrypoint: &quot;zelos.storage.InMemoryStorageBackend&quot;
+
+storage:
+  type: &quot;postgresql&quot;
+  url: &quot;postgresql://user:pass@host:5432/zelos&quot;
+
+security:                     # Phase 3
+  cert_file: &quot;/etc/zelos/certs/server.crt&quot;
+  key_file: &quot;/etc/zelos/certs/server.key&quot;
+  ca_file: &quot;/etc/zelos/certs/ca.crt&quot;
+  require_client_cert: true
+  audit_max_events: 100000
+
+multi_tenancy:                # Phase 3
+  enabled: true
+  tenants:
+    - id: &quot;eng&quot;
+      name: &quot;Engineering&quot;
+      quotas:
+        max_goals: 100
+        max_agents: 20
+        budget_per_goal: 5000
+
+hot_reload:                   # Phase 3
+  plugin_dir: &quot;/etc/zelos/plugins&quot;
+  upgrade_strategy: &quot;rolling&quot;
+  watch_patterns: [&quot;*.py&quot;, &quot;*.yaml&quot;]
+
+distributed:                  # Phase 3
+  enabled: true
+  node_id: &quot;zelos-01&quot;
+  host: &quot;10.0.1.10&quot;
+  port: 9876
+  capacity: 20
+  peers:
+    - node_id: &quot;zelos-02&quot;
+      host: &quot;10.0.1.11&quot;
+</code></pre>
+<hr />
+<h2 id="25-api-reference">25. API Reference</h2>
+<h3 id="auth-context">Auth Context</h3>
+<p>Every API method accepts an optional <code>auth_context</code> dict:</p>
+<pre><code class="language-python"># Full auth
+{&quot;role&quot;: &quot;admin&quot;, &quot;tenant_id&quot;: &quot;eng&quot;, &quot;actor&quot;: &quot;alice@corp.com&quot;}
+
+# API key auth
+{&quot;api_key&quot;: &quot;zelos_a1b2c3...&quot;}
+
+# No auth → defaults to admin (backward compatible)
+None
+</code></pre>
+<h3 id="return-value-patterns">Return Value Patterns</h3>
+<p><strong>Success</strong>:</p>
+<pre><code class="language-python">{&quot;goal_id&quot;: &quot;g-...&quot;, &quot;status&quot;: &quot;planned&quot;, &quot;plan_id&quot;: &quot;...&quot;, &quot;task_count&quot;: 4}
+{&quot;status&quot;: &quot;ok&quot;, &quot;operation&quot;: &quot;add_task&quot;}
+{&quot;status&quot;: &quot;approved&quot;}
+</code></pre>
+<p><strong>Rejection</strong>:</p>
+<pre><code class="language-python">{&quot;goal_id&quot;: &quot;...&quot;, &quot;status&quot;: &quot;rejected&quot;, &quot;reason&quot;: &quot;Permission denied: role 'agent' cannot 'goal.submit'&quot;}
+{&quot;status&quot;: &quot;rejected&quot;, &quot;reason&quot;: &quot;Goal quota exceeded for tenant 'eng'&quot;}
+{&quot;goal_id&quot;: &quot;...&quot;, &quot;status&quot;: &quot;rejected&quot;, &quot;reason&quot;: &quot;Invalid or expired API key&quot;}
+</code></pre>
+<p><strong>Error</strong>:</p>
+<pre><code class="language-python">{&quot;status&quot;: &quot;failed&quot;, &quot;reason&quot;: &quot;Task 'x' not found&quot;}
+{&quot;status&quot;: &quot;not_found&quot;}
+None
+</code></pre>
+<h3 id="role-permission-matrix">Role Permission Matrix</h3>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>admin</th>
+<th>operator</th>
+<th>agent</th>
+<th>viewer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>goal.submit</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>goal.cancel</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>goal.read</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>task.execute</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>task.create</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>task.read</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>agent.register</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>agent.heartbeat</code></td>
+<td>✅</td>
+<td>❌</td>
+<td>✅</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>agent.read</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>metrics.read</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>plugin.configure</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>admin.api_key.*</code></td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>admin.audit.*</code></td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>admin.tenant.*</code></td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="26-deployment-guide">26. Deployment Guide</h2>
+<h3 id="development-single-node">Development (Single Node)</h3>
+<pre><code class="language-bash">python3 -c &quot;
+from zelos.runtime import ZelosRuntime
+rt = ZelosRuntime.from_yaml('zelos.yaml')
+rt.start()
+# ... ctrl-c to stop
+&quot;
+</code></pre>
+<h3 id="production-multi-node">Production (Multi-node)</h3>
+<pre><code class="language-yaml"># Node 1 (leader candidate)
+distributed:
+  enabled: true
+  node_id: &quot;zelos-primary&quot;
+  host: &quot;10.0.1.10&quot;
+  peers:
+    - {node_id: &quot;zelos-worker-1&quot;, host: &quot;10.0.1.11&quot;}
+    - {node_id: &quot;zelos-worker-2&quot;, host: &quot;10.0.1.12&quot;}
+
+security:
+  cert_file: &quot;/etc/zelos/certs/server.crt&quot;
+  key_file: &quot;/etc/zelos/certs/server.key&quot;
+  ca_file: &quot;/etc/zelos/certs/ca.crt&quot;
+  require_client_cert: true
+
+storage:
+  type: &quot;postgresql&quot;
+  url: &quot;postgresql://zelos:${DB_PASS}@pg-cluster:5432/zelos&quot;
+</code></pre>
+<h3 id="container-deployment">Container Deployment</h3>
+<pre><code class="language-dockerfile">FROM python:3.12-slim
+COPY zelos/ /app/zelos/
+COPY zelos.yaml /app/
+CMD [&quot;python3&quot;, &quot;-c&quot;, &quot;from zelos.runtime import ZelosRuntime; \
+     rt = ZelosRuntime.from_yaml('zelos.yaml'); rt.start()&quot;]
+</code></pre>
+<hr />
+<h2 id="27-troubleshooting">27. Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Permission denied</code></td>
+<td>Wrong role</td>
+<td>Check <code>auth_context["role"]</code> or API key role</td>
+</tr>
+<tr>
+<td><code>Goal quota exceeded</code></td>
+<td>Tenant at limit</td>
+<td>Increase <code>quotas.max_goals</code> or complete old goals</td>
+</tr>
+<tr>
+<td><code>no agent provides capability: X</code></td>
+<td>No agent registered for X</td>
+<td>Add agent with that capability, or use <code>fallback_capability</code></td>
+</tr>
+<tr>
+<td><code>Invalid transition: X → Y</code></td>
+<td>Task in wrong state</td>
+<td>Check <code>task.status</code> before calling <code>transition()</code></td>
+</tr>
+<tr>
+<td><code>Adding edge X→Y would create cycle</code></td>
+<td>Circular dependency</td>
+<td>Re-design DAG to be acyclic</td>
+</tr>
+<tr>
+<td><code>Hot reload not detecting changes</code></td>
+<td>FileWatcher not started</td>
+<td>Check <code>hot_reload.plugin_dir</code> in config</td>
+</tr>
+<tr>
+<td><code>Multiple leaders detected</code></td>
+<td>No peer registration</td>
+<td>Register all peers with <code>register_peer()</code></td>
+</tr>
+<tr>
+<td><code>Expired API key</code></td>
+<td>TTL too short</td>
+<td>Generate key with longer <code>ttl_seconds</code></td>
+</tr>
+</tbody>
+</table>
+</body></html>

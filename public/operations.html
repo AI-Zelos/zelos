@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Operations — Zelos Documentation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:920px;margin:0 auto;padding:24px;background:#0d1117;color:#c9d1d9;line-height:1.65}
+a{color:#58a6ff;text-decoration:none}a:hover{text-decoration:underline}
+code{background:#161b22;padding:2px 6px;border-radius:4px;font-size:13px}
+pre{background:#161b22;padding:16px;border-radius:8px;overflow-x:auto;font-size:13px}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:12px 0}
+th,td{border:1px solid #30363d;padding:8px 14px;text-align:left}
+th{background:#161b22;font-weight:600}
+h1{font-size:32px;margin:24px 0 12px;color:#f0f6fc}
+h2{font-size:22px;margin:28px 0 10px;color:#f0f6fc;padding-bottom:6px;border-bottom:1px solid #21262d}
+h3{font-size:17px;margin:20px 0 8px;color:#f0f6fc}
+hr{border:none;border-top:1px solid #21262d;margin:24px 0}
+.back{margin-bottom:20px;font-size:14px}
+</style></head><body>
+<p class="back"><a href="./">← Documentation Home</a></p>
+<h1 id="zelos-operations-guide-v070">Zelos Operations Guide v0.7.0</h1>
+<h2 id="deployment-modes">Deployment Modes</h2>
+<h3 id="1-bare-metal-python">1. Bare Metal (Python)</h3>
+<pre><code class="language-bash">git clone https://github.com/AI-Zelos/zelos.git &amp;&amp; cd zelos
+pip install -e &quot;.[dev]&quot;
+cp zelos.yaml.example zelos.yaml   # edit config
+make dev                            # foreground
+# or: python3 start.py              # foreground with dashboard
+</code></pre>
+<h3 id="2-docker">2. Docker</h3>
+<pre><code class="language-bash">make build          # zelos:0.7.0
+make run            # docker compose up -d
+make stop           # docker compose down
+
+# With Redis for persistent storage:
+make run-storage    # includes redis profile
+</code></pre>
+<h3 id="3-kubernetes">3. Kubernetes</h3>
+<pre><code class="language-bash">kubectl apply -f deploy/k8s/deployment.yaml
+kubectl apply -f deploy/k8s/service.yaml
+</code></pre>
+<h4 id="k8s-probes">K8s Probes</h4>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Probe Type</th>
+<th>Port</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /live</code></td>
+<td>Liveness</td>
+<td>9876</td>
+<td><code>{"status": "alive"}</code></td>
+</tr>
+<tr>
+<td><code>GET /ready</code></td>
+<td>Readiness</td>
+<td>9876</td>
+<td><code>{"status": "ready"/"not_ready"}</code></td>
+</tr>
+</tbody>
+</table>
+<p>Example K8s config:</p>
+<pre><code class="language-yaml">livenessProbe:
+  httpGet:
+    path: /live
+    port: 9876
+  initialDelaySeconds: 5
+  periodSeconds: 15
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 9876
+  initialDelaySeconds: 3
+  periodSeconds: 10
+</code></pre>
+<hr />
+<h2 id="observability">Observability</h2>
+<h3 id="prometheus-metrics">Prometheus Metrics</h3>
+<p>Scrape <code>http://&lt;runtime&gt;:9876/metrics</code> for:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>zelos_goals_active</code></td>
+<td>Gauge</td>
+<td>Currently active goals</td>
+</tr>
+<tr>
+<td><code>zelos_goals_completed_total</code></td>
+<td>Counter</td>
+<td>Total completed goals</td>
+</tr>
+<tr>
+<td><code>zelos_tasks_completed_total</code></td>
+<td>Counter</td>
+<td>Total completed tasks</td>
+</tr>
+<tr>
+<td><code>zelos_tasks_failed_total</code></td>
+<td>Counter</td>
+<td>Total failed tasks</td>
+</tr>
+<tr>
+<td><code>zelos_agents_connected</code></td>
+<td>Gauge</td>
+<td>Currently connected agents</td>
+</tr>
+<tr>
+<td><code>zelos_agents_disconnected</code></td>
+<td>Gauge</td>
+<td>Disconnected agents</td>
+</tr>
+</tbody>
+</table>
+<h3 id="grafana-dashboard">Grafana Dashboard</h3>
+<p>Import <code>deploy/grafana/zelos-dashboard.json</code> into Grafana.
+Requires Prometheus datasource configured.</p>
+<hr />
+<h2 id="security">Security</h2>
+<h3 id="api-key-management">API Key Management</h3>
+<pre><code class="language-python">from zelos.security import APIKeyManager
+
+mgr = APIKeyManager(
+    max_failures=10,         # auto-revoke threshold
+    failure_window_seconds=60.0,  # sliding window
+    auto_revoke=True,        # enable brute-force protection
+)
+
+key = mgr.generate_key(&quot;admin&quot;, &quot;production-admin-key&quot;)
+# → &quot;zelos_&lt;128 hex chars&gt;&quot;  — save this, it's shown only once
+
+mgr.validate(key)   # → {&quot;role&quot;: &quot;admin&quot;, ...}
+mgr.revoke(key)     # → True
+</code></pre>
+<h3 id="anomaly-detection-v070">Anomaly Detection (v0.7.0)</h3>
+<ul>
+<li>Tracks failed auth attempts per key hash</li>
+<li>Auto-revokes after <code>max_failures</code> within <code>failure_window_seconds</code></li>
+<li>Configurable per deployment</li>
+<li>Failed attempts older than the window are pruned</li>
+</ul>
+<h3 id="audit-log-export">Audit Log Export</h3>
+<pre><code class="language-python">logger.export_json_file(&quot;/var/log/zelos/audit.json&quot;)
+</code></pre>
+<hr />
+<h2 id="distributed-coordination-v070">Distributed Coordination (v0.7.0)</h2>
+<h3 id="etcd-backend">etcd Backend</h3>
+<pre><code class="language-python">from zelos.coordination import EtcdCoordinationBackend, CoordinationNode
+
+backend = EtcdCoordinationBackend({&quot;endpoints&quot;: &quot;localhost:2379&quot;, &quot;prefix&quot;: &quot;/zelos/&quot;})
+backend.connect()
+backend.register_node(CoordinationNode(node_id=&quot;node-1&quot;, host=&quot;10.0.0.1&quot;, port=9001))
+backend.elect_leader(&quot;node-1&quot;, ttl_seconds=30)
+leader = backend.get_leader()  # → &quot;node-1&quot;
+backend.heartbeat(&quot;node-1&quot;)    # renew lease
+</code></pre>
+<h3 id="nats-message-bus">NATS Message Bus</h3>
+<pre><code class="language-python">from zelos.messaging_nats import NatsMessageBus
+
+bus = NatsMessageBus({&quot;servers&quot;: [&quot;nats://localhost:4222&quot;]})
+bus.connect()
+bus.subscribe(&quot;zelos.events&quot;, lambda data, headers: process(data))
+bus.publish(&quot;zelos.events&quot;, {&quot;event_type&quot;: &quot;task.completed&quot;})
+</code></pre>
+<h3 id="go-sdk">Go SDK</h3>
+<pre><code class="language-bash">go get github.com/zelos/zelos-go
+</code></pre>
+<pre><code class="language-go">c := client.New(&quot;http://localhost:9876&quot;, &quot;zk-client-dev&quot;)
+health, _ := c.Health()
+goal, _ := c.SubmitGoal(&quot;Build a landing page&quot;, &quot;high&quot;)
+</code></pre>
+<hr />
+<h2 id="multi-node-cluster-deployment">Multi-Node Cluster Deployment</h2>
+<h3 id="architecture">Architecture</h3>
+<pre><code>┌──────────────────────────────────────────────┐
+│                  Node 1 (Leader)             │
+│  ZelosRuntime + etcd + NATS                  │
+│  IP: 10.0.0.1:9876                           │
+└──────────┬──────────┬────────────────────────┘
+           │          │
+     ┌─────▼───┐  ┌──▼──────┐
+     │ Node 2  │  │ Node 3  │
+     │ 10.0.0.2│  │ 10.0.0.3│
+     └─────────┘  └─────────┘
+</code></pre>
+<h3 id="prerequisites">Prerequisites</h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Purpose</th>
+<th>Default Port</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>etcd</td>
+<td>Leader election + node discovery</td>
+<td>2379</td>
+</tr>
+<tr>
+<td>NATS</td>
+<td>Cross-node EventBus + messaging</td>
+<td>4222</td>
+</tr>
+<tr>
+<td>Zelos Runtime</td>
+<td>Agent orchestration</td>
+<td>9876</td>
+</tr>
+</tbody>
+</table>
+<h3 id="step-1-start-infrastructure">Step 1: Start Infrastructure</h3>
+<pre><code class="language-bash"># etcd (all nodes connect to same cluster)
+docker run -d --name etcd -p 2379:2379 \
+  bitnami/etcd:latest
+
+# NATS
+docker run -d --name nats -p 4222:4222 \
+  nats:latest
+</code></pre>
+<h3 id="step-2-configure-each-node">Step 2: Configure Each Node</h3>
+<pre><code class="language-yaml"># zelos-node-1.yaml
+runtime:
+  instance_id: &quot;zelos-node-1&quot;
+  api:
+    host: &quot;10.0.0.1&quot;
+    port: 9876
+
+distributed:
+  enabled: true
+  node_id: &quot;node-1&quot;
+  peers: [&quot;10.0.0.1:9877&quot;, &quot;10.0.0.2:9877&quot;, &quot;10.0.0.3:9877&quot;]
+
+storage:
+  type: postgresql
+  url: &quot;postgresql://postgres:zelos@10.0.0.1:5432/zelos&quot;
+
+coordination:
+  type: etcd
+  endpoints: &quot;10.0.0.1:2379&quot;
+
+messaging:
+  type: nats
+  servers: [&quot;nats://10.0.0.1:4222&quot;]
+</code></pre>
+<h3 id="step-3-start-nodes">Step 3: Start Nodes</h3>
+<pre><code class="language-bash"># Node 1 (expects to become leader)
+python3 start.py --config zelos-node-1.yaml &amp;
+
+# Node 2
+python3 start.py --config zelos-node-2.yaml &amp;
+
+# Node 3
+python3 start.py --config zelos-node-3.yaml &amp;
+</code></pre>
+<h3 id="step-4-verify-cluster">Step 4: Verify Cluster</h3>
+<pre><code class="language-bash">curl http://10.0.0.1:9876/api/v1/cluster
+# → {&quot;is_leader&quot;: true, &quot;peers&quot;: [&quot;node-1&quot;, &quot;node-2&quot;, &quot;node-3&quot;], &quot;healthy&quot;: 3}
+
+curl http://10.0.0.2:9876/api/v1/cluster
+# → {&quot;is_leader&quot;: false, &quot;leader&quot;: &quot;node-1&quot;}
+</code></pre>
+<h3 id="leader-election-flow">Leader Election Flow</h3>
+<pre><code>1. All nodes register in etcd: /zelos/nodes/{node_id}
+2. Smallest node_id wins (Bully algorithm)
+3. Leader holds etcd lease, renews via heartbeat
+4. If leader lease expires → new election triggered
+5. Watchers (NATS subscribers) notified of leader change
+</code></pre>
+<h3 id="work-stealing">Work Stealing</h3>
+<pre><code>Node-2 idle (queue depth=0) → queries etcd for busiest node → steals READY tasks
+Node-3 overloaded (queue depth=15) → Node-1 and Node-2 steal work
+</code></pre>
+<h3 id="failure-recovery">Failure Recovery</h3>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Leader crash</td>
+<td>etcd lease expires → Node-2/Node-3 elect new leader (&lt;5s)</td>
+</tr>
+<tr>
+<td>Worker crash</td>
+<td>In-flight tasks re-assigned via NATS</td>
+</tr>
+<tr>
+<td>etcd down</td>
+<td>Falls back to InMemory coordination (single-node mode)</td>
+</tr>
+<tr>
+<td>NATS down</td>
+<td>Falls back to InMemory message bus</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="troubleshooting">Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Runtime won't start</td>
+<td><code>python3 -c "from zelos.runtime import ZelosRuntime; ZelosRuntime().start()"</code></td>
+</tr>
+<tr>
+<td>Agent won't register</td>
+<td>Verify API key role &gt;= <code>agent</code></td>
+</tr>
+<tr>
+<td>Tasks stuck in READY</td>
+<td>Check capability name matches agent registration</td>
+</tr>
+<tr>
+<td>High failure rate</td>
+<td>Check anomaly detection — keys may be auto-revoked</td>
+</tr>
+<tr>
+<td><code>/ready</code> returns 503</td>
+<td>Check <code>GET /api/v1/health</code> for component status</td>
+</tr>
+</tbody>
+</table>
+<h3 id="health-check-components">Health Check Components</h3>
+<pre><code>GET /api/v1/health → {
+  &quot;status&quot;: &quot;healthy&quot;,
+  &quot;components&quot;: {
+    &quot;kernel&quot;: &quot;healthy&quot;,
+    &quot;plugins&quot;: {&quot;total&quot;: N, &quot;healthy&quot;: N},
+    &quot;agents&quot;: {&quot;connected&quot;: N, &quot;disconnected&quot;: N},
+    &quot;security&quot;: {&quot;audit_events&quot;: N},
+    &quot;cluster&quot;: {&quot;enabled&quot;: bool, &quot;is_leader&quot;: bool}
+  }
+}
+</code></pre>
+<hr />
+<h2 id="backup-recovery">Backup &amp; Recovery</h2>
+<h3 id="event-persistence">Event Persistence</h3>
+<p>Enable <code>PersistentEventStore</code> with a storage backend to survive restarts:</p>
+<pre><code class="language-python">from zelos.event_bus import PersistentEventStore
+from zelos.storage import PostgreSQLStorageBackend
+
+storage = PostgreSQLStorageBackend({&quot;url&quot;: &quot;postgresql://...&quot;})
+storage.connect()
+store = PersistentEventStore(storage)
+
+# After crash:
+recovered = store.recover()  # replays all persisted events
+</code></pre>
+<h3 id="state-recovery">State Recovery</h3>
+<p>Save Goal/Agent state before shutdown:</p>
+<pre><code class="language-python">storage.set_state(f&quot;goal-{goal_id}&quot;, goal_state)
+# After restart:
+saved = storage.get_state(f&quot;goal-{goal_id}&quot;)
+</code></pre>
+<hr />
+<h2 id="configuration-reference">Configuration Reference</h2>
+<p>See <code>zelos.yaml</code> for all options. Key sections:</p>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>runtime.api</code></td>
+<td>Host, port, auth keys</td>
+</tr>
+<tr>
+<td><code>runtime.limits</code></td>
+<td>max_goals, max_tasks_per_goal</td>
+</tr>
+<tr>
+<td><code>security</code></td>
+<td>audit_max_events, TLS/mTLS paths</td>
+</tr>
+<tr>
+<td><code>multi_tenancy</code></td>
+<td>enabled, tenant configs</td>
+</tr>
+<tr>
+<td><code>distributed</code></td>
+<td>enabled, node_id, peers</td>
+</tr>
+<tr>
+<td><code>plugins</code></td>
+<td>All plugin declarations (storage, memory, policy, verifier, planner, adapter)</td>
+</tr>
+</tbody>
+</table>
+</body></html>

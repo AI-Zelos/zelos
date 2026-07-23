@@ -27,8 +27,14 @@ jobs:
       - name: Install pdoc
         run: pip install pdoc
 
-      - name: Generate API docs
-        run: python3 -m pdoc zelos zelos_sdk -o _site --docformat google
+      - name: Install dependencies
+        run: pip install pdoc markdown
+
+      - name: Generate documentation site
+        run: python3 scripts/generate_docs.py
+
+      - name: Prepare deploy directory
+        run: mv public _site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -52,8 +52,8 @@ stop:
 
 # ── Docs ──
 docs:
-	python3 -m pdoc zelos zelos_sdk -o public --docformat google
-	@echo "✅ Docs generated in public/"
+	python3 scripts/generate_docs.py
+	@echo "✅ Docs generated: open public/index.html"
 
 # ── Clean ──
 clean:

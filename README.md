@@ -618,7 +618,7 @@ See [ROADMAP.md](ROADMAP.md) for detailed milestones.
 
 ### Online (GitHub Pages)
 
-API docs are auto-deployed via GitHub Actions (`.github/workflows/docs.yml`) on every push to `main`.
+Full documentation site auto-deployed on every push to `main` — includes **User Manual**, **Operations Guide**, and **API Reference** for all 28 modules.
 
 Visit: **https://AI-Zelos.github.io/zelos**
 
