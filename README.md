@@ -214,19 +214,31 @@ plugins:
 
 ---
 
+## Install
+
+```bash
+pip install zelos
+```
+
+Zelos core has **zero external dependencies** — pure Python stdlib. That's engineering philosophy.
+
+```bash
+pip install "zelos[dev]"    # adds pytest + ruff
+```
+
+---
+
 ## Development
 
 ```bash
-# Clone and enter the project
-git clone https://github.com/zelos/zelos.git && cd zelos
-
-# Install dev dependencies (pytest + ruff only; core has zero external deps)
+# Clone the repo
+git clone https://github.com/AI-Zelos/zelos.git && cd zelos
 pip install -e ".[dev]"
 
 # Quick reference
 make dev        # Start Runtime in hot-reload mode
-make test       # Run all 47 tests
-make lint       # Ruff code quality check
+make test       # Run all 78 tests
+make lint       # Ruff code quality check (zero errors)
 make format     # Auto-format all code
 make check      # Full CI pipeline (lint + test)
 make build      # Build Docker image

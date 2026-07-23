@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "zelos"
 version = "0.7.0"
-description = "Open Multi-Agent Orchestration Runtime"
+description = "The missing operating system for the multi-agent era"
 readme = "README.md"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 authors = [
     {name = "Zelos Contributors"}
 ]
@@ -19,16 +19,18 @@ keywords = [
     "agent-orchestration",
     "llm",
     "agent-framework",
+    "distributed-systems",
+    "event-driven",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
@@ -44,10 +46,11 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/AI-Zelos/zelos"
 Repository = "https://github.com/AI-Zelos/zelos"
-Documentation = "https://github.com/AI-Zelos/zelos"
+Documentation = "https://AI-Zelos.github.io/zelos"
 
 [tool.setuptools.packages.find]
 include = ["zelos*", "zelos_sdk*"]
+exclude = ["tests*", "demo*", "docs*", "scripts*", "deploy*", "public*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
