@@ -616,18 +616,22 @@ See [ROADMAP.md](ROADMAP.md) for detailed milestones.
 
 ## Documentation
 
-### Online (Gitee Pages)
+### Online (GitHub Pages)
 
-API docs are published via Gitee Pages at the project's Pages URL.
+API docs are auto-deployed via GitHub Actions (`.github/workflows/docs.yml`) on every push to `main`.
 
-To enable:
-1. Go to **Gitee repo → Services → Gitee Pages**
-2. Set deployment directory to `public/`
-3. Click **Enable**
+Visit: **https://AI-Zelos.github.io/zelos**
+
+### Local
+
+```bash
+make docs    # generates to public/
+open public/index.html
+```
 
 To regenerate after code changes:
 ```bash
-make docs    # generates to public/
+make docs
 git add public/ && git commit -m "docs: regenerate API docs"
 git push
 ```

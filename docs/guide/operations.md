@@ -5,7 +5,7 @@
 ### 1. Bare Metal (Python)
 
 ```bash
-git clone https://gitee.com/tomliuda/zelos.git && cd zelos
+git clone https://github.com/AI-Zelos/zelos.git && cd zelos
 pip install -e ".[dev]"
 cp zelos.yaml.example zelos.yaml   # edit config
 make dev                            # foreground

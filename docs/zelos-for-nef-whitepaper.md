@@ -235,7 +235,7 @@ Phase 0 已交付：
       
        去 Gitee 网页上点一下：                                                                                                                         
                                                                                                                                                   
-  gitee.com/tomliuda/zelos → 服务 → Gitee Pages                                                                                                   
+  github.com/AI-Zelos/zelos → Settings → Pages                                                                                                   
   → 部署目录填: public/                                                                                                                           
   → 点击「开启」                
 ~~~

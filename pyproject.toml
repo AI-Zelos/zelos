@@ -42,9 +42,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/zelos/zelos"
-Repository = "https://github.com/zelos/zelos"
-Documentation = "https://github.com/zelos/zelos"
+Homepage = "https://github.com/AI-Zelos/zelos"
+Repository = "https://github.com/AI-Zelos/zelos"
+Documentation = "https://github.com/AI-Zelos/zelos"
 
 [tool.setuptools.packages.find]
 include = ["zelos*", "zelos_sdk*"]
