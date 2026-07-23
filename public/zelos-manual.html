@@ -180,10 +180,10 @@ hr{border:none;border-top:1px solid #21262d;margin:24px 0}
 <h2 id="1-quick-start">1. Quick Start</h2>
 <h3 id="installation">Installation</h3>
 <pre><code class="language-bash"># Clone the repository
-git clone https://github.com/zelos/runtime.git
-cd runtime/
+git clone https://github.com/AI-Zelos/zelos.git
+cd zelos/
 
-# No pip install needed — pure Python stdlib
+# No pip install needed for core — pure Python stdlib
 # Verify:
 python3 -c &quot;from zelos.runtime import ZelosRuntime; print('OK')&quot;
 </code></pre>
@@ -1104,6 +1104,192 @@ new_plan = planner.replan(
 # → New alternative tasks to replace failed ones
 </code></pre>
 <hr />
+<h2 id="10-verifier">10. Verifier</h2>
+<p>Every Agent artifact must pass through a verification gate before flowing downstream.</p>
+<h3 id="built-in-verifiers">Built-in Verifiers</h3>
+<pre><code class="language-python">from zelos.verifier import SchemaVerifier
+from zelos.verifier_v2 import CodeReviewer, SecurityScanner, FactChecker
+
+# SchemaVerifier — validates against expected_output_schema
+from zelos.verifier import VerificationCriteria
+schema_v = SchemaVerifier()
+verdict = schema_v.verify(
+    {&quot;name&quot;: &quot;hello&quot;, &quot;version&quot;: 1},
+    VerificationCriteria(expected_output_schema={&quot;type&quot;: &quot;object&quot;, &quot;required&quot;: [&quot;name&quot;]}),
+)
+print(verdict.verdict)  # → &quot;passed&quot;
+
+# CodeReviewer — finds dangerous patterns (eval, hardcoded secrets)
+cr = CodeReviewer()
+verdict2 = cr.verify(
+    'eval(user_input)',
+    VerificationCriteria(options={&quot;language&quot;: &quot;python&quot;}),
+)
+print(verdict2.verdict)   # → &quot;failed&quot; (use of eval)
+print(verdict2.issues[0])  # → details about the finding
+
+# SecurityScanner — SQL injection, XSS, command injection, unsafe deserialization
+ss = SecurityScanner()
+verdict3 = ss.verify(
+    '&quot;SELECT * FROM users WHERE id=&quot; + user_id',
+    VerificationCriteria(),
+)
+print(verdict3.verdict)  # → &quot;failed&quot; (SQL injection)
+</code></pre>
+<h3 id="verificationgate-chain-verifiers">VerificationGate — Chain Verifiers</h3>
+<pre><code class="language-python">from zelos.verifier import VerificationGate
+
+gate = VerificationGate()
+gate.add_verifier(SchemaVerifier())
+gate.add_verifier(CodeReviewer())
+gate.add_verifier(SecurityScanner())
+
+result = gate.verify(artifact, criteria)
+# All pass → accepted. First failure → short-circuit and reject.
+</code></pre>
+<hr />
+<h2 id="11-policy">11. Policy</h2>
+<p>Policy enforces Allow / Reject / Delay / Retry — it never changes business logic.</p>
+<pre><code class="language-python">from zelos.policy import CostLimitPolicy, RateLimitPolicy, AllowlistPolicy, CompositePolicy
+
+# Cost limit: reject if goal cumulative cost exceeds budget
+cost = CostLimitPolicy({&quot;max_cost_per_goal&quot;: 100})
+print(cost.evaluate({&quot;goal_id&quot;: &quot;g1&quot;, &quot;task_cost&quot;: 50}))   # → &quot;allow&quot;  (50 &lt; 100)
+cost.record_cost(&quot;g1&quot;, 50)
+print(cost.evaluate({&quot;goal_id&quot;: &quot;g1&quot;, &quot;task_cost&quot;: 60}))   # → &quot;reject&quot; (50+60 &gt; 100)
+
+# Rate limit: sliding window of task submissions per minute
+rate = RateLimitPolicy({&quot;max_tasks_per_minute&quot;: 60, &quot;window_seconds&quot;: 60})
+# rate.evaluate({&quot;task_count&quot;: N}) → &quot;allow&quot; or &quot;reject&quot;
+
+# Allowlist: only allow specified agents
+allow = AllowlistPolicy({&quot;allowlist_agents&quot;: [&quot;agent-coder&quot;, &quot;agent-reviewer&quot;]})
+print(allow.evaluate({&quot;agent_id&quot;: &quot;agent-coder&quot;}))     # → &quot;allow&quot;
+print(allow.evaluate({&quot;agent_id&quot;: &quot;unknown-agent&quot;}))    # → &quot;reject&quot;
+
+# Composite: chain them — first reject short-circuits
+policy = CompositePolicy({&quot;policies&quot;: [cost, rate]})
+print(policy.evaluate({&quot;goal_id&quot;: &quot;g2&quot;, &quot;task_cost&quot;: 10}))
+# → &quot;allow&quot;
+</code></pre>
+<hr />
+<h2 id="12-memory">12. Memory</h2>
+<p>Runtime owns all memory. 6 isolated layers, each with independent lifecycle.</p>
+<pre><code class="language-python">from zelos.memory import InMemoryMemoryProvider
+
+mem = InMemoryMemoryProvider(max_entries_per_layer=5000, ttl_seconds=3600)
+
+# 6 layers: session | project | user | knowledge | execution | skill
+mem.store(&quot;session&quot;, &quot;goal-1-context&quot;, {&quot;goal&quot;: &quot;Build landing page&quot;, &quot;deadline&quot;: &quot;2026-08-01&quot;})
+mem.store(&quot;project&quot;, &quot;coding-style&quot;, {&quot;language&quot;: &quot;python&quot;, &quot;formatter&quot;: &quot;ruff&quot;})
+
+ctx = mem.retrieve(&quot;session&quot;, &quot;goal-1-context&quot;)
+print(ctx[&quot;goal&quot;])  # → &quot;Build landing page&quot;
+
+# TTL expiry — entries auto-expire after ttl_seconds
+mem.store(&quot;execution&quot;, &quot;temp-key&quot;, &quot;cache-me&quot;, ttl=1)
+# ...after 1 second...
+result = mem.retrieve(&quot;execution&quot;, &quot;temp-key&quot;)  # → None
+
+# Context Assembly — automatically merge relevant layers before Task dispatch
+from zelos.memory import ContextAssembler
+assembler = ContextAssembler(mem)
+context = assembler.assemble(task_id=&quot;task-1&quot;, goal_id=&quot;goal-1&quot;)
+# → MemoryContext with session/project/user/knowledge/execution/skill entries
+</code></pre>
+<hr />
+<h2 id="13-observability">13. Observability</h2>
+<p>Structured logging, Prometheus metrics, and OpenTelemetry tracing.</p>
+<pre><code class="language-python">from zelos.observability import StructuredLogger, MetricsCollector, Tracer
+
+# ── Structured JSON logging ──
+logger = StructuredLogger(level=&quot;info&quot;)
+logger.info(&quot;task_dispatched&quot;, task_id=&quot;t1&quot;, agent=&quot;coder-1&quot;)
+logger.warn(&quot;heartbeat_late&quot;, agent=&quot;reviewer-2&quot;, drift_ms=1500)
+
+# ── Metrics (Counter / Gauge / Histogram) ──
+metrics = MetricsCollector()
+metrics.inc_counter(&quot;task_completed_total&quot;, labels={&quot;capability&quot;: &quot;code&quot;})
+metrics.set_gauge(&quot;agents_connected&quot;, 5)
+metrics.observe_histogram(&quot;task_duration_ms&quot;, 340)
+
+# Export Prometheus text format
+print(metrics.to_prometheus_text())
+# # HELP task_completed_total ... \n # TYPE task_completed_total counter\n ...
+
+# ── Tracing (OpenTelemetry span tree) ──
+tracer = Tracer()
+span_id = tracer.start_span(&quot;goal.execute&quot;, attributes={&quot;goal_id&quot;: &quot;g1&quot;})
+tracer.add_event(span_id, &quot;task_dispatched&quot;, {&quot;task_id&quot;: &quot;t1&quot;})
+tracer.end_span(span_id)
+</code></pre>
+<hr />
+<h2 id="14-protocol-adapters">14. Protocol Adapters</h2>
+<p>All adapters translate external protocols to the same Runtime API. No business logic.</p>
+<pre><code class="language-python">from zelos.protocol_adapters import (
+    GRPCAdapter, WebSocketAdapter, MCPAdapter, A2AAdapter,
+)
+
+# gRPC — SubmitGoal, RegisterAgent, GetHealth mapped to protobuf service
+grpc = GRPCAdapter(runtime, host=&quot;0.0.0.0&quot;, port=50051)
+grpc.start()
+
+# WebSocket — real-time event streaming
+ws = WebSocketAdapter(runtime, host=&quot;0.0.0.0&quot;, port=9877)
+ws.start()  # Clients connect and subscribe to event types
+
+# MCP — Tool Registry for Agent tool discovery
+mcp = MCPAdapter(runtime)
+tool_list = mcp.list_tools()  # Agents discover available tools via JSON-RPC
+
+# A2A — Agent Card generation for cross-Runtime interop
+a2a = A2AAdapter(runtime)
+card = a2a.generate_agent_card(&quot;code-agent&quot;)  # capabilities → A2A skills
+</code></pre>
+<hr />
+<h2 id="15-plugin-isolation">15. Plugin Isolation</h2>
+<p>Run plugins in separate processes for fault isolation.</p>
+<pre><code class="language-python">from zelos.plugin_isolation import SubProcessPlugin
+
+plugin = SubProcessPlugin(
+    plugin_id=&quot;isolated-verifier&quot;,
+    entrypoint=&quot;my_verifier.py&quot;,  # Runs in its own Python process
+)
+plugin.start()      # Spawn subprocess, communicate via stdin/stdout JSON
+plugin.health()     # → True if subprocess responds
+plugin.execute({&quot;task&quot;: &quot;verify&quot;, &quot;artifact&quot;: {...}})
+plugin.shutdown()   # Graceful stop, force-kill after timeout
+</code></pre>
+<hr />
+<h2 id="16-storage">16. Storage</h2>
+<p>Pluggable storage backends — one config line to switch.</p>
+<pre><code class="language-python">from zelos.storage import create_storage_backend
+
+# InMemory (default, dev)
+backend = create_storage_backend({&quot;type&quot;: &quot;memory&quot;, &quot;max_events&quot;: 10000})
+
+# PostgreSQL (production)
+backend = create_storage_backend({
+    &quot;type&quot;: &quot;postgresql&quot;,
+    &quot;url&quot;: &quot;postgresql://user:pass@localhost:5432/zelos&quot;,
+})
+
+# Redis (high throughput)
+backend = create_storage_backend({
+    &quot;type&quot;: &quot;redis&quot;,
+    &quot;url&quot;: &quot;redis://localhost:6379/0&quot;,
+    &quot;prefix&quot;: &quot;zelos&quot;,
+})
+
+backend.connect()
+backend.append(&quot;task-events&quot;, [{&quot;event_id&quot;: &quot;e1&quot;, &quot;type&quot;: &quot;task.created&quot;}])
+events = backend.read(&quot;task-events&quot;, 0, 100)
+backend.set_state(&quot;goal-g1&quot;, {&quot;status&quot;: &quot;executing&quot;, &quot;progress&quot;: 0.6})
+state = backend.get_state(&quot;goal-g1&quot;)
+backend.create_snapshot(&quot;goal-g1&quot;, events_position=5, state={&quot;status&quot;: &quot;done&quot;})
+backend.disconnect()
+</code></pre>
+<hr />
 <h2 id="17-security-phase-3">17. Security (Phase 3)</h2>
 <p><strong>Module</strong>: <code>zelos.security</code> | <strong>Classes</strong>: <code>AccessControl</code>, <code>AuditLogger</code>, <code>APIKeyManager</code>, <code>TLSConfig</code></p>
 <p>Production-grade security infrastructure. Integrated into <code>ZelosRuntime</code> — all API methods enforce RBAC and log audit events.</p>
@@ -1355,6 +1541,39 @@ rt.reject_task(task_id, &quot;alice&quot;, &quot;Security scan found 3 critical 
 # ── Request changes ──
 rt._hitl.request_changes(request_id, &quot;bob&quot;, &quot;Please add integration tests&quot;)
 # → Status: &quot;changes_requested&quot; — developer sees feedback
+</code></pre>
+<hr />
+<h2 id="20-container-isolation">20. Container Isolation</h2>
+<p>Run plugins in isolated containers for maximum security and resource control.</p>
+<pre><code class="language-python">from zelos.container_isolation import ContainerPluginConfig, ContainerRunner, IsolationFactory
+
+# Docker container config
+config = ContainerPluginConfig(
+    image=&quot;python:3.12-slim&quot;,
+    command=[&quot;python&quot;, &quot;-u&quot;, &quot;agent.py&quot;],
+    env={&quot;ZELOS_API_KEY&quot;: &quot;zk-agent-xxx&quot;},
+    mounts={&quot;/host/code&quot;: &quot;/app/code&quot;},
+    cpu_limit=2,
+    memory_mb=512,
+    network=&quot;zelos-net&quot;,
+)
+print(config.to_docker_command())
+# → docker run --cpus 2 --memory 512m --network zelos-net ...
+
+# Remote plugin (HTTP)
+from zelos.container_isolation import RemotePlugin
+remote = RemotePlugin(
+    task_endpoint=&quot;https://agent.example.com/execute&quot;,
+    health_endpoint=&quot;https://agent.example.com/health&quot;,
+)
+# Health check via GET, tasks dispatched via POST, results via callback URL
+
+# Factory — 5 isolation modes
+runner = IsolationFactory.create(&quot;docker&quot;, config)
+runner = IsolationFactory.create(&quot;podman&quot;, config)
+runner = IsolationFactory.create(&quot;remote&quot;, endpoint_cfg)
+runner = IsolationFactory.create(&quot;subprocess&quot;, {&quot;entrypoint&quot;: &quot;agent.py&quot;})
+runner = IsolationFactory.create(&quot;in-process&quot;, {})
 </code></pre>
 <hr />
 <h2 id="21-hot-reload-phase-3">21. Hot Reload (Phase 3)</h2>
@@ -1816,6 +2035,178 @@ COPY zelos/ /app/zelos/
 COPY zelos.yaml /app/
 CMD [&quot;python3&quot;, &quot;-c&quot;, &quot;from zelos.runtime import ZelosRuntime; \
      rt = ZelosRuntime.from_yaml('zelos.yaml'); rt.start()&quot;]
+</code></pre>
+<hr />
+<h2 id="28-coordination-etcd-inmemory">28. Coordination (etcd + InMemory)</h2>
+<p>Pluggable distributed coordination — leader election, node registry, watch.</p>
+<pre><code class="language-python">from zelos.coordination import (
+    InMemoryCoordinationBackend, EtcdCoordinationBackend,
+    CoordinationNode, create_coordination_backend,
+)
+
+# InMemory (default, single-node)
+coord = create_coordination_backend({&quot;type&quot;: &quot;memory&quot;})
+coord.connect()
+coord.register_node(CoordinationNode(node_id=&quot;node-1&quot;, capabilities=[&quot;code&quot;]))
+
+# Bully algorithm — smallest node_id wins
+coord.elect_leader(&quot;node-1&quot;, ttl_seconds=30)
+print(coord.get_leader())  # → &quot;node-1&quot;
+
+# Watch for leader changes
+coord.watch_leader(lambda new_leader: print(f&quot;Leader changed: {new_leader}&quot;))
+
+# etcd (production, multi-node)
+coord_etcd = create_coordination_backend({
+    &quot;type&quot;: &quot;etcd&quot;,
+    &quot;endpoints&quot;: &quot;localhost:2379&quot;,
+    &quot;prefix&quot;: &quot;/zelos/&quot;,
+})
+coord_etcd.connect()
+coord_etcd.register_node(CoordinationNode(node_id=&quot;prod-node-1&quot;, host=&quot;10.0.0.1&quot;, port=9001))
+coord_etcd.elect_leader(&quot;prod-node-1&quot;, ttl_seconds=30)
+coord_etcd.heartbeat(&quot;prod-node-1&quot;)  # Renew lease
+</code></pre>
+<hr />
+<h2 id="29-messaging-nats-inmemory">29. Messaging (NATS + InMemory)</h2>
+<p>Pluggable message bus for cross-node EventBus transport.</p>
+<pre><code class="language-python">from zelos.messaging_nats import (
+    InMemoryMessageBus, NatsMessageBus, create_message_bus,
+)
+
+# InMemory (default, single-node)
+bus = create_message_bus({&quot;type&quot;: &quot;memory&quot;})
+bus.connect()
+
+# Publish-Subscribe with pattern matching
+bus.subscribe(&quot;task.*&quot;, lambda data, headers: print(f&quot;Task event: {data}&quot;))
+bus.publish(&quot;task.created&quot;, {&quot;task_id&quot;: &quot;t1&quot;, &quot;capability&quot;: &quot;code&quot;})
+bus.publish(&quot;task.completed&quot;, {&quot;task_id&quot;: &quot;t1&quot;})
+bus.publish(&quot;goal.submitted&quot;, {&quot;goal_id&quot;: &quot;g1&quot;})  # Not matched by &quot;task.*&quot;
+
+# Request-Reply pattern
+def handler(data, headers):
+    reply = headers.get(&quot;reply&quot;)
+    if reply:
+        bus.publish(reply, {&quot;answer&quot;: f&quot;Processed: {data['question']}&quot;})
+
+bus.subscribe(&quot;query&quot;, handler)
+result = bus.request(&quot;query&quot;, {&quot;question&quot;: &quot;status?&quot;}, timeout=1.0)
+print(result[&quot;answer&quot;])  # → &quot;Processed: status?&quot;
+
+# NATS (production, multi-node)
+bus_nats = create_message_bus({
+    &quot;type&quot;: &quot;nats&quot;,
+    &quot;servers&quot;: [&quot;nats://localhost:4222&quot;],
+})
+bus_nats.connect()
+bus_nats.subscribe(&quot;zelos.events&quot;, process_fn)
+bus_nats.publish(&quot;zelos.events&quot;, {&quot;event_type&quot;: &quot;task.completed&quot;})
+</code></pre>
+<hr />
+<h2 id="30-go-sdk">30. Go SDK</h2>
+<p>Build Agents and submit Goals from Go — the cloud-native language.</p>
+<pre><code class="language-go">package main
+
+import (
+    &quot;fmt&quot;
+    &quot;github.com/AI-Zelos/zelos-go/client&quot;
+    &quot;github.com/AI-Zelos/zelos-go/agent&quot;
+    &quot;github.com/AI-Zelos/zelos-go/schema&quot;
+)
+
+func main() {
+    // ── Remote client ──
+    c := client.New(&quot;http://localhost:9876&quot;, &quot;zk-client-dev&quot;)
+    health, _ := c.Health()
+    fmt.Println(health[&quot;status&quot;])  // → &quot;healthy&quot;
+
+    goal, _ := c.SubmitGoal(&quot;Build a landing page&quot;, &quot;high&quot;)
+    fmt.Println(goal[&quot;goal_id&quot;])
+
+    // ── Build a custom Agent ──
+    type MyCoder struct {
+        agent.BaseAgent
+    }
+
+    func (m *MyCoder) DeclareCapabilities() []schema.CapabilityDeclaration {
+        return []schema.CapabilityDeclaration{{
+            Name: &quot;code-generation.python&quot;,
+            Version: &quot;1.0.0&quot;,
+            Tags: []string{&quot;python&quot;},
+        }}
+    }
+
+    func (m *MyCoder) Execute(task schema.Task) (schema.TaskResult, error) {
+        return schema.TaskResult{
+            Status: &quot;completed&quot;,
+            Artifact: &amp;schema.ArtifactResult{
+                ContentType: &quot;text/plain&quot;,
+                Content: &quot;def hello(): return 'Hello from Zelos!'&quot;,
+            },
+        }, nil
+    }
+}
+</code></pre>
+<p>Available packages:
+| Package | Description |
+|---------|-------------|
+| <code>schema</code> | CapabilityDeclaration, Task, Artifact, MemoryContext types |
+| <code>agent</code>  | Agent interface, BaseAgent, DemoAgent |
+| <code>client</code> | HTTP client for remote Runtime (Goal/Agent/Admin APIs) |</p>
+<hr />
+<h2 id="31-typescript-sdk">31. TypeScript SDK</h2>
+<p>Build Agents and submit Goals from TypeScript/JavaScript.</p>
+<pre><code class="language-typescript">import { ZelosClient, BaseAgent, DemoAgent } from &quot;@zelos/sdk&quot;;
+import type { CapabilityDeclaration, Task, TaskResult } from &quot;@zelos/sdk&quot;;
+
+// ── Remote client ──
+const client = new ZelosClient(&quot;http://localhost:9876&quot;, &quot;zk-client-dev&quot;);
+const health = await client.health();
+console.log(health.status);  // → &quot;healthy&quot;
+
+// ── Build a custom Agent ──
+class MyCoder extends BaseAgent {
+  declareCapabilities(): CapabilityDeclaration[] {
+    return [{ name: &quot;code-generation.python&quot;, version: &quot;1.0.0&quot; }];
+  }
+
+  async execute(task: Task): Promise&lt;TaskResult&gt; {
+    return {
+      status: &quot;completed&quot;,
+      artifact: { contentType: &quot;text/plain&quot;, content: &quot;done&quot; },
+    };
+  }
+}
+</code></pre>
+<p>Install: <code>npm install @zelos/sdk</code></p>
+<hr />
+<h2 id="32-opentelemetry-integration">32. OpenTelemetry Integration</h2>
+<p>Export spans to Jaeger/Zipkin for distributed tracing.</p>
+<pre><code class="language-python">from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+# Configure OTLP exporter → Jaeger
+exporter = OTLPSpanExporter(endpoint=&quot;http://localhost:4318/v1/traces&quot;)
+provider = TracerProvider(resource=Resource.create({&quot;service.name&quot;: &quot;zelos-runtime&quot;}))
+provider.add_span_processor(BatchSpanProcessor(exporter))
+
+tracer = provider.get_tracer(&quot;zelos&quot;)
+
+# Create spans (goal → plan → dispatch → execute)
+with tracer.start_as_current_span(&quot;goal.submit&quot;) as span:
+    span.set_attribute(&quot;goal.description&quot;, &quot;Build a REST API&quot;)
+    span.add_event(&quot;goal.accepted&quot;, {&quot;goal_id&quot;: &quot;g-001&quot;})
+
+    with tracer.start_as_current_span(&quot;planner.plan&quot;) as plan:
+        plan.set_attribute(&quot;tasks.count&quot;, 3)
+        plan.add_event(&quot;plan.created&quot;, {&quot;plan_id&quot;: &quot;plan-001&quot;})
+
+provider.force_flush(timeout_millis=5000)  # Push to Jaeger
+# → View traces at http://localhost:16686
 </code></pre>
 <hr />
 <h2 id="27-troubleshooting">27. Troubleshooting</h2>
