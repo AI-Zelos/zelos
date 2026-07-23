@@ -19,3 +19,4 @@ zelos-ts/dist/
 package-lock.json
 .idea/
 docs/agent-marketplace-blueprint.md
+docs/v0.8.0-requirements.md
