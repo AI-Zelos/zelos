@@ -11,6 +11,7 @@ All notable changes to Zelos will be documented in this file.
 - NATS messaging integration (`zelos/messaging_nats.py`) — pluggable InMemory + NATS, pub/sub, pattern match, request-reply
 - Go SDK (`zelos-go/`) — schema types, Agent interface, ZelosClient, DemoAgent
 - TaskGraph O(1) evaluate_all via `_created_task_ids` set optimization
+- **Published to PyPI**: `pip install zelos-runtime` — zero external deps
 
 ### Changed
 - Version bumped: 0.6.0 → 0.7.0

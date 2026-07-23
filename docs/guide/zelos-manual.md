@@ -44,25 +44,61 @@
 ### Installation
 
 ```bash
-# Clone the repository
+# Install from PyPI
+pip install zelos-runtime
+
+# Verify (core has zero external dependencies)
+python3 -c "from zelos.runtime import ZelosRuntime; print('✅ Zelos Runtime OK')"
+```
+
+Or clone the repository for development:
+
+```bash
 git clone https://github.com/AI-Zelos/zelos.git
 cd zelos/
+pip install -e ".[dev]"
+```
 
-# No pip install needed for core — pure Python stdlib
-# Verify:
-python3 -c "from zelos.runtime import ZelosRuntime; print('OK')"
+### 5-Minute Quick Start (Copy-Paste Ready)
+
+```python
+# Save this as zelos_quickstart.py and run: python3 zelos_quickstart.py
+from zelos.runtime import ZelosRuntime
+
+# 1. Create and start Runtime
+rt = ZelosRuntime()
+rt.start()
+
+# 2. Register an agent that generates Python code
+rt.add_agent(
+    name="Coder",
+    entrypoint="my_agent:CodeAgent",
+    capabilities=[{"name": "code-generation.python", "version": "1.0.0"}],
+)
+
+# 3. Submit a goal — the Runtime handles everything else
+goal = rt.submit_goal(description="Write a function to reverse a string in Python")
+print(f"Goal submitted: {goal['goal_id'][:8]}... → {goal['status']}")
+
+# 4. Check status
+status = rt.get_goal_status(goal["goal_id"])
+print(f"Progress: {status.get('progress', {}).get('percent_complete', 0)}%")
+
+# 5. Check health
+health = rt.get_health()
+print(f"Runtime: {health['status']}, version={health['version']}")
+
+rt.shutdown()
+```
+
+Running this prints:
+```
+Goal submitted: a1b2c3d4... → planned
+Progress: 0%
+Runtime: healthy, version=0.7.0
 ```
 
 ### Your First Goal
-
-```python
-from zelos.runtime import ZelosRuntime
-
-# ── 1. Create Runtime ──
-rt = ZelosRuntime({"plugins": []})
-rt.start()
-
-# ── 2. Register an Agent ──
 rt.add_agent(
     name="CodeAgent",
     entrypoint="my_agents.coder:CodingAgent",

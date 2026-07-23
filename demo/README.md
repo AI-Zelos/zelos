@@ -5,12 +5,21 @@
 ## 快速开始
 
 ```bash
+# 安装
+pip install zelos-runtime
+
+# 克隆仓库获取 Demo
+git clone https://github.com/AI-Zelos/zelos.git
+cd zelos/
+
+# 配置 LLM（可选，Demo 13-21 无需 LLM）
 export OPENAI_API_KEY="sk-your-key"
 export OPENAI_API_BASE="https://api.deepseek.com/v1"
-export OPENAI_MODEL="deepseek-v4-flash"
 
-cd zelos/
-python3 demo/01_single_agent.py
+# 运行 Demo
+python3 demo/13_security.py        # ← 无需 LLM，可直接运行
+python3 demo/20_hitl_approval_workflow.py
+python3 demo/01_single_agent.py    # ← 需要 LLM API Key
 ```
 
 ## 支持的 LLM Provider

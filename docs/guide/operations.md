@@ -5,11 +5,19 @@
 ### 1. Bare Metal (Python)
 
 ```bash
+# Install from PyPI
+pip install zelos-runtime
+
+# Create config and run
+cp zelos.yaml.example zelos.yaml    # edit config to your needs
+python3 start.py                     # start Runtime + Dashboard
+```
+
+Or from source:
+```bash
 git clone https://github.com/AI-Zelos/zelos.git && cd zelos
 pip install -e ".[dev]"
-cp zelos.yaml.example zelos.yaml   # edit config
-make dev                            # foreground
-# or: python3 start.py              # foreground with dashboard
+make dev
 ```
 
 ### 2. Docker
