@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zelos Zh — Zelos Documentation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:920px;margin:0 auto;padding:24px;background:#0d1117;color:#c9d1d9;line-height:1.65}
+a{color:#58a6ff;text-decoration:none}a:hover{text-decoration:underline}
+code{background:#161b22;padding:2px 6px;border-radius:4px;font-size:13px}
+pre{background:#161b22;padding:16px;border-radius:8px;overflow-x:auto;font-size:13px}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:12px 0}
+th,td{border:1px solid #30363d;padding:8px 14px;text-align:left}
+th{background:#161b22;font-weight:600}
+h1{font-size:32px;margin:24px 0 12px;color:#f0f6fc}
+h2{font-size:22px;margin:28px 0 10px;color:#f0f6fc;padding-bottom:6px;border-bottom:1px solid #21262d}
+h3{font-size:17px;margin:20px 0 8px;color:#f0f6fc}
+hr{border:none;border-top:1px solid #21262d;margin:24px 0}
+.back{margin-bottom:20px;font-size:14px}
+</style></head><body>
+<p class="back"><a href="./">← Documentation Home</a></p>
+<h1 id="zelos">Zelos 全面技术手册</h1>
+<blockquote>
+<p><strong>Open Multi-Agent Orchestration Runtime</strong>
+一个完整的、生产就绪的多 Agent 编排运行时。不是框架，是基础设施。</p>
+</blockquote>
+<hr />
+<h2 id="_1">目录</h2>
+<ol>
+<li><a href="#1-项目简介">项目简介</a></li>
+<li><a href="#2-为什么存在">为什么存在</a></li>
+<li><a href="#3-什么时候使用">什么时候使用</a></li>
+<li><a href="#4-核心概念">核心概念</a></li>
+<li><a href="#5-快速上手">快速上手</a></li>
+<li><a href="#6-runtime-kernel">Runtime Kernel（内核）</a></li>
+<li><a href="#7-plugin-生态系统">Plugin 生态系统</a></li>
+<li><a href="#8-分布式与生产部署">分布式与生产部署</a></li>
+<li><a href="#9-安全与合规">安全与合规</a></li>
+<li><a href="#10-多租户">多租户</a></li>
+<li><a href="#11-可观测性">可观测性</a></li>
+<li><a href="#12-sdk-参考">SDK 参考</a></li>
+<li><a href="#13-api-参考">API 参考</a></li>
+<li><a href="#14-部署指南">部署指南</a></li>
+<li><a href="#15-常见问题">常见问题</a></li>
+</ol>
+<hr />
+<h2 id="1">1. 项目简介</h2>
+<h3 id="zelos_1">Zelos 是什么</h3>
+<p><strong>Zelos 是面向多 Agent 协同的编排运行时。</strong> 它接受一个自然语言描述的 Goal（目标），自动将其分解为可执行的 Task DAG，按能力匹配合适的 Agent，调度执行，验证结果，并记录完整的不可变审计链。</p>
+<pre><code>用户: &quot;帮我做一个电商网站的 Landing Page&quot;
+
+Zelos Runtime:
+  ├── Planner    → 分解为 6 个 Task（设计 → 编码 → 审查 → 修复 → 截图 → 报告）
+  ├── Scheduler  → 每个 Task 按 Capability 匹配最佳 Agent
+  ├── ExecEngine → 派发 Task，监控心跳，超时重试
+  ├── Verifier   → 验证每个 Agent 的输出是否符合预期 Schema
+  ├── Policy     → 控制预算、频率、权限
+  └── EventBus   → 全程不可变审计记录
+</code></pre>
+<h3 id="_2">类比</h3>
+<table>
+<thead>
+<tr>
+<th>系统</th>
+<th style="text-align: center;">管理单元</th>
+<th>做什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Linux</td>
+<td style="text-align: center;">Process</td>
+<td>CPU、内存、IO 调度</td>
+</tr>
+<tr>
+<td>Kubernetes</td>
+<td style="text-align: center;">Container</td>
+<td>扩缩容、网络、服务发现</td>
+</tr>
+<tr>
+<td>Temporal</td>
+<td style="text-align: center;">Workflow</td>
+<td>确定性工作流执行、重试、状态</td>
+</tr>
+<tr>
+<td><strong>Zelos</strong></td>
+<td style="text-align: center;"><strong>Goal</strong></td>
+<td><strong>多 Agent 规划、调度、验证、审计</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="_3">核心数据</h3>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>数值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>版本</td>
+<td>v0.7.0</td>
+</tr>
+<tr>
+<td>Phases</td>
+<td>0–7 全部完成</td>
+</tr>
+<tr>
+<td>源码模块</td>
+<td>28 个</td>
+</tr>
+<tr>
+<td>自动化测试</td>
+<td>78 个（71 passed）</td>
+</tr>
+<tr>
+<td>Demo</td>
+<td>21 个</td>
+</tr>
+<tr>
+<td>SDK</td>
+<td>Python / TypeScript / Go</td>
+</tr>
+<tr>
+<td>外部依赖</td>
+<td><strong>零</strong>（核心纯 Python stdlib）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2">2. 为什么存在</h2>
+<h3 id="agent">问题：多 Agent 系统的编排危机</h3>
+<p>2026 年的 AI 应用不再是单模型系统。一个用户请求可能需要：</p>
+<pre><code>规划 ──→ 研究 ──→ 编码 ──→ 浏览器自动化 ──→ 数据库查询 ──→ 验证 ──→ 人工审批
+  ↑                        ↑                          ↑                ↑
+  Planner              CodeAgent                   SQLAgent        HumanReviewer
+</code></pre>
+<p>每个环节由<strong>不同团队、不同技术栈、不同框架</strong>构建的 Agent 完成。问题来了：</p>
+<ol>
+<li><strong>谁负责调度？</strong> Agent A 不知道 Agent B 的存在，也不知道 B 什么时候完成</li>
+<li><strong>谁负责重试？</strong> Agent 执行失败了，应该换一个 Agent 还是重新规划？</li>
+<li><strong>谁负责验证？</strong> Agent C 的输出可能是错的，谁来检查？</li>
+<li><strong>谁负责审计？</strong> 如果出错了，怎么追溯是哪个 Agent 的哪个决策导致的？</li>
+<li><strong>谁负责治理？</strong> 预算超了谁踩刹车？频率超了谁限流？</li>
+</ol>
+<h3 id="_4">现有方案为什么不够</h3>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>解决了什么</th>
+<th>没解决什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>LangGraph / CrewAI</strong></td>
+<td>Agent 构建</td>
+<td>不负责调度、不负责审计、不负责治理</td>
+</tr>
+<tr>
+<td><strong>Temporal / Airflow</strong></td>
+<td>确定性工作流</td>
+<td>Agent 的行为是非确定性的——不适合工作流引擎</td>
+</tr>
+<tr>
+<td><strong>MCP / A2A</strong></td>
+<td>Agent 通信协议</td>
+<td>通信 ≠ 治理。没有规划、验证、审计</td>
+</tr>
+</tbody>
+</table>
+<h3 id="zelos_2">Zelos 的答案</h3>
+<blockquote>
+<p>把"Agent 编排"从应用层问题变成基础设施层问题。</p>
+</blockquote>
+<p>开发者不需要在自己的应用代码里管理 Agent 之间的依赖、重试、超时、验证。他们只需要：
+1. 构建 Agent
+2. 声明 Capability（能力）
+3. 注册到 Zelos</p>
+<p>剩下的一切——规划、调度、执行、重试、验证、审计——由 Runtime 处理。</p>
+<hr />
+<h2 id="3">3. 什么时候使用</h2>
+<h3 id="zelos_3">✅ 适合使用 Zelos 的场景</h3>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>AI SaaS 平台</strong> — 产品背后有 10+ 个专用 Agent</td>
+<td>需要调度器选最佳 Agent、失败自动重试、追踪每次调用的成本</td>
+</tr>
+<tr>
+<td><strong>企业 AI 转型</strong> — 多部门 Agent 需要跨团队协作</td>
+<td>Namespace 隔离、RBAC 权限、审计链满足合规要求</td>
+</tr>
+<tr>
+<td><strong>强合规行业</strong>（金融/医疗/法律）</td>
+<td>不可变审计链 = 每一笔 Agent 决策都可追溯、可重放</td>
+</tr>
+<tr>
+<td><strong>Agent 基础设施商</strong> — 构建第三方 Agent 注册和发现平台</td>
+<td>Capability Registry 天然就是 Agent 搜索引擎</td>
+</tr>
+<tr>
+<td><strong>AI 研究</strong> — 评估治理 vs 无治理的多 Agent 系统</td>
+<td>同一套 Benchmark 跑两遍，对比失败率和成本</td>
+</tr>
+<tr>
+<td><strong>高可靠性自动化</strong> — CI/CD、事件响应、数据管道</td>
+<td>重试、超时、热加入、零停机升级</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">❌ 不适合的场景</h3>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3-5 个 Agent 的简单脚本</td>
+<td>一个 for 循环就够了，Zelos 是重型武器</td>
+</tr>
+<tr>
+<td>确定性工作流（纯代码、无 AI）</td>
+<td>用 Temporal 更合适</td>
+</tr>
+<tr>
+<td>只想做 Prompt 管理</td>
+<td>用 LangChain 更轻量</td>
+</tr>
+<tr>
+<td>单模型 API 调用</td>
+<td>你不需要编排 Runtime</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4">4. 核心概念</h2>
+<h3 id="41-goal">4.1 Goal（目标）</h3>
+<p>用户提交的自然语言任务描述。例如："帮我写一个 Python Web 项目，包含登录和注册功能"。</p>
+<pre><code class="language-python">goal = rt.submit_goal(
+    description=&quot;写一个 Python Web 项目，包含登录和注册功能&quot;,
+    priority=&quot;high&quot;,
+    budget=50.0,         # 最多花多少钱
+    deadline_ms=600000,  # 10 分钟超时
+)
+</code></pre>
+<p>Goal 生命周期：</p>
+<pre><code>submitted → accepted → planned → executing → completed / failed / cancelled
+</code></pre>
+<h3 id="42-execution-plan">4.2 Execution Plan（执行计划）</h3>
+<p>Planner 将 Goal 分解为 Task DAG。Plan 是动态的——Task 失败后可以 re-plan。</p>
+<pre><code>Plan: &quot;Build Web Project&quot;
+  ├── Task 1: Design database schema   [design.db-schema]
+  ├── Task 2: Implement auth module    [code-generation.python]  ← depends on T1
+  ├── Task 3: Write unit tests         [verification.unit-test]  ← depends on T2
+  └── Task 4: Deploy to staging        [automation.cli]          ← depends on T3
+</code></pre>
+<h3 id="43-task">4.3 Task（任务）</h3>
+<p>Plan 中的最小执行单元。一个 Task = 一次 Agent 调用。</p>
+<pre><code class="language-python">Task(
+    task_id=&quot;task-auth&quot;,
+    description=&quot;Implement user authentication&quot;,
+    required_capability=&quot;code-generation.python&quot;,  # 按能力分发，不按 Agent 名称
+    dependencies=[&quot;task-db-schema&quot;],                # DAG 依赖
+    constraints=TaskConstraints(
+        max_retries=2,
+        timeout_ms=300000,
+        min_success_rate=0.85,
+    ),
+)
+</code></pre>
+<p>Task 状态机：</p>
+<pre><code>CREATED → READY → ASSIGNED → STARTED → COMPLETED
+                    ↓                     ↓
+                  (rejected)            FAILED → (retry) → READY
+                                       CANCELLED
+                                       TIMED_OUT
+</code></pre>
+<h3 id="44-capability">4.4 Capability（能力）</h3>
+<p>Agent 声明自己能做什么。Zelos 按能力分发，从不按 Agent 名称：</p>
+<pre><code class="language-python">CapabilityDeclaration(
+    name=&quot;code-generation.python&quot;,      # 唯一能力标识（点分隔命名空间）
+    version=&quot;1.0.0&quot;,                    # 语义化版本
+    description=&quot;生成 Python 代码&quot;,
+    qos={
+        &quot;max_latency_ms&quot;: 5000,
+        &quot;max_cost_per_call&quot;: 0.05,      # 每次调用成本
+        &quot;availability&quot;: 0.995,
+    },
+    tags=[&quot;python&quot;, &quot;web&quot;, &quot;enterprise&quot;],
+    capacity=10,                        # 最大并发数
+)
+</code></pre>
+<h3 id="45-agent">4.5 Agent</h3>
+<p>Agent 是一个外部执行插件。它只知道：接收 Task → 执行 → 返回 Artifact → 退出。</p>
+<p>Agent 不调度、不调用其他 Agent、不管内存、不知道工作流拓扑。</p>
+<h3 id="46-artifact">4.6 Artifact（产物）</h3>
+<p>Agent 执行 Task 后返回的结果。Artifact 是不可变的——创建后永不修改。如果 Agent 需要修正，会产生新的 Artifact。</p>
+<h3 id="47-event">4.7 Event（事件）</h3>
+<p>一切状态变化都表示为 Event。Event 是不可变的、仅追加的。所有 Event 通过 <code>correlation_id</code> 关联到同一个 Goal，通过 <code>causation_id</code> 形成因果链。</p>
+<hr />
+<h2 id="5">5. 快速上手</h2>
+<h3 id="_6">安装</h3>
+<pre><code class="language-bash">pip install zelos-runtime
+</code></pre>
+<p>核心零外部依赖，纯 Python stdlib。这是设计哲学——Runtime 不应该绑死任何特定生态。</p>
+<h3 id="5_1">5 分钟跑起来</h3>
+<pre><code class="language-python">from zelos.runtime import ZelosRuntime
+
+# 1. 创建并启动 Runtime
+rt = ZelosRuntime()
+rt.start()
+
+# 2. 注册一个 Agent
+rt.add_agent(
+    name=&quot;我的 Python 程序员&quot;,
+    entrypoint=&quot;my_agent:CodeAgent&quot;,
+    capabilities=[{&quot;name&quot;: &quot;code-generation.python&quot;, &quot;version&quot;: &quot;1.0.0&quot;}],
+)
+
+# 3. 提交一个 Goal
+goal = rt.submit_goal(&quot;写一个字符串反转函数&quot;)
+print(f&quot;Goal: {goal['goal_id'][:8]}... → {goal['status']}&quot;)
+
+# 4. 查看状态
+status = rt.get_goal_status(goal[&quot;goal_id&quot;])
+health = rt.get_health()
+print(f&quot;Runtime: {health['status']} v{health['version']}&quot;)
+
+rt.shutdown()
+</code></pre>
+<h3 id="zelosyaml">用 zelos.yaml 配置</h3>
+<pre><code class="language-yaml"># zelos.yaml
+runtime:
+  api:
+    host: &quot;0.0.0.0&quot;
+    port: 9876
+
+plugins:
+  - id: &quot;llm-planner&quot;
+    type: &quot;planner&quot;
+    entrypoint: &quot;zelos.planner.LLMPlanner&quot;
+    config:
+      provider: &quot;openai&quot;
+      model: &quot;deepseek-v4-flash&quot;
+      api_key: &quot;${OPENAI_API_KEY}&quot;
+      base_url: &quot;https://api.deepseek.com/v1&quot;
+
+  - id: &quot;schema-verifier&quot;
+    type: &quot;verifier&quot;
+    entrypoint: &quot;zelos.verifier.SchemaVerifier&quot;
+
+  - id: &quot;default-scoring&quot;
+    type: &quot;scoring_strategy&quot;
+    entrypoint: &quot;zelos.scheduler.DefaultScoringStrategy&quot;
+</code></pre>
+<pre><code class="language-python">rt = ZelosRuntime.from_yaml(&quot;zelos.yaml&quot;)
+rt.start()
+</code></pre>
+<h3 id="dashboard">启动 Dashboard</h3>
+<pre><code class="language-bash">python3 start.py
+# 浏览器打开 http://127.0.0.1:9876
+</code></pre>
+<p>内建 Web UI，无需外部文件，实时展示 Goals、Agents、Tasks、Audit Log。</p>
+<hr />
+<h2 id="6-runtime-kernel">6. Runtime Kernel</h2>
+<p>Kernel 是 Zelos 的最小不可变核心。6 个组件，缺一不可——如果移除了它，多 Agent 编排就不再是 Zelos。</p>
+<h3 id="61-eventbus">6.1 EventBus（事件总线）</h3>
+<p>进程内的发布/订阅系统。<strong>所有组件通过它通信——永远不直接调用。</strong></p>
+<pre><code class="language-python">from zelos.event_bus import EventBus, Event
+
+bus = EventBus(max_events=10000)
+
+# 精确订阅
+bus.subscribe(&quot;task.completed&quot;, lambda e: print(f&quot;Task done: {e.payload}&quot;))
+
+# 模式匹配订阅
+bus.subscribe_pattern(&quot;task.*&quot;, lambda e: print(f&quot;Any task event: {e.event_type}&quot;))
+
+# 按 Goal 订阅
+bus.subscribe_correlation(&quot;goal-g1&quot;, lambda e: process(e))
+
+# 发布
+bus.publish(Event(
+    event_id=&quot;evt-001&quot;, event_type=&quot;task.completed&quot;,
+    source=&quot;execution-engine&quot;, timestamp=time.time(),
+    correlation_id=&quot;goal-g1&quot;, causation_id=&quot;evt-000&quot;,
+    payload={&quot;task_id&quot;: &quot;task-1&quot;, &quot;artifact_id&quot;: &quot;art-1&quot;},
+))
+
+# 重放
+bus.replay_from(position=0, handler=process_function)
+bus.replay_correlation(&quot;goal-g1&quot;, handler=process_function)
+</code></pre>
+<p>特性：
+- 不可变事件（发布后不可修改）
+- 幂等（相同 event_id 重复发布静默忽略）
+- 环形缓冲区（max_events 限制内存）
+- 1 MB 单事件上限
+- Replay（按位置或 correlation_id）
+- 持久化支持（PersistentEventStore + 任意 StorageBackend）</p>
+<h3 id="62-capabilityregistry">6.2 CapabilityRegistry（能力注册表）</h3>
+<p>Agent 的"搜索引擎"。按名称、标签、前缀、版本约束查询。</p>
+<pre><code class="language-python">from zelos.capability_registry import CapabilityRegistry
+
+reg = CapabilityRegistry()
+reg.register(&quot;agent-1&quot;, &quot;CodeAgent&quot;, [
+    {&quot;name&quot;: &quot;code-generation.python&quot;, &quot;version&quot;: &quot;1.0.0&quot;, &quot;tags&quot;: [&quot;python&quot;, &quot;web&quot;]},
+    {&quot;name&quot;: &quot;code-review&quot;, &quot;version&quot;: &quot;1.0.0&quot;, &quot;tags&quot;: [&quot;security&quot;]},
+])
+
+reg.find_by_name(&quot;code-generation.python&quot;)           # 精确名称
+reg.find_by_prefix(&quot;code-generation&quot;)                 # 前缀匹配
+reg.find_by_tag([&quot;python&quot;, &quot;web&quot;])                    # 标签 AND
+reg.find_providers_for(&quot;code-generation.python&quot;)      # 可用 Agent 列表
+reg.find_by_name(&quot;code-generation.python&quot;, &quot;&gt;=1.0,&lt;2.0&quot;)  # 版本约束
+
+reg.mark_available(&quot;agent-1&quot;)     # 标记可用
+reg.mark_unavailable(&quot;agent-1&quot;)   # 标记不可用（不会被调度）
+reg.deprecate(&quot;agent-1&quot;, ...)     # 标记废弃（降低调度优先级）
+</code></pre>
+<h3 id="63-taskgraph">6.3 TaskGraph（任务图引擎）</h3>
+<p>管理 Task 的 DAG 依赖关系和状态转换。</p>
+<pre><code class="language-python">from zelos.task_graph import TaskGraphEngine, Task, TaskStatus
+
+tg = TaskGraphEngine()
+
+t1 = Task(task_id=&quot;t1&quot;, plan_id=&quot;plan-1&quot;, description=&quot;设计 DB Schema&quot;,
+          required_capability=&quot;design.db-schema&quot;)
+t2 = Task(task_id=&quot;t2&quot;, plan_id=&quot;plan-1&quot;, description=&quot;实现 Auth 模块&quot;,
+          required_capability=&quot;code-generation.python&quot;, dependencies=[&quot;t1&quot;])
+
+tg.add_task(t1)
+tg.add_task(t2)
+
+tg.transition(&quot;t1&quot;, TaskStatus.READY)
+tg.transition(&quot;t1&quot;, TaskStatus.ASSIGNED)
+tg.transition(&quot;t1&quot;, TaskStatus.STARTED)
+tg.transition(&quot;t1&quot;, TaskStatus.COMPLETED)
+
+# t1 完成 → t2 自动变为 READY
+ready = tg.on_task_completed(&quot;t1&quot;)
+print(ready)  # → [&quot;t2&quot;]
+
+# 循环检测
+tg.add_dependency(&quot;t2&quot;, &quot;t1&quot;)  # → ValueError: cycle detected
+
+# 动态修改
+tg.add_task_dynamic(t3)        # 运行中插入新 Task
+</code></pre>
+<h3 id="64-scheduler">6.4 Scheduler（调度器）</h3>
+<p>5 阶段流水线：Sort → Filter → Score → Policy → Select</p>
+<pre><code class="language-python">from zelos.scheduler import Scheduler, DefaultScoringStrategy
+
+sched = Scheduler(task_graph, capability_registry, scoring_strategy=DefaultScoringStrategy())
+
+# 阶段 1: Sort — 按优先级排序
+# 阶段 2: Filter — 11 个硬约束（能力匹配、版本兼容、Agent 存活、容量、预算、截止日期、标签、排除列表等）
+candidates = sched._phase2_filter(task)  # 筛选可用 Agent
+# 阶段 3: Score — 7 因子加权评分（可替换为自定义策略）
+# 阶段 4: Policy — Allow / Reject / Delay / Retry
+# 阶段 5: Select — 选择最高分 Agent
+result = sched._schedule_one(task)
+</code></pre>
+<p><strong>自定义评分策略（竞价排名示例）：</strong></p>
+<pre><code class="language-python">class MarketplaceScoring(ScoringStrategy):
+    def score(self, task, candidates):
+        for c in candidates:
+            quality = c.success_rate * 0.7
+            price = 1.0 - min(c.cost_per_call / 0.50, 1.0)
+            bid = min(c.metadata.get(&quot;bid&quot;, 0.0) / 0.10, 1.0)
+            c.score = quality * 0.5 + price * 0.3 + bid * 0.2
+        return sorted(candidates, key=lambda c: c.score, reverse=True)
+</code></pre>
+<h3 id="65-executionengine">6.5 ExecutionEngine（执行引擎）</h3>
+<p>Task 派发、心跳监控、超时控制。</p>
+<pre><code class="language-python">from zelos.execution_engine import ExecutionEngine
+
+ee = ExecutionEngine(task_graph, event_bus)
+ee.register_agent(&quot;agent-1&quot;, &quot;CodeAgent&quot;, max_concurrent_tasks=5, heartbeat_interval_ms=30000)
+
+ee.dispatch(&quot;task-1&quot;, &quot;agent-1&quot;)           # 派发 Task
+ee.heartbeat(&quot;agent-1&quot;)                    # Agent 心跳
+ee.submit_result(&quot;task-1&quot;, &quot;agent-1&quot;, {    # Agent 提交结果
+    &quot;status&quot;: &quot;completed&quot;,
+    &quot;artifact&quot;: {&quot;content_type&quot;: &quot;application/json&quot;, &quot;content&quot;: {...}},
+})
+ee.cancel_task(&quot;task-1&quot;)                   # 取消 Task
+ee.start_monitor()                         # 启动超时/心跳监控线程
+</code></pre>
+<p>Agent 状态机：</p>
+<pre><code>registered → heartbeating → disconnected（心跳超时）
+</code></pre>
+<h3 id="66-pluginlifecyclemanager">6.6 PluginLifecycleManager（插件生命周期管理器）</h3>
+<p>管理插件的加载顺序、依赖解析、健康检查、重启。</p>
+<pre><code class="language-python">from zelos.plugin_manager import PluginLifecycleManager
+
+plm = PluginLifecycleManager()
+manifests = plm.discover_from_config(plugin_configs)
+instances = plm.load_all(manifests)  # 按拓扑序加载
+
+plm.health_check(&quot;schema-verifier&quot;)  # 健康检查
+plm.restart_plugin(&quot;llm-planner&quot;)    # 重启
+plm.stop_plugin(&quot;llm-planner&quot;)       # 优雅停止
+</code></pre>
+<p>加载顺序（强制执行）：</p>
+<pre><code>storage → memory → policy → scoring_strategy → verifier → planner → adapter
+</code></pre>
+<hr />
+<h2 id="7-plugin">7. Plugin 生态系统</h2>
+<h3 id="71-planner">7.1 Planner（规划器）</h3>
+<p>将自然语言 Goal 分解为 Task DAG。支持多种 LLM Provider。</p>
+<pre><code class="language-python">from zelos.planner import LLMPlanner, create_provider
+
+# OpenAI
+provider = create_provider({&quot;provider&quot;: &quot;openai&quot;, &quot;model&quot;: &quot;gpt-4o&quot;, &quot;api_key&quot;: &quot;sk-...&quot;})
+
+# Anthropic Claude
+provider = create_provider({&quot;provider&quot;: &quot;anthropic&quot;, &quot;model&quot;: &quot;claude-opus-4-8&quot;, &quot;api_key&quot;: &quot;sk-ant-...&quot;})
+
+# Google Gemini
+provider = create_provider({&quot;provider&quot;: &quot;google&quot;, &quot;model&quot;: &quot;gemini-2.5-pro&quot;, &quot;api_key&quot;: &quot;...&quot;})
+
+# DeepSeek（OpenAI 兼容）
+provider = create_provider({&quot;provider&quot;: &quot;openai&quot;, &quot;model&quot;: &quot;deepseek-v4-flash&quot;,
+                             &quot;api_key&quot;: &quot;sk-...&quot;, &quot;base_url&quot;: &quot;https://api.deepseek.com/v1&quot;})
+
+# Mock（测试用，返回固定 JSON）
+provider = create_provider({&quot;provider&quot;: &quot;mock&quot;})
+
+planner = LLMPlanner({&quot;provider&quot;: &quot;mock&quot;})
+plan = planner.plan(&quot;Write a hello world function&quot;, goal_id=&quot;g1&quot;)
+# 自动校验：DAG 无环、依赖引用有效、每个 Task 有 capability
+
+# Replan — 某个 Task 失败后重新规划
+new_plan = planner.replan(original_plan=plan, failed_task_id=&quot;task-3&quot;)
+</code></pre>
+<h3 id="72-verifier">7.2 Verifier（验证器）</h3>
+<p>Agent 的每个 Artifact 必须通过验证关卡才能流向下游。</p>
+<pre><code class="language-python">from zelos.verifier import SchemaVerifier, VerificationGate, VerificationCriteria
+from zelos.verifier_v2 import CodeReviewer, SecurityScanner
+
+# Schema 验证
+schema_v = SchemaVerifier()
+result = schema_v.verify(
+    {&quot;name&quot;: &quot;hello&quot;, &quot;version&quot;: 1},
+    VerificationCriteria(expected_output_schema={&quot;type&quot;: &quot;object&quot;, &quot;required&quot;: [&quot;name&quot;]}),
+)
+print(result.verdict)  # → &quot;passed&quot;
+
+# 代码审查
+cr = CodeReviewer()
+result = cr.verify(&quot;eval(user_input)&quot;, VerificationCriteria(options={&quot;language&quot;: &quot;python&quot;}))
+# → &quot;failed&quot; — 检测到 eval() 使用
+
+# 安全扫描（SQL 注入、XSS、命令注入、不安全的反序列化、硬编码密钥）
+ss = SecurityScanner()
+result = ss.verify('&quot;SELECT * FROM users WHERE id=&quot; + user_id', VerificationCriteria())
+# → &quot;failed&quot; — SQL 注入
+
+# 四级验证链
+gate = VerificationGate()
+gate.add_verifier(SchemaVerifier())
+gate.add_verifier(CodeReviewer())
+gate.add_verifier(SecurityScanner())
+gate.add_verifier(FactChecker())
+result = gate.verify(artifact, criteria)
+# 全部通过 → accepted。任意一个失败 → 短路拒绝。
+</code></pre>
+<h3 id="73-policy">7.3 Policy（策略引擎）</h3>
+<p>策略只做 Allow / Reject / Delay / Retry——从不改变业务逻辑。</p>
+<pre><code class="language-python">from zelos.policy import CostLimitPolicy, AllowlistPolicy, CompositePolicy
+
+cost = CostLimitPolicy({&quot;max_cost_per_goal&quot;: 100})
+cost.evaluate({&quot;goal_id&quot;: &quot;g1&quot;, &quot;task_cost&quot;: 50})  # → &quot;allow&quot;
+
+allow = AllowlistPolicy({&quot;allowlist_agents&quot;: [&quot;agent-coder&quot;]})
+allow.evaluate({&quot;agent_id&quot;: &quot;unknown-agent&quot;})  # → &quot;reject&quot;
+
+combo = CompositePolicy({&quot;policies&quot;: [cost, allow]})
+# 顺序执行，首次 reject 即短路
+</code></pre>
+<h3 id="74-memory">7.4 Memory（记忆架构）</h3>
+<p>6 层隔离的记忆系统。<strong>Memory 属于 Runtime，不属于 Agent。</strong></p>
+<pre><code class="language-python">from zelos.memory import InMemoryMemoryProvider
+
+mem = InMemoryMemoryProvider(max_entries_per_layer=5000, ttl_seconds=3600)
+
+# 6 层记忆，独立生命周期
+mem.store(&quot;session&quot;, &quot;goal-1&quot;, {&quot;goal&quot;: &quot;...&quot;, &quot;deadline&quot;: &quot;2026-08-01&quot;})      # Goal 生命周期
+mem.store(&quot;project&quot;, &quot;coding-style&quot;, {&quot;language&quot;: &quot;python&quot;})                     # 持久
+mem.store(&quot;user&quot;, &quot;preferences&quot;, {&quot;model&quot;: &quot;claude&quot;})                            # 持久
+mem.store(&quot;knowledge&quot;, &quot;api-docs&quot;, {&quot;endpoint&quot;: &quot;/api/v1&quot;})                      # 持久，跨用户
+mem.store(&quot;execution&quot;, &quot;task-1-cache&quot;, {&quot;intermediate&quot;: &quot;data&quot;})                 # Task 生命周期
+mem.store(&quot;skill&quot;, &quot;code-review-template&quot;, {&quot;checklist&quot;: [...]})                 # 持久，可复用
+
+# Context Assembly — Task 派发前自动组装上下文
+from zelos.memory import ContextAssembler
+ctx = ContextAssembler(mem).assemble(task_id=&quot;task-1&quot;, goal_id=&quot;goal-1&quot;)
+# → 聚合 session/project/user/knowledge/execution/skill 层的相关条目
+</code></pre>
+<h3 id="75-storage">7.5 Storage（存储后端）</h3>
+<p>一行配置切换存储后端，代码无需改动。</p>
+<pre><code class="language-python">from zelos.storage import create_storage_backend
+
+backend = create_storage_backend({&quot;type&quot;: &quot;postgresql&quot;, &quot;url&quot;: &quot;postgresql://...&quot;})
+backend.connect()
+backend.append(&quot;task-events&quot;, [{&quot;event_id&quot;: &quot;e1&quot;}])
+events = backend.read(&quot;task-events&quot;, 0, 100)
+backend.set_state(&quot;goal-g1&quot;, {&quot;status&quot;: &quot;executing&quot;})
+backend.create_snapshot(&quot;goal-g1&quot;, events_position=5, state={...})
+</code></pre>
+<p>支持的后端：<code>memory</code> / <code>redis</code> / <code>postgresql</code> / <code>mysql</code></p>
+<hr />
+<h2 id="8">8. 分布式与生产部署</h2>
+<h3 id="81-runtime">8.1 分布式 Runtime</h3>
+<pre><code class="language-python">from zelos.distributed import LeaderElection, WorkStealing, NodeRegistry, ClusterNode
+
+# Leader 选举（Bully 算法——最小 node_id 当选）
+le = LeaderElection(node_id=&quot;node-alpha&quot;)
+le.register_peer(&quot;node-bravo&quot;)
+le.start()
+print(le.get_leader_id())  # → &quot;node-alpha&quot;
+
+# 工作窃取（忙节点的 READY 任务被空闲节点窃走）
+ws_a = WorkStealing(node_id=&quot;node-a&quot;)
+ws_b = WorkStealing(node_id=&quot;node-b&quot;)
+ws_a.enqueue_task(&quot;t1&quot;, capability=&quot;code&quot;)
+stolen = ws_b.steal_from(ws_a, max_count=3)  # → 窃走 t1
+
+# 节点注册中心（健康监控 + 能力查询）
+reg = NodeRegistry()
+reg.register(ClusterNode(node_id=&quot;n1&quot;, host=&quot;10.0.0.1&quot;, port=9001, capabilities=[&quot;code&quot;]))
+reg.find_by_capability(&quot;code&quot;)  # → [n1]
+reg.detect_dead_nodes(timeout_seconds=60)  # → 心跳过期的节点列表
+</code></pre>
+<h3 id="82">8.2 多节点集群部署</h3>
+<pre><code class="language-yaml"># zelos-node-1.yaml
+distributed:
+  enabled: true
+  node_id: &quot;node-1&quot;
+  peers: [&quot;10.0.0.1:9877&quot;, &quot;10.0.0.2:9877&quot;, &quot;10.0.0.3:9877&quot;]
+
+coordination:
+  type: etcd
+  endpoints: &quot;10.0.0.1:2379&quot;
+
+messaging:
+  type: nats
+  servers: [&quot;nats://10.0.0.1:4222&quot;]
+</code></pre>
+<pre><code class="language-bash">python3 start.py --config zelos-node-1.yaml &amp;
+python3 start.py --config zelos-node-2.yaml &amp;
+python3 start.py --config zelos-node-3.yaml &amp;
+
+curl http://10.0.0.1:9876/api/v1/cluster
+# → {&quot;is_leader&quot;: true, &quot;peers&quot;: [&quot;node-1&quot;,&quot;node-2&quot;,&quot;node-3&quot;], &quot;healthy&quot;: 3}
+</code></pre>
+<h3 id="83">8.3 容器部署</h3>
+<pre><code class="language-bash">make build        # 构建 Docker 镜像（80 MB）
+make run          # Docker Compose 一键启动
+make run-storage  # 附带 Redis
+</code></pre>
+<h3 id="84">8.4 热重载</h3>
+<p>零停机升级插件。支持 4 种策略：</p>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>行为</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ROLLING</td>
+<td>逐个替换实例</td>
+<td>默认安全升级</td>
+</tr>
+<tr>
+<td>BLUE_GREEN</td>
+<td>先启新版，保留旧版，再切流量</td>
+<td>大版本升级</td>
+</tr>
+<tr>
+<td>CANARY</td>
+<td>X% 流量到新版</td>
+<td>灰度验证</td>
+</tr>
+<tr>
+<td>INSTANT</td>
+<td>立即切换</td>
+<td>热修复</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="9">9. 安全与合规</h2>
+<h3 id="91-rbac">9.1 RBAC 权限控制</h3>
+<pre><code class="language-python">from zelos.security import AccessControl
+
+ac = AccessControl()
+# 4 个内置角色：
+#   admin:    * （全部操作）
+#   operator: goal.*, task.*, agent.read, plugin.*
+#   agent:    task.execute, agent.heartbeat, artifact.create
+#   viewer:   goal.read, task.read, agent.read, metrics.read
+
+ac.check(&quot;agent&quot;, &quot;task.execute&quot;)   # → True
+ac.check(&quot;agent&quot;, &quot;goal.submit&quot;)    # → False
+ac.check(&quot;admin&quot;, &quot;anything&quot;)       # → True（wildcard）
+ac.check(&quot;operator&quot;, &quot;task.create&quot;) # → True（task.* prefix match）
+</code></pre>
+<h3 id="92">9.2 审计日志</h3>
+<pre><code class="language-python">from zelos.security import AuditLogger
+
+logger = AuditLogger(max_events=100000)
+logger.log(&quot;admin&quot;, &quot;goal.submit&quot;, &quot;goal-g1&quot;, result=&quot;allow&quot;, detail=&quot;Submitted by user&quot;)
+logger.log(&quot;agent-1&quot;, &quot;task.execute&quot;, &quot;task-t1&quot;, result=&quot;allow&quot;, detail=&quot;Executed in 340ms&quot;)
+
+# 多字段查询
+events = logger.query(actor=&quot;agent-1&quot;, action=&quot;task.execute&quot;)
+events = logger.query(resource=&quot;goal-g1&quot;, time_start=1721654400, time_end=1721655000)
+
+# 导出
+count = logger.export_json_file(&quot;/var/log/zelos/audit.json&quot;)
+</code></pre>
+<h3 id="93-api-key">9.3 API Key 管理 + 异常检测</h3>
+<pre><code class="language-python">from zelos.security import APIKeyManager
+
+mgr = APIKeyManager(max_failures=10, failure_window_seconds=60, auto_revoke=True)
+key = mgr.generate_key(&quot;admin&quot;, &quot;production-key&quot;)  # → &quot;zelos_&lt;128 hex&gt;&quot;
+mgr.validate(key)    # → {&quot;role&quot;: &quot;admin&quot;, ...}
+mgr.revoke(key)      # → True
+
+# 暴力破解防护：10 次失败 → 60 秒内 → 自动吊销
+fail_count = mgr.get_failure_count(key)
+</code></pre>
+<h3 id="94-mtls">9.4 mTLS</h3>
+<pre><code class="language-python">from zelos.security import TLSConfig
+
+tls = TLSConfig(
+    cert_file=&quot;/etc/zelos/server.pem&quot;,
+    key_file=&quot;/etc/zelos/server.key&quot;,
+    ca_file=&quot;/etc/zelos/ca.pem&quot;,
+    require_client_cert=True,
+)
+
+adapter = HTTPAdapter(rt, host=&quot;0.0.0.0&quot;, port=8443, tls_config=tls)
+adapter.start()
+# 现在只接受持有有效客户端证书的连接
+</code></pre>
+<hr />
+<h2 id="10">10. 多租户</h2>
+<pre><code class="language-python">from zelos.multi_tenancy import TenantManager, ResourceQuota
+
+tm = TenantManager()
+tm.register_tenant(&quot;tenant-finance&quot;, &quot;Finance Dept&quot;, quotas=ResourceQuota(
+    max_goals=50, max_tasks=200, max_agents=10, budget_per_goal=100
+))
+tm.register_tenant(&quot;tenant-eng&quot;, &quot;Engineering&quot;, quotas=ResourceQuota(
+    max_goals=200, max_tasks=1000, max_agents=50
+))
+
+# 租户隔离：Finance 看不到 Engineering 的 Goals/Agents
+ns_fin = tm.get_namespace(&quot;tenant-finance&quot;)
+ns_fin.add_goal(&quot;goal-1&quot;)
+ns_fin.add_goal(&quot;goal-2&quot;)
+# 超出配额自动拒绝
+
+# 启停控制
+tm.deactivate_tenant(&quot;tenant-finance&quot;)   # 暂停所有操作
+tm.activate_tenant(&quot;tenant-finance&quot;)     # 恢复
+</code></pre>
+<hr />
+<h2 id="11">11. 可观测性</h2>
+<h3 id="111-prometheus-metrics">11.1 Prometheus Metrics</h3>
+<pre><code class="language-bash">curl http://localhost:9876/metrics
+</code></pre>
+<pre><code># HELP zelos_goals_active Number of active goals
+# TYPE zelos_goals_active gauge
+zelos_goals_active 3
+
+# HELP zelos_tasks_completed_total Total completed tasks
+# TYPE zelos_tasks_completed_total counter
+zelos_tasks_completed_total 1042
+
+# HELP zelos_agents_connected Connected agents
+# TYPE zelos_agents_connected gauge
+zelos_agents_connected 12
+</code></pre>
+<h3 id="112-opentelemetry-jaeger">11.2 OpenTelemetry / Jaeger</h3>
+<pre><code class="language-python">from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+exporter = OTLPSpanExporter(endpoint=&quot;http://localhost:4318/v1/traces&quot;)
+# 创建 Span → 导出到 Jaeger → http://localhost:16686 可视化
+</code></pre>
+<h3 id="113-grafana-dashboard">11.3 Grafana Dashboard</h3>
+<p><code>deploy/grafana/zelos-dashboard.json</code> — 导入即可。</p>
+<h3 id="114-k8s">11.4 K8s 探针</h3>
+<pre><code>GET /live   → {&quot;status&quot;: &quot;alive&quot;}     # 存活探针
+GET /ready  → {&quot;status&quot;: &quot;ready&quot;}     # 就绪探针
+</code></pre>
+<hr />
+<h2 id="12-sdk">12. SDK 参考</h2>
+<h3 id="121-python-sdk-zelos_sdk">12.1 Python SDK (<code>zelos_sdk</code>)</h3>
+<pre><code class="language-python">from zelos_sdk import BaseAgent, CapabilityDeclaration, ZelosClient, Task
+
+class MyAgent(BaseAgent):
+    def declare_capabilities(self):
+        return [CapabilityDeclaration(name=&quot;code-generation.python&quot;, version=&quot;1.0.0&quot;)]
+
+    def execute(self, task: Task):
+        return {&quot;status&quot;: &quot;completed&quot;, &quot;artifact&quot;: {&quot;content_type&quot;: &quot;text/plain&quot;, &quot;content&quot;: &quot;result&quot;}}
+
+# 远程客户端
+client = ZelosClient(&quot;http://localhost:9876&quot;, &quot;zk-client-dev&quot;)
+client.submit_goal(&quot;Build something&quot;)
+client.health()
+</code></pre>
+<h3 id="122-typescript-sdk-zelossdk">12.2 TypeScript SDK (<code>@zelos/sdk</code>)</h3>
+<pre><code class="language-typescript">import { ZelosClient, BaseAgent } from &quot;@zelos/sdk&quot;;
+
+const client = new ZelosClient(&quot;http://localhost:9876&quot;, &quot;zk-client-dev&quot;);
+await client.health();
+
+class MyAgent extends BaseAgent {
+  declareCapabilities() { return [{ name: &quot;code-generation.python&quot;, version: &quot;1.0.0&quot; }]; }
+  async execute(task) { return { status: &quot;completed&quot;, artifact: { contentType: &quot;text/plain&quot;, content: &quot;done&quot; } }; }
+}
+</code></pre>
+<h3 id="123-go-sdk-zelos-go">12.3 Go SDK (<code>zelos-go</code>)</h3>
+<pre><code class="language-go">import &quot;github.com/AI-Zelos/zelos-go/client&quot;
+
+c := client.New(&quot;http://localhost:9876&quot;, &quot;zk-client-dev&quot;)
+health, _ := c.Health()
+goal, _ := c.SubmitGoal(&quot;Build a landing page&quot;, &quot;high&quot;)
+</code></pre>
+<hr />
+<h2 id="13-api">13. API 参考</h2>
+<p>所有 API 返回 JSON，通过 <code>Authorization: Bearer &lt;key&gt;</code> 认证。</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/goals</code></td>
+<td>提交 Goal</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/goals</code></td>
+<td>列出所有 Goal</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/goals/{id}</code></td>
+<td>获取 Goal 状态</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/v1/goals/{id}</code></td>
+<td>取消 Goal</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/agents</code></td>
+<td>注册 Agent</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/agents</code></td>
+<td>列出 Agent</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/agents/{id}</code></td>
+<td>获取 Agent 详情</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/agents/{id}/heartbeat</code></td>
+<td>Agent 心跳</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/agents/{id}/tasks/{tid}/result</code></td>
+<td>提交 Task 结果</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/health</code></td>
+<td>Runtime 健康检查</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/metrics</code></td>
+<td>Runtime 指标</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/audit</code></td>
+<td>审计日志</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/tenants</code></td>
+<td>租户列表</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/cluster</code></td>
+<td>集群状态</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/approvals/pending</code></td>
+<td>待审批项</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/live</code></td>
+<td>K8s 存活探针</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/ready</code></td>
+<td>K8s 就绪探针</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/metrics</code></td>
+<td>Prometheus 指标</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="14">14. 部署指南</h2>
+<h3 id="_7">开发环境</h3>
+<pre><code class="language-bash">pip install zelos-runtime
+python3 start.py
+</code></pre>
+<h3 id="_8">生产环境（单节点）</h3>
+<pre><code class="language-bash">pip install zelos-runtime[dev]
+# 配置 zelos.yaml → python3 start.py --config zelos.yaml
+</code></pre>
+<h3 id="docker">生产环境（Docker）</h3>
+<pre><code class="language-bash">docker build -t zelos:0.7.0 .
+docker compose up -d
+</code></pre>
+<h3 id="kubernetes">生产环境（Kubernetes）</h3>
+<pre><code class="language-yaml"># deploy/k8s/deployment.yaml
+livenessProbe:
+  httpGet: { path: /live, port: 9876 }
+readinessProbe:
+  httpGet: { path: /ready, port: 9876 }
+</code></pre>
+<h3 id="_9">生产环境（多节点集群）</h3>
+<p>见 <a href="#82-多节点集群部署">8.2 多节点集群部署</a></p>
+<hr />
+<h2 id="15">15. 常见问题</h2>
+<h3 id="q-zelos-langgraph">Q: Zelos 和 LangGraph 有什么区别？</h3>
+<p>LangGraph 是 Agent 构建工具包——帮你定义 Agent 内部的图结构。Zelos 是 Agent 编排 Runtime——帮你管理多个独立 Agent 之间的调度、验证、审计。两者是互补的：你可以用 LangGraph 构建 Agent，用 Zelos 编排这些 Agent。</p>
+<h3 id="q-zelos-temporal">Q: Zelos 和 Temporal 有什么区别？</h3>
+<p>Temporal 管理确定性工作流（纯代码，可回放）。Zelos 管理非确定性 Agent（LLM 调用、浏览器自动化——天然不确定）。Temporal 要求工作流代码是确定性的，Zelos 明确接受 Agent 的不确定性，通过三权分立（Planner ≠ Scheduler ≠ Verifier）来治理。</p>
+<h3 id="q-zelos">Q: Zelos 依赖哪些外部服务？</h3>
+<p><strong>核心 Runtime 零依赖。</strong> 生产部署推荐：
+- PostgreSQL / Redis（事件持久化）
+- etcd（多节点领导者选举）
+- NATS（跨节点消息传递）
+- Jaeger（分布式追踪）</p>
+<p>全部可选——单节点开发模式不需要任何外部服务。</p>
+<h3 id="q-agent-python">Q: Agent 必须用 Python 写吗？</h3>
+<p>不。Agent 是外部进程，任何语言都可以。只要通过 HTTP API 注册、心跳、执行、提交结果即可。Python/TypeScript/Go SDK 只是提供了便利的封装。</p>
+<h3 id="q-agent">Q: 能支持多少个 Agent？</h3>
+<p>在单节点上测试过 500 个 Agent 同时注册，Capability 查询 &lt; 1ms。多节点通过 etcd + NATS 横向扩展。</p>
+<h3 id="q-agent_1">Q: 怎么保证 Agent 不互相调用？</h3>
+<p><strong>架构层面保证。</strong> Agent 只知道 Runtime，不知道其他 Agent 的存在。它收到的 Task 不包含任何其他 Agent 的信息。Agent 无法直接与其他 Agent 通信——所有通信必须通过 EventBus。</p>
+<h3 id="q-planner-llm">Q: Planner 一定要用 LLM 吗？</h3>
+<p>不。Planner 是一个可替换的插件。你可以实现一个基于模板的 Planner，或者基于规则引擎的 Planner。LLMPlanner 只是默认实现。</p>
+<hr />
+<blockquote>
+<p>📄 <a href="zelos-manual.html">English User Manual →</a> | <a href="zelos.html">API Reference →</a> | <a href="https://github.com/AI-Zelos/zelos">GitHub →</a></p>
+</blockquote>
+</body></html>

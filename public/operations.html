@@ -22,11 +22,17 @@ hr{border:none;border-top:1px solid #21262d;margin:24px 0}
 <h1 id="zelos-operations-guide-v070">Zelos Operations Guide v0.7.0</h1>
 <h2 id="deployment-modes">Deployment Modes</h2>
 <h3 id="1-bare-metal-python">1. Bare Metal (Python)</h3>
+<pre><code class="language-bash"># Install from PyPI
+pip install zelos-runtime
+
+# Create config and run
+cp zelos.yaml.example zelos.yaml    # edit config to your needs
+python3 start.py                     # start Runtime + Dashboard
+</code></pre>
+<p>Or from source:</p>
 <pre><code class="language-bash">git clone https://github.com/AI-Zelos/zelos.git &amp;&amp; cd zelos
 pip install -e &quot;.[dev]&quot;
-cp zelos.yaml.example zelos.yaml   # edit config
-make dev                            # foreground
-# or: python3 start.py              # foreground with dashboard
+make dev
 </code></pre>
 <h3 id="2-docker">2. Docker</h3>
 <pre><code class="language-bash">make build          # zelos:0.7.0

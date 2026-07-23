@@ -23,7 +23,7 @@ if os.path.exists(PUBLIC):
 os.makedirs(PUBLIC)
 
 # ── Convert guide docs ──
-for md_name in ["zelos-manual.md", "operations.md"]:
+for md_name in ["zelos-manual.md", "zelos-zh.md", "operations.md"]:
     src = os.path.join(ROOT, "docs", "guide", md_name)
     if not os.path.exists(src):
         continue
@@ -94,6 +94,7 @@ h1{font-size:52px;margin-bottom:4px;color:#f0f6fc}h1 span{color:#58a6ff}
 <div class="cards">
 <a class="card" href="zelos.html"><h3>&#128218; API Reference</h3><p>Complete API docs for all 28 modules &mdash; runtime, kernel, plugins, SDK</p></a>
 <a class="card" href="zelos-manual.html"><h3>&#128214; User Manual</h3><p>Getting started, architecture deep dive, configuration, and full API walkthrough</p></a>
+<a class="card" href="zelos-zh.html"><h3>&#127471;&#127477; 中文手册</h3><p>Zelos 全面技术手册 — 为什么存在、怎么用、每个模块详解、部署指南、FAQ</p></a>
 <a class="card" href="operations.html"><h3>&#128640; Operations Guide</h3><p>Deployment (bare-metal/Docker/K8s), multi-node cluster, monitoring, troubleshooting</p></a>
 <a class="card" href="https://github.com/AI-Zelos/zelos"><h3>&#128187; GitHub</h3><p>Source code &middot; 78 tests &middot; 21 demos &middot; Python/TS/Go SDKs</p></a>
 </div>
