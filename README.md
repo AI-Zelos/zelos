@@ -216,6 +216,9 @@ plugins:
 
 ## Install
 
+[![PyPI version](https://img.shields.io/pypi/v/zelos-runtime)](https://pypi.org/project/zelos-runtime/)
+[![Python versions](https://img.shields.io/pypi/pyversions/zelos-runtime)](https://pypi.org/project/zelos-runtime/)
+
 ```bash
 pip install zelos-runtime
 ```
@@ -225,6 +228,8 @@ Zelos core has **zero external dependencies** — pure Python stdlib. That's eng
 ```bash
 pip install "zelos-runtime[dev]"    # adds pytest + ruff
 ```
+
+→ [zelos-runtime on PyPI](https://pypi.org/project/zelos-runtime/)
 
 ---
 
