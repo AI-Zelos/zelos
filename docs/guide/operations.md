@@ -152,6 +152,122 @@ goal, _ := c.SubmitGoal("Build a landing page", "high")
 
 ---
 
+## Multi-Node Cluster Deployment
+
+### Architecture
+
+```
+┌──────────────────────────────────────────────┐
+│                  Node 1 (Leader)             │
+│  ZelosRuntime + etcd + NATS                  │
+│  IP: 10.0.0.1:9876                           │
+└──────────┬──────────┬────────────────────────┘
+           │          │
+     ┌─────▼───┐  ┌──▼──────┐
+     │ Node 2  │  │ Node 3  │
+     │ 10.0.0.2│  │ 10.0.0.3│
+     └─────────┘  └─────────┘
+```
+
+### Prerequisites
+
+| Component | Purpose | Default Port |
+|-----------|---------|-------------|
+| etcd | Leader election + node discovery | 2379 |
+| NATS | Cross-node EventBus + messaging | 4222 |
+| Zelos Runtime | Agent orchestration | 9876 |
+
+### Step 1: Start Infrastructure
+
+```bash
+# etcd (all nodes connect to same cluster)
+docker run -d --name etcd -p 2379:2379 \
+  bitnami/etcd:latest
+
+# NATS
+docker run -d --name nats -p 4222:4222 \
+  nats:latest
+```
+
+### Step 2: Configure Each Node
+
+```yaml
+# zelos-node-1.yaml
+runtime:
+  instance_id: "zelos-node-1"
+  api:
+    host: "10.0.0.1"
+    port: 9876
+
+distributed:
+  enabled: true
+  node_id: "node-1"
+  peers: ["10.0.0.1:9877", "10.0.0.2:9877", "10.0.0.3:9877"]
+
+storage:
+  type: postgresql
+  url: "postgresql://postgres:zelos@10.0.0.1:5432/zelos"
+
+coordination:
+  type: etcd
+  endpoints: "10.0.0.1:2379"
+
+messaging:
+  type: nats
+  servers: ["nats://10.0.0.1:4222"]
+```
+
+### Step 3: Start Nodes
+
+```bash
+# Node 1 (expects to become leader)
+python3 start.py --config zelos-node-1.yaml &
+
+# Node 2
+python3 start.py --config zelos-node-2.yaml &
+
+# Node 3
+python3 start.py --config zelos-node-3.yaml &
+```
+
+### Step 4: Verify Cluster
+
+```bash
+curl http://10.0.0.1:9876/api/v1/cluster
+# → {"is_leader": true, "peers": ["node-1", "node-2", "node-3"], "healthy": 3}
+
+curl http://10.0.0.2:9876/api/v1/cluster
+# → {"is_leader": false, "leader": "node-1"}
+```
+
+### Leader Election Flow
+
+```
+1. All nodes register in etcd: /zelos/nodes/{node_id}
+2. Smallest node_id wins (Bully algorithm)
+3. Leader holds etcd lease, renews via heartbeat
+4. If leader lease expires → new election triggered
+5. Watchers (NATS subscribers) notified of leader change
+```
+
+### Work Stealing
+
+```
+Node-2 idle (queue depth=0) → queries etcd for busiest node → steals READY tasks
+Node-3 overloaded (queue depth=15) → Node-1 and Node-2 steal work
+```
+
+### Failure Recovery
+
+| Failure | Behavior |
+|---------|----------|
+| Leader crash | etcd lease expires → Node-2/Node-3 elect new leader (<5s) |
+| Worker crash | In-flight tasks re-assigned via NATS |
+| etcd down | Falls back to InMemory coordination (single-node mode) |
+| NATS down | Falls back to InMemory message bus |
+
+---
+
 ## Troubleshooting
 
 | Symptom | Check |
