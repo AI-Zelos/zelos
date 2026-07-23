@@ -4,20 +4,33 @@ All notable changes to Zelos will be documented in this file.
 
 ---
 
+## [0.7.0] — 2026-07-23
+
+### Added — Advanced Production
+- etcd coordination backend (`zelos/coordination.py`) — pluggable InMemory + etcd, leader election, watch, heartbeat
+- NATS messaging integration (`zelos/messaging_nats.py`) — pluggable InMemory + NATS, pub/sub, pattern match, request-reply
+- Go SDK (`zelos-go/`) — schema types, Agent interface, ZelosClient, DemoAgent
+- TaskGraph O(1) evaluate_all via `_created_task_ids` set optimization
+
+### Changed
+- Version bumped: 0.6.0 → 0.7.0
+- Test count: 68 → 78 (71 passed, 7 skipped)
+- ROADMAP: Phase 7 marked Complete
+
+---
+
 ## [0.6.0] — 2026-07-22
 
 ### Added — Demo Enrichment, OTel, TS SDK Verification
-- HITL approval workflow demo (6 scenarios: single/multi approver, reject, changes, timeout, audit)
-- Multi-tenant isolation demo (5 scenarios: registration, quotas, isolation, lifecycle, usage report)
-- OpenTelemetry → Jaeger integration (OTLP export, span verification, Jaeger UI query)
-- TypeScript SDK: `tsc` compilation verified, `.d.ts` + `.js` output generated
-- GitHub Pages docs deployment workflow (`.github/workflows/docs.yml`)
-- Demo README updated with Phase 5/6 demos + supplementary notes
+- HITL approval workflow demo (6 scenarios)
+- Multi-tenant isolation demo (5 scenarios)
+- OpenTelemetry → Jaeger integration (OTLP export, Jaeger API verification)
+- TypeScript SDK: `tsc` compilation verified
+- GitHub Pages docs deployment workflow
 
 ### Changed
 - Version bumped: 0.5.0 → 0.6.0
-- Test count: 66 → 68 (63 passed, 5 skipped)
-- ROADMAP: Phase 6 Complete, OTel moved from Phase 7 to done
+- Test count: 66 → 68
 
 ---
 

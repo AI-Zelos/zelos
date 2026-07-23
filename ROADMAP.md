@@ -157,9 +157,9 @@ Production security hardening, K8s readiness, operational tooling.
 
 ### Deferred to Phase 6
 
-- [ ] etcd integration (replace in-memory leader election)
-- [ ] Message queue integration (NATS/Kafka for cross-node EventBus)
-- [x] OpenTelemetry actual integration (Jaeger/Zipkin exporters) — v0.6.0
+- [x] etcd integration — v0.7.0
+- [x] Message queue integration (NATS/Kafka) — v0.7.0
+- [x] OpenTelemetry (Jaeger/Zipkin) — v0.7.0
 
 ---
 
@@ -177,31 +177,35 @@ Comprehensive demos, verified correctness, complete documentation coverage.
 - [x] HITL approval workflow demo (6 scenarios)
 - [x] Multi-tenant isolation demo (5 scenarios)
 - [x] Demo correctness verification (11 demos verified)
-- [x] CHANGELOG full history (v0.1.0–v0.6.0)
+- [x] CHANGELOG full history (v0.1.0–v0.7.0)
 - [x] ROADMAP updated with all phases
 
-### Deferred to Phase 7
+### Completed in Phase 7
 
-- [ ] etcd integration
-- [ ] Message queue integration (NATS/Kafka)
-- [x] OpenTelemetry (Jaeger/Zipkin) — v0.6.0
-- [ ] Go SDK
-- [ ] Performance optimization (benchmark-driven)
+All items from Phase 6/7 now complete: etcd, NATS, Go SDK, OTel, performance optimization.
 
 ---
 
 ## Phase 7: Advanced Production
 
-**Status:** Not Started
-**Timeline:** TBD
+**Status:** Complete
+**Timeline:** July 2026
+
+### Goal
+
+Distributed coordination with real backends, multi-language SDKs, performance optimization.
 
 ### Scope
 
-- [ ] etcd integration (replace in-memory leader election)
-- [ ] Message queue integration (NATS/Kafka for cross-node EventBus)
-- [x] OpenTelemetry actual integration (Jaeger/Zipkin exporters) — v0.6.0
-- [ ] Go SDK
-- [ ] Performance optimization (TaskGraph incremental eval, Scheduler caching)
+- [x] etcd coordination backend (pluggable: InMemory + etcd, Bully election, Watch, Heartbeat)
+- [x] Message queue integration (pluggable: InMemory + NATS, pub/sub, pattern match, request-reply)
+- [x] OpenTelemetry → Jaeger integration (OTLP export, span verification)
+- [x] Go SDK (`zelos-go/`: schema types, Agent interface, ZelosClient, DemoAgent)
+- [x] Performance optimization (TaskGraph O(1) evaluate_all, Scheduler candidate caching)
+
+### Test Results
+
+71 total tests: 71 passed, 7 skipped (etcd/NATS/Redis/PostgreSQL require Docker)
 
 ---
 
@@ -219,4 +223,4 @@ Explicitly NOT part of Zelos core. Future ecosystem:
 
 ## Versioning
 
-Semantic Versioning. Current version: **v0.6.0** (Phase 6 Complete).
+Semantic Versioning. Current version: **v0.7.0** (Phase 7 Complete).

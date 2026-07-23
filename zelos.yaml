@@ -1,5 +1,5 @@
 # zelos.yaml — Zelos Runtime Configuration
-# Version: 0.6.0 — Engineering completeness.
+# Version: 0.7.0 — Engineering completeness.
 
 runtime:
   instance_id: "zelos-dev-01"

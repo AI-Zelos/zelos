@@ -7,8 +7,8 @@ Requires: docker run -d --name zelos-jaeger -p 16686:16686 -p 4317:4317 -p 4318:
 """
 
 import json
-import sys
 import os
+import sys
 import time
 import urllib.request
 
@@ -36,8 +36,8 @@ def test_otel_span_creation():
     """Create OpenTelemetry spans and verify they can be generated."""
     print("\n📡 OpenTelemetry Span Creation")
     try:
-        from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
 
         provider = TracerProvider(resource=Resource.create({"service.name": "zelos-runtime"}))
         tracer = provider.get_tracer("zelos")
@@ -64,11 +64,10 @@ def test_otel_jaeger_export():
     _require_jaeger()
     print("\n🚀 OTel → Jaeger Export")
 
-    from opentelemetry import trace
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk.resources import Resource
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from opentelemetry.sdk.resources import Resource
-    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
     svc_name = f"zelos-test-{int(time.time()) % 10000}"
 
@@ -97,7 +96,7 @@ def test_otel_jaeger_export():
         services = data.get("data", [])
         print(f"  Jaeger services: {services}")
         print(f"  ✅ OTLP export → {len(services)} service(s) visible in Jaeger")
-        print(f"  ✅ Jaeger UI: http://localhost:16686")
+        print("  ✅ Jaeger UI: http://localhost:16686")
     except Exception as e:
         print(f"  ⚠️ Jaeger query error: {e}")
 

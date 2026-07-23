@@ -1,6 +1,6 @@
 {
   "name": "@zelos/sdk",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Zelos TypeScript SDK — Build Agents and submit Goals on Zelos Runtime",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

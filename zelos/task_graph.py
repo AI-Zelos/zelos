@@ -62,6 +62,7 @@ class TaskGraphEngine:
         self._tasks: dict[str, Task] = {}
         self._dependencies: dict[str, set[str]] = {}  # task_id → {dependency_ids}
         self._dependents_map: dict[str, set[str]] = {}  # task_id → {dependent_ids}
+        self._created_task_ids: set[str] = set()  # v0.7.0: O(1) lookup for created tasks
 
     # ── Task CRUD ──
 
@@ -70,6 +71,7 @@ class TaskGraphEngine:
         task.updated_at = task.created_at
         self._tasks[task.task_id] = task
         self._dependencies[task.task_id] = set(task.dependencies)
+        self._created_task_ids.add(task.task_id)
         # Register as dependent on each dependency
         for dep_id in task.dependencies:
             self._dependents_map.setdefault(dep_id, set()).add(task.task_id)
@@ -84,14 +86,20 @@ class TaskGraphEngine:
 
     def transition(self, task_id: str, to_status: TaskStatus, agent_id: str | None = None) -> Task:
         task = self._get_required(task_id)
-        valid = VALID_TRANSITIONS.get(task.status, set())
+        from_status = task.status
+        valid = VALID_TRANSITIONS.get(from_status, set())
         if to_status not in valid:
-            raise ValueError(f"Invalid transition: {task.status.value} → {to_status.value}")
+            raise ValueError(f"Invalid transition: {from_status.value} → {to_status.value}")
 
         task.status = to_status
         task.updated_at = __import__("time").time()
         if agent_id and to_status in (TaskStatus.ASSIGNED, TaskStatus.STARTED):
             task.assigned_agent_id = agent_id
+        # v0.7.0: track created set for O(1) evaluate_all
+        if from_status == TaskStatus.CREATED and to_status != TaskStatus.CREATED:
+            self._created_task_ids.discard(task_id)
+        elif to_status == TaskStatus.CREATED:
+            self._created_task_ids.add(task_id)
         return task
 
     def _get_required(self, task_id: str) -> Task:
@@ -116,12 +124,12 @@ class TaskGraphEngine:
         return True
 
     def evaluate_all(self) -> list[str]:
-        """Evaluate all CREATED tasks. Returns list of task_ids that became READY."""
+        """Evaluate all CREATED tasks (O(|CREATED|) via _created_task_ids set). Returns task_ids that became READY."""
         ready = []
-        for task_id in list(self._tasks.keys()):
-            if self._tasks[task_id].status == TaskStatus.CREATED:
-                if self.evaluate_dependencies(task_id):
-                    ready.append(task_id)
+        for task_id in list(self._created_task_ids):
+            t = self._tasks.get(task_id)
+            if t and t.status == TaskStatus.CREATED and self.evaluate_dependencies(task_id):
+                ready.append(task_id)
         return ready
 
     def on_task_completed(self, completed_task_id: str) -> list[str]:

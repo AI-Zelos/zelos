@@ -22,7 +22,7 @@ import argparse
 import json
 import sys
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -291,7 +291,7 @@ class ZelosCLI:
                 f"  Version: {health.get('version', 'N/A')}\n"
                 f"  Kernel: {health.get('components', {}).get('kernel', 'N/A')}"
             )
-        return "Zelos Runtime Health: healthy (simulation)\n  Version: 0.6.0"
+        return "Zelos Runtime Health: healthy (simulation)\n  Version: 0.7.0"
 
     def _cmd_metrics(self, args) -> str:
         if self.runtime:

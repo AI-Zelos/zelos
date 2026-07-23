@@ -2,7 +2,7 @@
 
 > An Open Multi-Agent Orchestration Runtime.
 
-**Status:** Phase 6 Complete · **Version:** 0.6.0
+**Status:** Phase 7 Complete · **Version:** 0.7.0
 
 ---
 
@@ -532,6 +532,17 @@ After reading these, you should understand the entire Runtime architecture witho
 | **Phase 4** | Engineering Completeness (CI/CD, Docker, TS SDK, mTLS) | ✅ Complete |
 | **Phase 5** | Production Hardening (Anomaly Detection, K8s Probes, Operations) | ✅ Complete |
 | **Phase 6** | Demo Enrichment & Documentation (HITL, Multi-tenancy, Docs) | ✅ Complete |
+| **Phase 7** | Advanced Production (etcd, NATS, Go SDK, Perf, OTel) | ✅ Complete |
+
+### Phase 7 Deliverables
+
+| Module | Components |
+|--------|-----------|
+| **Coordination** | etcd + InMemory backends, leader election, watch, heartbeat, factory |
+| **Messaging** | NATS + InMemory message bus, pub/sub, pattern match, request-reply |
+| **Go SDK** | `zelos-go/` — schema types, Agent interface, ZelosClient, DemoAgent |
+| **Performance** | TaskGraph O(1) evaluate_all |
+| **OpenTelemetry** | Jaeger OTLP export, span verification |
 
 ### Phase 6 Deliverables
 
@@ -539,7 +550,7 @@ After reading these, you should understand the entire Runtime architecture witho
 |--------|-----------|
 | **HITL Demos** | Single/multi approver, rejection, change request, timeout, audit trail (6 scenarios) |
 | **Multi-tenancy Demos** | Registration, quotas, isolation, lifecycle, usage report (5 scenarios) |
-| **Documentation** | CHANGELOG v0.1.0–v0.6.0, ROADMAP all phases, Operations manual, API docs |
+| **Documentation** | CHANGELOG v0.1.0–v0.7.0, ROADMAP all phases, Operations manual, API docs |
 
 ### Phase 5 Deliverables
 

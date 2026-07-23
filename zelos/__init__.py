@@ -1,7 +1,7 @@
 """
 Zelos — Open Multi-Agent Orchestration Runtime
 
-v0.6.0: Demo enrichment — HITL approval workflow, multi-tenant isolation, full docs coverage.
+v0.7.0: Advanced Production — etcd/NATS coordination, Go SDK, perf optimization, OTel Jaeger.
 """
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
