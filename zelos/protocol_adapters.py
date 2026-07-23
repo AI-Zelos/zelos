@@ -103,7 +103,7 @@ class GRPCAdapter(ProtocolAdapter):
             "agent_id": agent_id,
             "status": "registered",
             "heartbeat_interval_ms": 30000,
-            "runtime_version": "0.2.0",
+            "runtime_version": "0.7.0",
         }
 
     def AgentHeartbeat(self, request: dict) -> dict:

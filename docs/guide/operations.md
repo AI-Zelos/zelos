@@ -1,4 +1,4 @@
-# Zelos Operations Guide v0.6.0
+# Zelos Operations Guide v0.7.0
 
 ## Deployment Modes
 
@@ -15,7 +15,7 @@ make dev                            # foreground
 ### 2. Docker
 
 ```bash
-make build          # zelos:0.6.0
+make build          # zelos:0.7.0
 make run            # docker compose up -d
 make stop           # docker compose down
 
@@ -97,7 +97,7 @@ mgr.validate(key)   # → {"role": "admin", ...}
 mgr.revoke(key)     # → True
 ```
 
-### Anomaly Detection (v0.6.0)
+### Anomaly Detection (v0.7.0)
 
 - Tracks failed auth attempts per key hash
 - Auto-revokes after `max_failures` within `failure_window_seconds`
@@ -108,6 +108,46 @@ mgr.revoke(key)     # → True
 
 ```python
 logger.export_json_file("/var/log/zelos/audit.json")
+```
+
+---
+
+## Distributed Coordination (v0.7.0)
+
+### etcd Backend
+
+```python
+from zelos.coordination import EtcdCoordinationBackend, CoordinationNode
+
+backend = EtcdCoordinationBackend({"endpoints": "localhost:2379", "prefix": "/zelos/"})
+backend.connect()
+backend.register_node(CoordinationNode(node_id="node-1", host="10.0.0.1", port=9001))
+backend.elect_leader("node-1", ttl_seconds=30)
+leader = backend.get_leader()  # → "node-1"
+backend.heartbeat("node-1")    # renew lease
+```
+
+### NATS Message Bus
+
+```python
+from zelos.messaging_nats import NatsMessageBus
+
+bus = NatsMessageBus({"servers": ["nats://localhost:4222"]})
+bus.connect()
+bus.subscribe("zelos.events", lambda data, headers: process(data))
+bus.publish("zelos.events", {"event_type": "task.completed"})
+```
+
+### Go SDK
+
+```bash
+go get github.com/zelos/zelos-go
+```
+
+```go
+c := client.New("http://localhost:9876", "zk-client-dev")
+health, _ := c.Health()
+goal, _ := c.SubmitGoal("Build a landing page", "high")
 ```
 
 ---

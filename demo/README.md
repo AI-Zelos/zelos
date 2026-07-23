@@ -1,6 +1,6 @@
 # Zelos Demo 合集
 
-21 个可运行的端到端示例，覆盖 v0.6.0 全部功能。只需配置 LLM API Key 即可运行需要 LLM 的 Demo。
+21 个可运行的端到端示例，覆盖 v0.7.0 全部功能。只需配置 LLM API Key 即可运行需要 LLM 的 Demo。
 
 ## 快速开始
 

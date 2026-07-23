@@ -371,7 +371,7 @@ class ZelosHTTPHandler(BaseHTTPRequestHandler):
                         "agent_id": agent_id,
                         "status": "registered",
                         "heartbeat_interval_ms": 30000,
-                        "runtime_version": "0.3.0",
+                        "runtime_version": "0.7.0",
                     },
                 )
 
