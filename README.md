@@ -614,6 +614,33 @@ See [ROADMAP.md](ROADMAP.md) for detailed milestones.
 
 ---
 
+## Documentation
+
+### Online (Gitee Pages)
+
+API docs are published via Gitee Pages at the project's Pages URL.
+
+To enable:
+1. Go to **Gitee repo → Services → Gitee Pages**
+2. Set deployment directory to `public/`
+3. Click **Enable**
+
+To regenerate after code changes:
+```bash
+make docs    # generates to public/
+git add public/ && git commit -m "docs: regenerate API docs"
+git push
+```
+
+### Local
+
+```bash
+make docs
+open public/index.html
+```
+
+---
+
 ## License
 
 Apache 2.0

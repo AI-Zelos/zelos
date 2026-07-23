@@ -10,6 +10,7 @@ help:
 	@echo "  make lint       Check code with Ruff"
 	@echo "  make format     Auto-format code with Ruff"
 	@echo "  make check      Run lint + test (CI pipeline)"
+	@echo "  make docs       Generate API docs to public/"
 	@echo "  make build      Build Docker image"
 	@echo "  make run        Start Runtime via Docker Compose"
 	@echo "  make clean      Remove build artifacts"
@@ -48,6 +49,11 @@ run-storage:
 
 stop:
 	docker compose down
+
+# ── Docs ──
+docs:
+	python3 -m pdoc zelos zelos_sdk -o public --docformat google
+	@echo "✅ Docs generated in public/"
 
 # ── Clean ──
 clean:
