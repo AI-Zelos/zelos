@@ -1,50 +1,72 @@
 # Zelos
 
-> An Open Multi-Agent Orchestration Runtime.
+> The missing operating system for the multi-agent era.
 
-**Status:** Phase 7 Complete · **Version:** 0.7.0
+**Status:** Phase 7 Complete · **Version:** 0.7.0 · **78 Tests** · **3 SDKs** · **Apache 2.0**
+
+<p align="center">
+  <b>Linux manages Processes. Kubernetes manages Containers. Zelos manages Goals.</b>
+</p>
 
 ---
 
-## Why
+## Why Zelos Exists
 
-Modern AI applications are no longer single-model systems. A single request may require planning, research, coding, browser automation, database queries, verification, and human approval — each provided by a different agent.
+**The hard problem in AI is no longer building a good agent. The hard problem is running a hundred of them — safely.**
 
-The problem is no longer **how to build an agent**. It is **how to reliably orchestrate hundreds of independent, heterogeneous agents to achieve a goal**.
+A single user request in 2026 can trigger planning, research, coding, browser automation, SQL queries, verification, and human approval. Each step is a different agent, built by a different team, using a different stack.
 
-No existing system solves this. Agent frameworks (LangGraph, CrewAI) couple agent construction with orchestration. Workflow engines (Temporal, Airflow) are designed for deterministic code, not autonomous agents. Manual scripting does not scale.
+Nobody planned for this. We got:
+- **LangGraph / CrewAI / AutoGen** — agent construction kits. They help you _build_ agents, but they don't _run_ them.
+- **Temporal / Airflow** — workflow engines for deterministic code. Autonomous agents are anything but deterministic.
+- **MCP / A2A** — communication protocols. They let agents talk, but don't govern what they do.
 
-Zelos exists to be the missing layer: the Runtime that sits between a Goal and the Agents that fulfill it.
+All three miss the same thing: **there is no runtime that plans, schedules, verifies, and audits multi-agent execution.**
+
+Zelos is that runtime.
 
 ---
 
 ## What Zelos Is
 
-Zelos is a **Runtime** — the same way Linux manages processes, Kubernetes manages containers, and Temporal manages workflows.
+Zelos is **infrastructure**, not a framework. It sits beneath your agents — the same way an OS sits beneath your processes.
 
-| System | Unit | What It Manages |
-|--------|------|-----------------|
-| Linux | Process | CPU, Memory, I/O |
-| Kubernetes | Container | Scheduling, Scaling, Networking |
-| Temporal | Workflow | Execution, Retry, State |
-| **Zelos** | **Goal** | **Planning, Scheduling, Multi-Agent Coordination, Verification** |
+| If you're building... | You need... | Zelos provides... |
+|----------------------|-------------|-------------------|
+| 5 agents in a script | A `for` loop | Overkill — don't use Zelos |
+| 20 agents across 3 teams | A scheduler | Goal → Plan → Task DAG → auto-dispatch |
+| 100 agents in production | A runtime | Distributed coordination, failover, retry, audit |
+| 500+ agents as a service | An OS | Multi-tenancy, quotas, billing audit, compliance |
 
-Zelos does not build agents. Zelos runs them.
+**Zelos does not build agents. Zelos runs them, governs them, and keeps the receipts.**
+
+---
+
+## When to Use Zelos
+
+| Scenario | Why Zelos |
+|----------|-----------|
+| 🤖 **AI-powered SaaS platform** — your product uses 10+ specialized agents behind a single API | You need a scheduler that picks the right agent, retries on failure, and tracks cost per request. You don't want every agent directly calling every other agent. |
+| 🏢 **Enterprise AI transformation** — multiple departments deploy agents that need to collaborate cross-team | You need namespace isolation (Finance can't touch Engineering's agents), RBAC, and an audit trail that your compliance team can actually read. |
+| 🔒 **Regulated industry** (finance, healthcare, legal) — AI agents handling sensitive workflows | You need every agent action to be immutable and replayable. EU AI Act / SOC2 auditors don't accept "trust me bro." Zelos gives you a cryptographic audit chain. |
+| 🧪 **AI research lab** — evaluating governance vs. ungoverned multi-agent systems | You need a test harness that can run the same workload with and without governance, then compare failure rates, cost, and Byzantine resilience. |
+| 🏗️ **Agent infrastructure provider** — building a platform where third-party agents can register and get discovered | You already have the kernel of an Agent Marketplace. Capability Registry = agent search. ScoringStrategy = ranking. EventBus = billing audit. |
+| ⚡ **High-reliability automation** — CI/CD, incident response, data pipelines with AI steps | You need retry logic, timeouts, dead-letter queues, and the ability to hot-join agents without restarting the pipeline. |
 
 ---
 
 ## What Zelos Is NOT
 
-Zelos explicitly rejects these categories:
+Zelos explicitly rejects these categories — and that's its strength:
 
-| NOT | Why |
-|-----|-----|
-| Agent Framework | Does not prescribe how to build agents |
-| Workflow Engine | Does not define static DAGs; plans are goal-derived and dynamic |
-| Prompt Framework | Does not manage prompts; agents own prompting |
-| LLM Wrapper | Does not abstract model APIs; Runtime knows nothing about LLMs |
-| LangGraph / CrewAI Alternative | These are agent construction toolkits; Zelos is infrastructure |
-| Marketplace / SaaS | These are future ecosystem projects |
+| NOT | Why that matters |
+|-----|-----------------|
+| Agent Framework | We don't tell you how to build agents. Bring any agent — Python, Go, TypeScript, curl. |
+| Workflow Engine | We don't force static DAGs. Plans are goal-derived, dynamic, and replan on failure. |
+| Prompt Framework | We don't touch your prompts. Your agent owns its LLM interaction end-to-end. |
+| LLM Wrapper | The Runtime knows nothing about GPT, Claude, or Gemini. LLM-agnostic by design. |
+| LangGraph / CrewAI Alternative | Those are agent _construction_ toolkits. Zelos is agent _infrastructure_. Complementary. |
+| SaaS / Marketplace | Those are future ecosystem projects on top of Zelos. The Runtime comes first.
 
 ---
 
@@ -604,13 +626,17 @@ See [ROADMAP.md](ROADMAP.md) for detailed milestones.
 
 ## Design Philosophy
 
-- **Runtime First** — The Runtime owns everything; agents are plugins
-- **Capability First** — Dispatch by what, never by who
-- **Execution Plan First** — Plan exists before any agent is invoked
-- **Specification First** — Code follows specification, never the reverse
-- **Event Driven** — Every state change is an event; no direct calls between components
-- **Plugin Architecture** — Everything above the Kernel is replaceable
-- **Cloud Native** — Designed for distributed operation from day one
+> Zelos is built on 15 non-negotiable Architecture Invariants. Every line of code must conform.
+
+- **Runtime First** — The Runtime owns everything; agents are execution plugins only
+- **Capability First** — Dispatch by _what_ (capability name), never by _who_ (agent name)
+- **Execution Plan First** — A Plan exists before any agent is invoked; no agent can bypass it
+- **Event Driven** — Every state change is an immutable event; no component communicates directly
+- **Plugin Architecture** — The Kernel is sealed. Planner, Verifier, Policy, Memory, Storage — all replaceable
+- **Specification First** — Code follows specification. Schema changes require version bumps
+- **Cloud Native** — Designed for distributed, multi-node operation from Phase 1
+
+[Full Architecture Invariants →](docs/architecture/invariants.md)
 
 ---
 
