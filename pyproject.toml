@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "zelos"
+name = "zelos-runtime"
 version = "0.7.0"
 description = "The missing operating system for the multi-agent era"
 readme = "README.md"

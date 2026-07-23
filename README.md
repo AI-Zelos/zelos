@@ -217,13 +217,13 @@ plugins:
 ## Install
 
 ```bash
-pip install zelos
+pip install zelos-runtime
 ```
 
 Zelos core has **zero external dependencies** — pure Python stdlib. That's engineering philosophy.
 
 ```bash
-pip install "zelos[dev]"    # adds pytest + ruff
+pip install "zelos-runtime[dev]"    # adds pytest + ruff
 ```
 
 ---
