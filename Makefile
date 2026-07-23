@@ -1,4 +1,4 @@
-.PHONY: help dev test lint format check build run clean
+.PHONY: help dev test lint format check build run clean docs
 
 # ── Default ──
 help:
