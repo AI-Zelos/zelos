@@ -15,17 +15,19 @@ class TaskStatus(Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     TIMED_OUT = "timed_out"
+    FATAL_FAILED = "fatal_failed"  # v0.8.0: non-retryable terminal failure
 
 
 VALID_TRANSITIONS = {
     TaskStatus.CREATED: {TaskStatus.READY, TaskStatus.CANCELLED},
-    TaskStatus.READY: {TaskStatus.ASSIGNED, TaskStatus.CANCELLED, TaskStatus.FAILED},
-    TaskStatus.ASSIGNED: {TaskStatus.STARTED, TaskStatus.READY, TaskStatus.CANCELLED},
-    TaskStatus.STARTED: {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.TIMED_OUT, TaskStatus.CANCELLED},
-    TaskStatus.FAILED: {TaskStatus.READY},
-    TaskStatus.TIMED_OUT: {TaskStatus.READY},
+    TaskStatus.READY: {TaskStatus.ASSIGNED, TaskStatus.CANCELLED, TaskStatus.FAILED, TaskStatus.FATAL_FAILED},
+    TaskStatus.ASSIGNED: {TaskStatus.STARTED, TaskStatus.READY, TaskStatus.CANCELLED, TaskStatus.FATAL_FAILED},
+    TaskStatus.STARTED: {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.TIMED_OUT, TaskStatus.CANCELLED, TaskStatus.FATAL_FAILED},
+    TaskStatus.FAILED: {TaskStatus.READY, TaskStatus.FATAL_FAILED},
+    TaskStatus.TIMED_OUT: {TaskStatus.READY, TaskStatus.FATAL_FAILED},
     TaskStatus.COMPLETED: set(),  # Terminal
     TaskStatus.CANCELLED: set(),  # Terminal
+    TaskStatus.FATAL_FAILED: set(),  # v0.8.0: Terminal — no recovery
 }
 
 
@@ -51,8 +53,68 @@ class Task:
     required_tags: list[str] = field(default_factory=list)
     max_cost_per_call: float | None = None
     max_latency_ms: int | None = None
+    non_retryable_errors: list[str] = field(default_factory=list)  # v0.8.0
     created_at: float = 0.0
     updated_at: float = 0.0
+
+    # ═══ v0.8.0: Serialization ═══
+
+    def to_dict(self) -> dict:
+        """Serialize Task to a dictionary for persistence."""
+        return {
+            "task_id": self.task_id,
+            "plan_id": self.plan_id,
+            "description": self.description,
+            "required_capability": self.required_capability,
+            "status": self.status.value,
+            "dependencies": list(self.dependencies),
+            "dependents": list(self.dependents),
+            "attempt": self.attempt,
+            "max_retries": self.max_retries,
+            "backoff_base_ms": self.backoff_base_ms,
+            "timeout_ms": self.timeout_ms,
+            "assigned_agent_id": self.assigned_agent_id,
+            "priority": self.priority,
+            "fallback_capability": self.fallback_capability,
+            "preferred_agent_id": self.preferred_agent_id,
+            "excluded_agent_ids": list(self.excluded_agent_ids),
+            "min_success_rate": self.min_success_rate,
+            "required_tags": list(self.required_tags),
+            "max_cost_per_call": self.max_cost_per_call,
+            "max_latency_ms": self.max_latency_ms,
+            "non_retryable_errors": list(self.non_retryable_errors),
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Task":
+        """Deserialize a Task from a dictionary."""
+        return cls(
+            task_id=d["task_id"],
+            plan_id=d["plan_id"],
+            description=d["description"],
+            required_capability=d["required_capability"],
+            status=TaskStatus(d.get("status", "created")),
+            dependencies=list(d.get("dependencies", [])),
+            dependents=list(d.get("dependents", [])),
+            attempt=int(d.get("attempt", 0)),
+            max_retries=int(d.get("max_retries", 3)),
+            backoff_base_ms=int(d.get("backoff_base_ms", 1000)),
+            timeout_ms=int(d.get("timeout_ms", 30000)),
+            assigned_agent_id=d.get("assigned_agent_id"),
+            priority=d.get("priority", "medium"),
+            fallback_capability=d.get("fallback_capability"),
+            preferred_agent_id=d.get("preferred_agent_id"),
+            excluded_agent_ids=list(d.get("excluded_agent_ids", [])),
+            min_success_rate=float(d.get("min_success_rate", 0.0)),
+            required_tags=list(d.get("required_tags", [])),
+            max_cost_per_call=d.get("max_cost_per_call"),
+            max_latency_ms=d.get("max_latency_ms"),
+            non_retryable_errors=list(d.get("non_retryable_errors", [])),
+            created_at=float(d.get("created_at", 0.0)),
+            updated_at=float(d.get("updated_at", 0.0)),
+        )
 
 
 class TaskGraphEngine:

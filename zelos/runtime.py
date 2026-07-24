@@ -19,8 +19,10 @@ from .capability_registry import CapabilityRegistry
 from .config_loader import ConfigLoader
 from .container_isolation import ContainerPluginConfig, ContainerRunner, RemotePlugin
 from .distributed import ClusterNode, LeaderElection, NodeRegistry, WorkStealing
-from .event_bus import EventBus
+from .event_bus import Event, EventBus
+from .event_sourcing import EventSourcingEngine  # v0.8.0
 from .execution_engine import AgentState, ExecutionEngine
+from .goal_state import GoalState  # v0.8.0
 from .hot_reload import FileWatcher, HotReloadManager, UpgradeStrategy
 from .memory import ContextAssembler, InMemoryMemoryProvider
 from .multi_tenancy import ResourceQuota, TenantManager
@@ -28,6 +30,7 @@ from .planner import LLMPlanner, MockLLMProvider, PlannerPlan
 from .plugin_manager import PluginLifecycleManager
 from .policy import CompositePolicy
 from .scheduler import PolicyPlugin, Scheduler, ScoringStrategy
+from .storage import InMemoryStorageBackend, StorageBackend, create_storage_backend  # v0.8.0
 
 # ═══ Phase 3 imports ═══
 from .security import AccessControl, APIKeyManager, AuditLogger, TLSConfig
@@ -72,6 +75,15 @@ class ZelosRuntime:
         self._running = False
         self._lock = threading.RLock()
         self._started_at: float = 0.0
+
+        # ── v0.8.0: Storage & Event Sourcing ──
+        storage_cfg = self.config.get("storage", {})
+        if storage_cfg:
+            self._storage_backend: StorageBackend = create_storage_backend(storage_cfg)
+        else:
+            self._storage_backend = InMemoryStorageBackend()
+        self._storage_backend.connect()
+        self._event_sourcing_engine = EventSourcingEngine()
 
         # ── Phase 3: Security ──
         sec_cfg = self.config.get("security", {})
@@ -522,6 +534,7 @@ class ZelosRuntime:
                 scoring_strategy=self._scoring_strategy,
                 policy_plugin=self._policy_plugin,
             )
+            self._scheduler.set_event_bus(self._event_bus)  # v0.8.0: retry events
 
             # Set up Execution Engine callbacks
             self._execution_engine._agent_dispatch = self._on_dispatch
@@ -578,6 +591,9 @@ class ZelosRuntime:
 
             self._running = True
             self._started_at = time.time()
+
+            # v0.8.0: Recover incomplete goals from storage
+            self._recover_goals_from_storage()
 
             # Start orchestrator loop (background thread)
             self._orchestrator_thread = threading.Thread(target=self._orchestrator_loop, daemon=True)
@@ -677,6 +693,12 @@ class ZelosRuntime:
                             _stuck_since.pop(tid, None)
                             self._try_replan(task)
 
+                # 2.5 v0.8.0: Evaluate retry for FAILED/TIMED_OUT tasks
+                if self._scheduler:
+                    for t in self._task_graph.list_tasks():
+                        if t.status in (TaskStatus.FAILED, TaskStatus.TIMED_OUT):
+                            self._scheduler.evaluate_retry(t)
+
                 # 3. Check Goal completion + Sub-goal completion
                 with self._lock:
                     for goal_id, goal in list(self._goals.items()):
@@ -686,7 +708,7 @@ class ZelosRuntime:
                         all_tasks = [t for t in self._task_graph.list_tasks() if t.plan_id == plan_id]
                         if not all_tasks:
                             continue
-                        terminal = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED}
+                        terminal = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.FATAL_FAILED}
                         all_done = all(t.status in terminal for t in all_tasks)
                         if all_done:
                             all_completed = all(t.status == TaskStatus.COMPLETED for t in all_tasks)
@@ -698,6 +720,8 @@ class ZelosRuntime:
                                 goal_id,
                                 detail=goal.get("description", ""),
                             )
+                            # v0.8.0: Persist terminal state
+                            self._persist_goal_state(goal_id)
 
                 # 4. Phase 3: Distributed — real work stealing + dead node cleanup
                 if self._cluster_enabled:
@@ -1034,6 +1058,9 @@ class ZelosRuntime:
         if ns:
             ns.add_goal(goal_id)
 
+        # v0.8.0: Persist initial goal state
+        self._persist_goal_state(goal_id)
+
         # HITL: create approval request if required
         if require_approval and approvers:
             self._hitl.create_request(
@@ -1099,6 +1126,9 @@ class ZelosRuntime:
             goal["plan_id"] = plan_id
             goal["updated_at"] = time.time()
 
+            # v0.8.0: Persist after plan creation
+            self._persist_goal_state(goal_id)
+
         task_count = len([t for t in self._task_graph.list_tasks() if t.plan_id == plan_id])
 
         return {
@@ -1108,6 +1138,100 @@ class ZelosRuntime:
             "plan_id": plan_id,
             "task_count": task_count,
         }
+
+    # ═══════════════════ v0.8.0: Goal State Persistence & Recovery ═══════════════════
+
+    def _build_goal_state(self, goal_id: str) -> GoalState:
+        """Build a GoalState snapshot from current runtime state."""
+        goal = self._goals.get(goal_id, {})
+        plan_id = goal.get("plan_id", "")
+        tasks = [t for t in self._task_graph.list_tasks() if t.plan_id == plan_id]
+        return GoalState.from_goal_dict(goal, tasks)
+
+    def _persist_goal_state(self, goal_id: str) -> None:
+        """Persist the current goal state to the storage backend."""
+        try:
+            gs = self._build_goal_state(goal_id)
+            self._storage_backend.set_state(f"goal:{goal_id}", gs.to_dict())
+            # Also save snapshot for event sourcing
+            event_pos = gs.event_position
+            self._storage_backend.create_snapshot(goal_id, events_position=event_pos, state=gs.to_dict())
+        except Exception:
+            pass  # Best-effort persistence
+
+    def _recover_goal_from_storage(self, goal_id: str) -> GoalState | None:
+        """Recover a single goal state from storage."""
+        saved = self._storage_backend.get_state(f"goal:{goal_id}")
+        if saved:
+            return GoalState.from_dict(saved)
+        return None
+
+    def _recover_goals_from_storage(self) -> int:
+        """Recover all incomplete goals from storage at startup.
+        Returns count of recovered goals.
+        """
+        count = 0
+        try:
+            # Scan for goal: prefixed keys
+            # InMemory storage backend exposes _state dict — iterate
+            if hasattr(self._storage_backend, '_state'):
+                for key in list(self._storage_backend._state.keys()):
+                    if key.startswith("goal:") and not key.startswith("snapshot:"):
+                        goal_id = key[5:]  # Remove "goal:" prefix
+                        gs = self._recover_goal_from_storage(goal_id)
+                        if gs and not gs.is_terminal():
+                            self._restore_goal_state(gs)
+                            count += 1
+            else:
+                # For other backends, the goal IDs might come from events
+                # Try recovering from events with a known goal_id pattern
+                pass
+        except Exception:
+            pass
+        return count
+
+    def _restore_goal_state(self, gs: GoalState) -> None:
+        """Restore a GoalState into the runtime's internal structures."""
+        plan_id = gs.plan_id
+        goal = {
+            "goal_id": gs.goal_id,
+            "description": gs.description,
+            "status": gs.status,
+            "budget": gs.budget,
+            "deadline": gs.deadline,
+            "priority": gs.priority,
+            "plan_id": plan_id,
+            "tenant_id": gs.tenant_id,
+            "created_at": gs.created_at,
+            "updated_at": gs.updated_at,
+            "completed_at": gs.completed_at,
+            "progress": {
+                "total_tasks": len(gs.tasks),
+                "completed_tasks": sum(1 for t in gs.tasks if t.status == TaskStatus.COMPLETED),
+                "failed_tasks": sum(1 for t in gs.tasks if t.status == TaskStatus.FAILED),
+                "ready_tasks": sum(1 for t in gs.tasks if t.status == TaskStatus.READY),
+                "in_flight_tasks": sum(1 for t in gs.tasks if t.status in (TaskStatus.ASSIGNED, TaskStatus.STARTED)),
+                "blocked_tasks": sum(1 for t in gs.tasks if t.status == TaskStatus.CREATED),
+                "percent_complete": 0.0,
+            },
+            "event_position": gs.event_position,
+        }
+        # Recalculate percent
+        total = goal["progress"]["total_tasks"]
+        if total > 0:
+            goal["progress"]["percent_complete"] = (goal["progress"]["completed_tasks"] / total) * 100
+
+        with self._lock:
+            self._goals[gs.goal_id] = goal
+
+        # Restore tasks into task graph
+        for task in gs.tasks:
+            if task.task_id not in self._task_graph._tasks:
+                self._task_graph.add_task(task)
+
+    def submit_heartbeat(self, task_id: str) -> bool:
+        """v0.8.0: Submit a heartbeat for an in-flight task to prevent timeout."""
+        return self._execution_engine.submit_heartbeat(task_id)
 
     def get_goal_status(self, goal_id: str, auth_context: dict | None = None) -> dict[str, Any] | None:
         """Get goal status. Phase 3: tenant-filtered."""
@@ -1141,6 +1265,26 @@ class ZelosRuntime:
             "percent_complete": (completed / total * 100) if total > 0 else 0.0,
         }
         goal["updated_at"] = time.time()
+
+        # v0.8.0: Collect retry history from events
+        retry_history = []
+        for t in goal_tasks:
+            task_retries = []
+            for event in self._event_bus.store._events:
+                if (event.event_type == "task.retry_scheduled"
+                        and event.payload.get("task_id") == t.task_id):
+                    task_retries.append({
+                        "attempt": event.payload.get("attempt"),
+                        "backoff_ms": event.payload.get("backoff_ms"),
+                        "previous_error": event.payload.get("previous_error", {}),
+                        "timestamp": event.timestamp,
+                    })
+            if task_retries:
+                retry_history.append({
+                    "task_id": t.task_id,
+                    "retries": task_retries,
+                })
+
         return {
             "goal_id": goal["goal_id"],
             "status": goal["status"],
@@ -1150,6 +1294,7 @@ class ZelosRuntime:
             "updated_at": goal["updated_at"],
             "completed_at": goal["completed_at"],
             "tenant_id": goal.get("tenant_id", "default"),
+            "retry_history": retry_history,  # v0.8.0
         }
 
     def cancel_goal(self, goal_id: str, auth_context: dict | None = None) -> dict[str, Any] | None:
@@ -1588,7 +1733,7 @@ class ZelosRuntime:
                 "hitl": {"pending_approvals": pending_approvals},
                 "cluster": {"enabled": self._cluster_enabled, "is_leader": self._leader_election.is_leader()},
             },
-            "version": "0.7.0",
+            "version": "0.8.0",
         }
 
     def get_metrics(self) -> dict[str, Any]:

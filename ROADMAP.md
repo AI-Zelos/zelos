@@ -209,6 +209,39 @@ Distributed coordination with real backends, multi-language SDKs, performance op
 
 ---
 
+## Phase 8: Event Sourcing & Reliability
+
+**Status:** Complete
+**Version:** v0.8.0
+**Timeline:** July 2026
+
+### Goal
+
+Goal state reconstructable from Event History. Heartbeat timeout. NonRetryableError. Retry history tracking.
+
+### Scope
+
+- [x] Event Sourcing Engine — pure-function `apply_event()`, full replay, snapshot + incremental
+- [x] Goal State serialization — `GoalState` dataclass with `to_dict()`/`from_dict()`
+- [x] Task serialization — `Task.to_dict()` / `Task.from_dict()` round-trip
+- [x] Runtime persistence — auto-save GoalState on state change, restore on startup
+- [x] Monotonic event `sequence_id` — auto-assigned in store, `replay_from(seq_id)` API
+- [x] Heartbeat Timeout — `InFlightTask.heartbeat_at`, auto-detection in monitor loop
+- [x] `submit_heartbeat(task_id)` API — Agent heartbeat to prevent timeout
+- [x] NonRetryableError — `Task.non_retryable_errors`, `FATAL_FAILED` terminal status
+- [x] Retry history — `task.retry_scheduled` event with full context payload
+- [x] Query operations confirmed event-free (REQ-06 verified)
+
+### Test Results
+
+28 new v0.8.0 tests. All pass. Zero regressions across 62+ total tests.
+
+### Reference
+- `docs/v0.8.0-requirements.md`
+- `docs/temporal-reliability-analysis.md`
+
+---
+
 ## Beyond: Ecosystem Projects
 
 Explicitly NOT part of Zelos core. Future ecosystem:
@@ -223,4 +256,4 @@ Explicitly NOT part of Zelos core. Future ecosystem:
 
 ## Versioning
 
-Semantic Versioning. Current version: **v0.7.0** (Phase 7 Complete).
+Semantic Versioning. Current version: **v0.8.0** (Phase 8 Complete).

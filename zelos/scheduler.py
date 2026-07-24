@@ -97,7 +97,10 @@ class DefaultPolicy(PolicyPlugin):
 
 
 class Scheduler:
-    """Kernel component — 5-phase scheduler."""
+    """Kernel component — 5-phase scheduler.
+
+    v0.8.0: Publishes task.retry_scheduled events on retry.
+    """
 
     def __init__(
         self,
@@ -110,12 +113,17 @@ class Scheduler:
         self._registry = capability_registry
         self._scoring = scoring_strategy or DefaultScoringStrategy()
         self._policy = policy_plugin or DefaultPolicy()
+        self._event_bus = None  # v0.8.0: set via set_event_bus()
 
     def set_scoring_strategy(self, strategy: ScoringStrategy) -> None:
         self._scoring = strategy
 
     def set_policy(self, policy: PolicyPlugin) -> None:
         self._policy = policy
+
+    def set_event_bus(self, event_bus) -> None:
+        """v0.8.0: Inject EventBus for publishing retry events."""
+        self._event_bus = event_bus
 
     # ── Main Entry Point ──
 
@@ -229,15 +237,48 @@ class Scheduler:
 
     # ── Retry ──
 
-    def evaluate_retry(self, task: Task) -> str | None:
-        """Returns 'retry' if task should be retried, None if exhausted."""
+    def evaluate_retry(self, task: Task, previous_error: dict | None = None) -> str | None:
+        """Returns 'retry' if task should be retried, None if exhausted.
+
+        v0.8.0:
+          - Skips retry for FATAL_FAILED tasks (terminal).
+          - Publishes task.retry_scheduled event to EventBus on retry.
+          - Accepts previous_error dict for event payload.
+        """
+        # v0.8.0: FATAL_FAILED is terminal — no retry
+        if task.status == TaskStatus.FATAL_FAILED:
+            return None
+
         task.attempt += 1
         if task.attempt <= task.max_retries:
             backoff_ms = task.backoff_base_ms * (2 ** (task.attempt - 1)) + random.randint(0, 500)
-            if task.status == TaskStatus.FAILED:
+            if task.status in (TaskStatus.FAILED, TaskStatus.TIMED_OUT):
                 self._task_graph.transition(task.task_id, TaskStatus.READY)
+
+            # v0.8.0: Publish retry event
+            if self._event_bus:
+                import time
+                import uuid
+
+                from .event_bus import Event
+
+                retry_event = Event(
+                    event_id=str(uuid.uuid4()),
+                    event_type="task.retry_scheduled",
+                    source="scheduler",
+                    timestamp=time.time(),
+                    correlation_id=task.plan_id,
+                    payload={
+                        "task_id": task.task_id,
+                        "attempt": task.attempt,
+                        "backoff_ms": backoff_ms,
+                        "plan_id": task.plan_id,
+                        "previous_error": previous_error or {},
+                    },
+                )
+                self._event_bus.publish(retry_event)
             return f"retry_in_{backoff_ms}ms"
         else:
-            if task.status != TaskStatus.FAILED:
+            if task.status not in (TaskStatus.FAILED, TaskStatus.FATAL_FAILED):
                 self._task_graph.transition(task.task_id, TaskStatus.FAILED)
             return None

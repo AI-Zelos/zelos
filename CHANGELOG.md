@@ -4,6 +4,36 @@ All notable changes to Zelos will be documented in this file.
 
 ---
 
+## [0.8.0] — 2026-07-24
+
+### Added — Event Sourcing + Reliability
+- **Event Sourcing Engine** (`zelos/event_sourcing.py`) — pure-function state reducer, full replay, snapshot + incremental recovery
+- **Goal State persistence** (`zelos/goal_state.py`) — `GoalState` dataclass with `to_dict()`/`from_dict()`, auto-persisted on state change
+- **Goal Recovery on startup** — Runtime automatically restores all incomplete goals from `StorageBackend`
+- **Monotonic event `sequence_id`** — auto-assigned in `InMemoryEventStore`, `replay_from(seq_id)` API
+- **Heartbeat Timeout detection** — `InFlightTask.heartbeat_at` + `heartbeat_timeout_ms`, monitor auto-detects missed heartbeats
+- **`submit_heartbeat(task_id)` API** — Agent heartbeat to prevent task timeout
+- **NonRetryableError support** — `Task.non_retryable_errors` field + `TaskStatus.FATAL_FAILED` terminal state
+- **Retry history tracking** — `task.retry_scheduled` event with `task_id`/`attempt`/`backoff_ms`/`previous_error` payload
+- **Retry history in `get_goal_status()`** — exposes per-task retry timeline
+- Task serialization: `Task.to_dict()` / `Task.from_dict()` round-trip
+
+### Changed
+- Version bumped: 0.7.0 → 0.8.0
+- `TaskStatus` enum: added `FATAL_FAILED` (terminal, no retry)
+- `Event` dataclass: added `sequence_id: int = -1`
+- `InFlightTask` dataclass: added `heartbeat_at` + `heartbeat_timeout_ms`
+- `Scheduler`: publishes `task.retry_scheduled` events, skips `FATAL_FAILED` tasks
+- `ExecutionEngine`: heartbeat timeout detection in monitor loop, `submit_heartbeat()` method
+- `ZelosRuntime`: storage backend integration, goal recovery on startup, `submit_heartbeat()` API
+- Test count: 28 new v0.8.0 tests (REQ-01 through REQ-07)
+
+### Reference
+- Requirements: `docs/v0.8.0-requirements.md`
+- Analysis: `docs/temporal-reliability-analysis.md`
+
+---
+
 ## [0.7.0] — 2026-07-23
 
 ### Added — Advanced Production

@@ -18,6 +18,8 @@ class InFlightTask:
     agent_name: str
     started_at: float
     timeout_at: float
+    heartbeat_at: float = 0.0  # v0.8.0: last heartbeat timestamp
+    heartbeat_timeout_ms: int = 30000  # v0.8.0: heartbeat timeout in ms
 
 
 @dataclass
@@ -99,12 +101,15 @@ class ExecutionEngine:
 
         with self._lock:
             self._task_graph.transition(task_id, TaskStatus.STARTED, agent_id=agent_id)
+            hb_timeout = getattr(task, 'heartbeat_timeout_ms', 0) or agent.heartbeat_interval_ms * 3
             in_flight = InFlightTask(
                 task_id=task_id,
                 agent_id=agent_id,
                 agent_name=agent.agent_name,
                 started_at=time.time(),
                 timeout_at=time.time() + (task.timeout_ms / 1000),
+                heartbeat_at=time.time(),  # v0.8.0
+                heartbeat_timeout_ms=hb_timeout,  # v0.8.0
             )
             self._in_flight[task_id] = in_flight
             agent.current_tasks.append(task_id)
@@ -130,6 +135,8 @@ class ExecutionEngine:
     def submit_result(self, task_id: str, agent_id: str, result: dict) -> bool:
         """
         Agent returns task result. result = {status: "completed"|"failed", artifact?: ..., error?: ...}
+
+        v0.8.0: If error code matches task.non_retryable_errors, transition to FATAL_FAILED.
         """
         with self._lock:
             inflight = self._in_flight.pop(task_id, None)
@@ -147,8 +154,23 @@ class ExecutionEngine:
                     self._task_graph.transition(task_id, TaskStatus.COMPLETED)
                 except ValueError:
                     return False
-                agent.total_completed += 1 if agent else 0
+                if agent:
+                    agent.total_completed += 1
             else:
+                # v0.8.0: Check non_retryable_errors
+                task = self._task_graph.get_task(task_id)
+                error_code = (result.get("error") or {}).get("code", "")
+                if task and error_code and task.non_retryable_errors:
+                    if error_code in task.non_retryable_errors:
+                        try:
+                            self._task_graph.transition(task_id, TaskStatus.FATAL_FAILED)
+                        except ValueError:
+                            # Fallback: if FATAL_FAILED transition not valid, use FAILED
+                            self._task_graph.transition(task_id, TaskStatus.FAILED)
+                        if agent:
+                            agent.total_failed += 1
+                        return True
+                # Normal failure
                 try:
                     self._task_graph.transition(task_id, TaskStatus.FAILED)
                 except ValueError:
@@ -175,6 +197,41 @@ class ExecutionEngine:
                 return True
         return False
 
+    # ── v0.8.0: Heartbeat ──
+
+    def submit_heartbeat(self, task_id: str, agent_id: str = "") -> bool:
+        """v0.8.0: Update heartbeat timestamp for an in-flight task."""
+        with self._lock:
+            ft = self._in_flight.get(task_id)
+            if not ft:
+                return False
+            if agent_id and ft.agent_id != agent_id:
+                return False
+            ft.heartbeat_at = time.time()
+            return True
+
+    def _check_heartbeat_timeouts(self) -> list[str]:
+        """v0.8.0: Check for heartbeat timeouts, transition tasks to FAILED.
+        Returns list of task_ids that timed out due to heartbeat.
+        """
+        now = time.time()
+        timed_out = []
+        with self._lock:
+            for tid, ft in list(self._in_flight.items()):
+                if ft.heartbeat_timeout_ms > 0:
+                    timeout_at = ft.heartbeat_at + (ft.heartbeat_timeout_ms / 1000)
+                    if now >= timeout_at:
+                        try:
+                            self._task_graph.transition(tid, TaskStatus.FAILED)
+                        except ValueError:
+                            pass
+                        self._in_flight.pop(tid, None)
+                        agent = self._agents.get(ft.agent_id)
+                        if agent and tid in agent.current_tasks:
+                            agent.current_tasks.remove(tid)
+                        timed_out.append(tid)
+        return timed_out
+
     # ── Timeout Monitor ──
 
     def start_monitor(self) -> None:
@@ -196,7 +253,11 @@ class ExecutionEngine:
                 except ValueError:
                     pass
                 self._in_flight.pop(tid, None)
-            # Heartbeat check
+
+            # v0.8.0: Heartbeat timeout check
+            self._check_heartbeat_timeouts()
+
+            # Agent heartbeat check
             with self._lock:
                 for agent in list(self._agents.values()):
                     if agent.status == "heartbeating":

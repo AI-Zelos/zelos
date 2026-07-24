@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zelos-runtime"
-version = "0.7.0"
+version = "0.8.0"
 description = "The missing operating system for the multi-agent era"
 readme = "README.md"
 license = "Apache-2.0"

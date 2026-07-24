@@ -28,6 +28,7 @@ class Event:
     payload: dict[str, Any] = field(default_factory=dict)
     causation_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    sequence_id: int = -1  # v0.8.0: monotonic sequence id, -1 = unassigned
 
     _frozen: bool = field(default=False, repr=False)
 
@@ -50,6 +51,7 @@ class Event:
             "payload": dict(self.payload),
             "causation_id": self.causation_id,
             "metadata": dict(self.metadata),
+            "sequence_id": self.sequence_id,
         }
 
 
@@ -160,17 +162,29 @@ class EventBus:
 
 
 class InMemoryEventStore:
-    """Phase 1: In-memory ring buffer event store."""
+    """Phase 1: In-memory ring buffer event store.
+
+    v0.8.0: Auto-assigns monotonic sequence_id on append.
+    Supports replay_from(sequence_id) for event sourcing.
+    """
 
     def __init__(self, max_events: int = 10000):
         self._events: list[Event] = []
         self._event_ids: set = set()
         self._max_events = max_events
         self._position = 0
+        self._next_sequence_id: int = 0  # v0.8.0: monotonic counter
 
     def append(self, event: Event) -> None:
         if event.event_id in self._event_ids:
             return  # Idempotent
+        # v0.8.0: Auto-assign monotonic sequence_id
+        if event.sequence_id < 0:
+            # Need to bypass frozen check to set sequence_id
+            object.__setattr__(event, "_frozen", False)
+            event.sequence_id = self._next_sequence_id
+            object.__setattr__(event, "_frozen", True)
+        self._next_sequence_id = max(self._next_sequence_id, event.sequence_id + 1)
         if len(self._events) >= self._max_events:
             removed = self._events.pop(0)
             self._event_ids.discard(removed.event_id)
@@ -184,6 +198,10 @@ class InMemoryEventStore:
             idx = 0
         return list(self._events[idx:])
 
+    def replay_from(self, sequence_id: int) -> list[Event]:
+        """v0.8.0: Return events with sequence_id >= given value."""
+        return [e for e in self._events if e.sequence_id >= sequence_id]
+
     def get_by_correlation(self, correlation_id: str) -> list[Event]:
         return [e for e in self._events if e.correlation_id == correlation_id]
 
@@ -196,6 +214,8 @@ class PersistentEventStore:
 
     Wraps an InMemoryEventStore for fast reads and syncs writes to the backend.
     On init, replays persisted events into memory for crash recovery.
+
+    v0.8.0: Supports sequence_id in recovery and replay_from.
     """
 
     def __init__(self, storage_backend, max_events: int = 10000):
@@ -213,6 +233,10 @@ class PersistentEventStore:
     def read_from(self, from_position: int) -> list[Event]:
         return self._memory.read_from(from_position)
 
+    def replay_from(self, sequence_id: int) -> list[Event]:
+        """v0.8.0: Return events with sequence_id >= given value."""
+        return self._memory.replay_from(sequence_id)
+
     def recover(self) -> int:
         """Replay persisted events into memory after restart. Returns count recovered."""
         try:
@@ -228,11 +252,15 @@ class PersistentEventStore:
                     payload=r.get("payload", {}),
                     causation_id=r.get("causation_id"),
                     metadata=r.get("metadata", {}),
+                    sequence_id=r.get("sequence_id", -1),
                 )
                 self._memory.append(event)
             return len(raw)
         except Exception:
             return 0
+
+    def get_by_correlation(self, correlation_id: str) -> list[Event]:
+        return self._memory.get_by_correlation(correlation_id)
 
     def __len__(self):
         return len(self._memory)
