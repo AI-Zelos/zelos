@@ -589,7 +589,7 @@ After reading these, you should understand the entire Runtime architecture witho
 |--------|-----------|
 | **HITL Demos** | Single/multi approver, rejection, change request, timeout, audit trail (6 scenarios) |
 | **Multi-tenancy Demos** | Registration, quotas, isolation, lifecycle, usage report (5 scenarios) |
-| **Documentation** | CHANGELOG v0.1.0–v0.7.0, ROADMAP all phases, Operations manual, API docs |
+| **Documentation** | CHANGELOG v0.1.0–v0.8.0, ROADMAP all phases, Operations manual, API docs |
 
 ### Phase 5 Deliverables
 
