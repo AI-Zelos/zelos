@@ -2,7 +2,7 @@
 
 > The missing operating system for the multi-agent era.
 
-**Status:** Phase 7 Complete · **Version:** 0.7.0 · **78 Tests** · **3 SDKs** · **Apache 2.0**
+**Status:** Phase 8 Complete · **Version:** 0.8.0 · **91 Tests** · **3 SDKs** · **Apache 2.0**
 
 <p align="center">
   <b>Linux manages Processes. Kubernetes manages Containers. Zelos manages Goals.</b>
