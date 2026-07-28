@@ -68,21 +68,75 @@ subprocess.run(
 )
 print("  ✅ API Reference (pdoc)")
 
-# ── Copy static assets (PDFs from papers/) ──
-import glob
+# ── Copy & convert papers/ ──
+import glob, re
 paper_cards = ""
 papers_dir = os.path.join(ROOT, "docs", "papers")
 paper_files = []
 if os.path.isdir(papers_dir):
+    # Track which PDFs have an HTML counterpart (don't double-card)
+    seen_titles = set()
+    for md_file in sorted(glob.glob(os.path.join(papers_dir, "*.md"))):
+        basename = os.path.splitext(os.path.basename(md_file))[0]
+        # Generate short name: first 4 ascii words, or first 30 chars of basename
+        words = re.split(r'[_\s]+', basename)
+        ascii_words = [w for w in words[:6] if re.match(r'^[a-zA-Z0-9-]+$', w)]
+        if len(ascii_words) >= 2:
+            short_name = '-'.join(ascii_words[:4]).lower()
+        else:
+            # For non-English titles, use first 40 chars of basename, keeping CJK
+            short_name = re.sub(r'[^a-zA-Z0-9一-鿿-]', '', basename)[:40].lower()
+            if not short_name:
+                import hashlib
+                short_name = hashlib.md5(basename.encode()).hexdigest()[:8]
+        short_name = re.sub(r'-+', '-', short_name).strip('-')
+        html_name = f"{short_name}.html"
+
+        # Convert MD to HTML
+        with open(md_file) as f:
+            body = markdown.markdown(f.read(), extensions=["tables", "fenced_code"])
+        html = f"""<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{basename[:60]}</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:920px;margin:0 auto;padding:24px;background:#0d1117;color:#c9d1d9;line-height:1.65}}
+a{{color:#58a6ff}}h1{{color:#f0f6fc;margin:24px 0 12px}}h2{{color:#f0f6fc;margin:28px 0 10px;border-bottom:1px solid #21262d;padding-bottom:6px}}h3{{color:#f0f6fc;margin:20px 0 8px}}
+code{{background:#161b22;padding:2px 6px;border-radius:4px;font-size:13px}}
+pre{{background:#161b22;padding:16px;border-radius:8px;overflow-x:auto;font-size:13px}}pre code{{background:none;padding:0}}
+table{{border-collapse:collapse;width:100%;margin:12px 0}}
+th,td{{border:1px solid #30363d;padding:8px 14px;text-align:left}}
+th{{background:#161b22;font-weight:600}}
+.back{{margin-bottom:20px;font-size:14px}}strong{{color:#f0f6fc}}
+</style></head><body>
+<p class="back"><a href="./">← Documentation Home</a></p>
+{body}
+</body></html>"""
+        with open(os.path.join(PUBLIC, html_name), "w") as f:
+            f.write(html)
+        print(f"  📝 {html_name}")
+
+        # Get title
+        with open(md_file) as f:
+            first_line = f.readline().strip().lstrip("#").strip()
+        title = first_line if first_line else basename
+        if title not in seen_titles:
+            paper_cards += f'<a class="card" href="{html_name}"><h3>&#128214; Paper</h3><p>{title}</p></a>\n'
+            seen_titles.add(title)
+
     for pdf in sorted(glob.glob(os.path.join(papers_dir, "*.pdf"))):
-        # Use a short, clean filename for the public copy
         basename = os.path.basename(pdf)
-        import re
-        # Extract a short key from the filename: first 3-4 words
         stem = os.path.splitext(basename)[0]
         words = re.split(r'[_\s]+', stem)
-        short_name = '-'.join(words[:4]).lower()
-        short_name = re.sub(r'[^a-z0-9-]', '', short_name)
+        ascii_words = [w for w in words[:6] if re.match(r'^[a-zA-Z0-9-]+$', w)]
+        if len(ascii_words) >= 2:
+            short_name = '-'.join(ascii_words[:4]).lower()
+        else:
+            short_name = re.sub(r'[^a-zA-Z0-9]', '', stem)[:40].lower()
+            if not short_name:
+                import hashlib
+                short_name = hashlib.md5(stem.encode()).hexdigest()[:8]
         short_name = re.sub(r'-+', '-', short_name).strip('-')
         clean_name = f"{short_name}.pdf"
         dest = os.path.join(PUBLIC, clean_name)
@@ -90,16 +144,13 @@ if os.path.isdir(papers_dir):
         paper_files.append(clean_name)
         print(f"  📄 {clean_name}")
 
-        # Try to get title from corresponding .md file, fallback to filename
+        # Only add card if no MD card was already created for this paper
         md_path = pdf.replace(".pdf", ".md")
-        title = os.path.splitext(basename)[0]
-        desc = ""
-        if os.path.exists(md_path):
-            with open(md_path) as f:
-                first_line = f.readline().strip().lstrip("#").strip()
-                if first_line:
-                    title = first_line
-        paper_cards += f'<a class="card" href="{clean_name}"><h3>&#128214; Paper</h3><p>{title}</p></a>\n'
+        if not os.path.exists(md_path):
+            title = stem
+            if title not in seen_titles:
+                paper_cards += f'<a class="card" href="{clean_name}"><h3>&#128214; Paper (PDF)</h3><p>{title}</p></a>\n'
+                seen_titles.add(title)
 
 # ── Landing page ──
 index = f"""<!DOCTYPE html>
