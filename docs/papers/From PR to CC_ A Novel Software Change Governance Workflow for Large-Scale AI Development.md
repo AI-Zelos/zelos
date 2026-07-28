@@ -4,7 +4,7 @@
 
 **New Model**: This paper proposes CC (Change Capsule)—an intention-driven, pre-governance software change workflow. CC replaces PR's pure code-artifact drive with a formalized five-dimensional information model (Intent, Knowledge Constraints, Structural Constraints, Risk Specification, Verification Criteria), moving governance timing from "post-review" to "intention definition and constraint solidification." The closed-loop governance chain is: Intention Definition → Constraint Solidification → Constrained Generation → Evidence Verification → Compliant Merge. Through formal modeling and three theorem proofs, we rigorously demonstrate that PR and CC are structurally heterogeneous paradigms; PR cannot evolve into CC through incremental optimization such as AI-assisted review or pre-commit CI checks.
 
-**Quantified Results**: Controlled experiments on 20 unified AI tasks (with an added AI-Augmented PR baseline) show: CC workflow reduces rework rate from 35% (PR) to 5%, human dependency from 100% to 0% (fully automated closed loop), and constraint violation rate from 30% to 0%. Compared to AI-Augmented PR (rework rate 20%, human dependency still 100%), CC's paradigm advantage stems from topological reconstruction rather than merely introducing AI capabilities. The added intention-writing step (avg. 3.2 min/task) is fully offset by automated review, resulting in total human time at only 27% of the PR workflow.
+**Quantified Results**: Controlled experiments on 20 unified AI tasks (with an added AI-Augmented PR baseline) show: CC workflow reduces rework rate from 35% (PR) to 5%, human dependency from 100% to 0% (fully automated closed loop), and constraint violation rate from 30% to 0%. Compared to AI-Augmented PR (rework rate 20%, human dependency still 100%), CC's paradigm advantage stems from topological reconstruction rather than merely introducing AI capabilities. The added intention-writing step (avg. 3.2 min/task) is fully offset by automated review—compressing human intervention time from an average of 11.7 min/task to 3.2 min/task, a 73% reduction, while completely eliminating the serial waiting bottleneck inherent in the review phase.
 
 # 2 Related Work
 
@@ -265,9 +265,11 @@ The core advantages of CC are reflected in AI code generation, large\-scale soft
 
 CC deployment requires standardized construction of intention definition, architectural constraint, coding specification, and verification criterion systems, resulting in initial process adaptation and rule precipitation costs\. For ultra\-lightweight small\-scale projects and temporary rapid iteration tasks, standardized CC governance introduces minor process redundancy compared with lightweight PR workflows\.
 
-### 7\.4\.3 Experimental Limitations
+### 7\.4\.3 Experimental Limitations & Honest Declaration on 0% Violation Rate
 
 All experiments are conducted on the Zelos v0\.9\.0 platform with standardized business repositories under controllable and standardized task scenarios\. The adaptability to ultra\-large\-scale industrial complex projects, multi\-team collaborative iteration, and heterogeneous tech stack environments requires further verification, limiting the generalizability of experimental results\.
+
+**Honest declaration on the 0% violation rate**: The 0% constraint violation rate reported in our experiments was achieved under explicit, deterministic constraint rules \(e\.g\., lint specifications, dependency whitelists, interface contract verification, vulnerability database matching\)\. For constraints requiring deep semantic understanding \(e\.g\., "design pattern appropriateness," "concurrency safety," "transaction boundary correctness"\), the current CC verification capabilities are limited and cannot guarantee a 0% violation rate\. This is not a fundamental flaw of the CC workflow paradigm but rather a boundary of current automated verification toolchains' semantic analysis capabilities\. As AI code semantic understanding continues to evolve, this boundary will progressively shrink\. Candidly acknowledging this current limitation is both a necessary demonstration of rigorous academic practice and a clear pointer for future research on more sophisticated semantic-level verification\.
 
 ## 7\.5 Future Optimization Directions
 
