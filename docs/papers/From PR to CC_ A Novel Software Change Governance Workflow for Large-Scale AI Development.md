@@ -58,6 +58,17 @@ PR is a typical artifact\-post\-governance workflow following the logic of "gene
 
 **Figure 1 Topology of Traditional PR Artifact\-Driven Workflow**
 
+```mermaid
+flowchart LR
+A[Natural Language Requirements No Pre-Constraints] --> B[AI/Developer Generates Code Artifacts]
+B --> C[Submit PR Ticket]
+C --> D[Manual Post-Review Compliance/Risk/Requirement Check]
+D --> E{Review Passed?}
+E -->|No| F[Manual Rework]
+F --> C
+E -->|Yes| G[Merge Code into Repository]
+```
+
 1\. Code Generation: Developers or AI complete code writing, modification, and refactoring to output final code diff artifacts;
 
 2\. Post\-Review: Human reviewers verify the compliance, rationality, and risk of generated code based on manual cognition;
@@ -73,6 +84,20 @@ To address the timing defects of PR, this paper constructs the CC intention\-dri
 **Definition 2 \(CC Intention\-Driven Workflow\)**: The formal definition of the CC workflow is: $W_{CC} = (\{IntentionDefinition, ConstraintSolidification, ConstrainedGeneration, EvidenceVerification, CompliantMerge\}, ChangeProposal, Pre-GovernanceRules, CCTransitionSequence)$\. The fixed transition sequence is: $IntentionDefinition \rightarrow ConstraintSolidification \rightarrow ConstrainedGeneration \rightarrow EvidenceVerification \rightarrow CompliantMerge$\. The CC workflow takes instantiated change proposals as the core governance object\. The complete closed\-loop workflow topology is as follows:
 
 **Figure 2 Complete Pipeline of Proposed CC Intention\-Driven Workflow**
+
+```mermaid
+flowchart LR
+A[Requirement Analysis] --> B[Standardized Intention Definition: Goal/Scope/Success Criteria]
+B --> C[Constraint Solidification: Architecture+Coding+Risk+Business Rules]
+C --> D[AI Constrained Code Generation Following Pre-Constraints]
+D --> E[Full-Dimensional Evidence Auto-Verification: Test/Architecture/Security/Compatibility]
+E --> F[Confidence Scoring and Policy Decision]
+F --> G{Decision Result}
+G -->|Auto-Approve| H[Compliant Merge into Repository]
+G -->|Reject| I[Change Terminated]
+G -->|Human Review <5% cases| J[Human Intervention]
+J --> H
+```
 
 1\. Intention Definition: Clarify business objectives, iteration values, and modification scopes of code changes to eliminate unconstrained and boundary\-ambiguous modifications;
 

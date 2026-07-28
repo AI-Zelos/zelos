@@ -44,6 +44,15 @@ th{background:#161b22;font-weight:600}
 <p>PR is a typical artifact-post-governance workflow following the logic of "generate code artifacts first, then execute review governance".</p>
 <p><strong>Definition 1 (PR Artifact-Driven Workflow)</strong>: The formal definition of the PR workflow is: $W_{PR} = ({Generation, Review, Merge}, CodeArtifact, Post-GovernanceRules, PRTransitionSequence)$. The fixed transition sequence is: $Generation \rightarrow Review \rightarrow Merge$. The PR workflow takes code artifacts as the core governance object. The complete workflow topology is as follows:</p>
 <p><strong>Figure 1 Topology of Traditional PR Artifact-Driven Workflow</strong></p>
+<pre><code class="language-mermaid">flowchart LR
+A[Natural Language Requirements No Pre-Constraints] --&gt; B[AI/Developer Generates Code Artifacts]
+B --&gt; C[Submit PR Ticket]
+C --&gt; D[Manual Post-Review Compliance/Risk/Requirement Check]
+D --&gt; E{Review Passed?}
+E --&gt;|No| F[Manual Rework]
+F --&gt; C
+E --&gt;|Yes| G[Merge Code into Repository]
+</code></pre>
 <p>1. Code Generation: Developers or AI complete code writing, modification, and refactoring to output final code diff artifacts;</p>
 <p>2. Post-Review: Human reviewers verify the compliance, rationality, and risk of generated code based on manual cognition;</p>
 <p>3. Merge \&amp; Storage: Approved code is merged into the repository to complete software changes.</p>
@@ -52,6 +61,18 @@ th{background:#161b22;font-weight:600}
 <p>To address the timing defects of PR, this paper constructs the CC intention-driven workflow, adding comprehensive pre-governance stages before code generation to realize pre-emptive governance and constrained generation, fundamentally avoiding risks in AI iterative development.</p>
 <p><strong>Definition 2 (CC Intention-Driven Workflow)</strong>: The formal definition of the CC workflow is: $W_{CC} = ({IntentionDefinition, ConstraintSolidification, ConstrainedGeneration, EvidenceVerification, CompliantMerge}, ChangeProposal, Pre-GovernanceRules, CCTransitionSequence)$. The fixed transition sequence is: $IntentionDefinition \rightarrow ConstraintSolidification \rightarrow ConstrainedGeneration \rightarrow EvidenceVerification \rightarrow CompliantMerge$. The CC workflow takes instantiated change proposals as the core governance object. The complete closed-loop workflow topology is as follows:</p>
 <p><strong>Figure 2 Complete Pipeline of Proposed CC Intention-Driven Workflow</strong></p>
+<pre><code class="language-mermaid">flowchart LR
+A[Requirement Analysis] --&gt; B[Standardized Intention Definition: Goal/Scope/Success Criteria]
+B --&gt; C[Constraint Solidification: Architecture+Coding+Risk+Business Rules]
+C --&gt; D[AI Constrained Code Generation Following Pre-Constraints]
+D --&gt; E[Full-Dimensional Evidence Auto-Verification: Test/Architecture/Security/Compatibility]
+E --&gt; F[Confidence Scoring and Policy Decision]
+F --&gt; G{Decision Result}
+G --&gt;|Auto-Approve| H[Compliant Merge into Repository]
+G --&gt;|Reject| I[Change Terminated]
+G --&gt;|Human Review &lt;5% cases| J[Human Intervention]
+J --&gt; H
+</code></pre>
 <p>1. Intention Definition: Clarify business objectives, iteration values, and modification scopes of code changes to eliminate unconstrained and boundary-ambiguous modifications;</p>
 <p>2. Constraint Solidification: Lock business rules, architectural boundaries, risk thresholds, and coding specifications for changes to form executable code generation constraints;</p>
 <p>3. Constrained Generation: AI or developers generate code artifacts strictly following pre-solidified constraints;</p>
@@ -130,8 +151,7 @@ th{background:#161b22;font-weight:600}
 <h2>5.1 Overall Architecture of the Zelos Platform</h2>
 <p>The core upgrade of Zelos v0.9.0 is transforming from a traditional AI execution engine to an AI software change governance platform. Abandoning the result-only task execution logic, it constructs a full lifecycle governance capability covering intention definition, architectural analysis, code generation, evidence verification, and decision merging, highly consistent with the proposed CC workflow paradigm. The platform architecture centers on a self-developed CC engine, coordinating with constraint parsing, intention parsing, code generation, and verification decision modules to form a closed-loop governance system.</p>
 <p><strong>Figure 3 Overall System Architecture of Zelos v0.9.0</strong></p>
-<p><code>mermaid
-flowchart TD
+<pre><code class="language-mermaid">flowchart TD
     subgraph Top-Level Core Governance
         A[CC EngineCore Workflow Scheduling]
     end
@@ -140,7 +160,8 @@ flowchart TD
     B &amp; C --&gt; D[AI Code GeneratorConstrained Code Generation]
     D --&gt; E[Verification EngineEvidence Collection &amp; Verification]
     E --&gt; F[Merge DecisionIntelligent Merge Decision]
-    F --&gt; G[Git RepositoryCode Repository Storage]</code></p>
+    F --&gt; G[Git RepositoryCode Repository Storage]
+</code></pre>
 <p>The functional positioning of each core module strictly matches the CC five-dimensional governance model, fundamentally differing from the single-point execution logic of traditional PR workflows: The CC engine serves as the top-level core coordinating full-process change governance rules; the intention parser standardizes change objectives and scopes, corresponding to the intention dimension of the CC model; the constraint engine solidifies architectural specifications, coding rules, and risk thresholds, corresponding to knowledge and structural constraint dimensions; the AI code generator completes constrained code iteration under pre-defined rules; the verification engine aggregates multi-dimensional verification evidence to form standardized evidence packages; final automated merging decisions are made based on evidence and confidence scores, realizing human-free closed-loop governance.</p>
 <h2>5.2 Design and Implementation of Core CC Engine</h2>
 <p>As the core innovation of this paper, the CC engine is the primary module of prototype implementation, customized for AI software change governance and fully implementing the proposed formal model and five-dimensional information specification. Built upon the newly added change evidence package system of Zelos v0.9.0, it resolves core PR defects including missing intentions, loose constraints, scattered evidence, and subjective decision-making.</p>
