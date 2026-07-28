@@ -106,12 +106,14 @@ with open(os.path.join(PUBLIC, "index.html"), "w") as f:
     f.write(index)
 print("  ✅ index.html")
 
-# ── Copy static assets (PDFs, etc.) ──
+# ── Copy static assets (PDFs from papers/) ──
 import glob
-for pdf in glob.glob(os.path.join(ROOT, "docs", "*.pdf")):
-    dest = os.path.join(PUBLIC, os.path.basename(pdf).replace(" ", "-").lower())
-    shutil.copy2(pdf, dest)
-    print(f"  📄 {os.path.basename(dest)}")
+papers_dir = os.path.join(ROOT, "docs", "papers")
+if os.path.isdir(papers_dir):
+    for pdf in glob.glob(os.path.join(papers_dir, "*.pdf")):
+        dest = os.path.join(PUBLIC, os.path.basename(pdf).replace(" ", "-").lower())
+        shutil.copy2(pdf, dest)
+        print(f"  📄 {os.path.basename(dest)}")
 
 print(f"\n✅ Documentation site generated: {PUBLIC}/")
 print(f"   open {PUBLIC}/index.html")

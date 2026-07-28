@@ -613,6 +613,21 @@ zelos/
 │       ├── agent-registration.json
 │       ├── artifact.json
 │       └── event.json
+│   ├── zeip/                            ← Zelos Enhancement Proposals (specs)
+│   │   ├── ZEIP-0001-intent.md
+│   │   ├── ZEIP-0002-artifact.md
+│   │   ├── ZEIP-0003-evidence.md
+│   │   ├── ZEIP-0004-verification.md
+│   │   ├── ZEIP-0005-capability.md
+│   │   ├── ZEIP-0006-policy.md
+│   │   └── ZEIP-0007-change-proposal.md
+│   ├── handbook/                        ← Agent Engineering Handbook
+│   │   ├── 01-what-is-agent-engineering.md
+│   │   ├── ...
+│   │   └── 10-from-code-review-to-change-review.md
+│   └── papers/                          ← Academic papers
+│       ├── Beyond Code_ A Formal Theory of Software Engineering in AI-Native Paradigm.pdf
+│       └── Beyond Code_ A Formal Theory of Software Engineering in AI-Native Paradigm.md
 ```
 
 ---
