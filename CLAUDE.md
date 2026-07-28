@@ -80,6 +80,10 @@ The Runtime owns:
 - Architecture Delta
 - Impact Analysis
 - Rollback Plan
+- Change Proposal (CP)
+- Constraint Engine
+- Verifier Chain
+- Merge Executor
 - Change Approval Request (CAR)
 - Memory
 - Context

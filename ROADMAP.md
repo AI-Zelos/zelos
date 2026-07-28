@@ -270,6 +270,35 @@ Upgrade Zelos from execution engine to governance platform. Human reviews Intent
 
 ---
 
+---
+
+## Phase 10: CP Governance Platform
+
+**Status:** Complete
+**Version:** v1.0.0
+**Timeline:** July 2026
+
+### Goal
+Complete engineering implementation of the CP (Change Proposal) governance paradigm from the paper "From PR to CP." Zelos becomes the reference implementation.
+
+### Scope
+- [x] ChangeProposal — five-tuple CP dataclass (I×K×S×R×E) per paper definition
+- [x] Constraint Engine — CP → executable constraints for constrained generation
+- [x] Verifier Chain — auto-orchestrated verification with FAIL-stop and escalation
+- [x] Merge Executor — auto-merge on approve (event_sourcing_apply + git_merge)
+- [x] Constraint Injection — Agent execution context carries CP constraints at dispatch
+- [x] Task.constraints field — executable constraint carrier
+- [x] Smart from_intent() — scope→risk, constraints→coding rules, criteria→verification
+
+### Test Results
+12 new v1.0 tests. 151 total passed, 7 skipped. Zero regressions.
+
+### Reference
+- `docs/v1.0.0-requirements.md`
+- `docs/papers/From PR to CP_ A Novel Software Change Governance Workflow for Large-Scale AI Development.md`
+
+---
+
 ## Beyond: Ecosystem Projects
 
 Explicitly NOT part of Zelos core. Future ecosystem:
@@ -284,4 +313,4 @@ Explicitly NOT part of Zelos core. Future ecosystem:
 
 ## Versioning
 
-Semantic Versioning. Current version: **v0.9.0** (Phase 9 Complete).
+Semantic Versioning. Current version: **v1.0.0** (Phase 10 Complete).

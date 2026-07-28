@@ -45,7 +45,7 @@ Zelos is a **governance platform for multi-agent execution**, not a framework. I
 | Layer | What it does |
 |-------|-------------|
 | **Runtime** (v0.1–v0.8) | Goal → Plan → Task DAG → Schedule → Execute → Retry → Verify → Audit |
-| **Governance** (v0.9+) | Execution Trace → Evidence Collection → Confidence Scoring → Policy Gate → Change Approval Request |
+| **Governance** (v0.9–v1.0) | Execution Trace → Evidence Collection → Confidence Scoring → Policy Gate → Change Proposal (CP) → Verifier Chain → Auto-Merge |
 
 | If you're building... | You need... | Zelos provides... |
 |----------------------|-------------|-------------------|

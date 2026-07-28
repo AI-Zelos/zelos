@@ -71,10 +71,10 @@ Zelos Runtime:
 
 | 指标 | 数值 |
 |------|------|
-| 版本 | v0.9.0 |
-| Phases | 0–9 全部完成 |
-| 源码模块 | 33 个 |
-| 自动化测试 | 139 个（139 passed） |
+| 版本 | v1.0.0 |
+| Phases | 0–10 全部完成 |
+| 源码模块 | 37 个 |
+| 自动化测试 | 151 个（151 passed） |
 | Demo | 21 个 |
 | SDK | Python / TypeScript / Go |
 | 外部依赖 | **零**（核心纯 Python stdlib） |
@@ -1580,6 +1580,69 @@ for change in ad.api_changes:
         print(f"❌ Breaking change: {change.endpoint}")
     elif change.change_type == "new":
         print(f"➕ New endpoint: {change.endpoint}")
+```
+
+---
+
+## 17. v1.0.0 新特性：CP（Change Proposal）治理平台
+
+v1.0.0 完整实现了论文"从 PR 到 CP"中定义的 CP 治理范式。Zelos 从此成为论文的完整参考实现。
+
+### 17.1 ChangeProposal 五元模型
+
+论文定义 CP = (I, K, S, R, E) 五元信息模型：
+
+```python
+from zelos.change_proposal import ChangeProposal
+
+cp = ChangeProposal(
+    goal_id="g-1",
+    knowledge_constraints=KnowledgeConstraints(
+        coding_standards=["pep8"],
+        forbidden_patterns=["eval", "exec"],
+    ),
+    structural_constraints=StructuralConstraints(
+        modified_modules=["auth"],
+        protected_modules=["payment"],
+    ),
+    risk_spec=RiskSpec(risk_level="medium"),
+    verification_criteria=VerificationCriteria(
+        test_pass_rate=1.0, coverage_threshold_pct=80.0,
+    ),
+)
+# 自动构建：submit_goal 时从 IntentSpec 自动推导 CP
+```
+
+### 17.2 约束引擎
+
+将 CP 固化为可执行约束，注入 Agent 执行上下文：
+
+```python
+from zelos.constraint_engine import ConstraintEngine
+engine = ConstraintEngine()
+constraints = engine.apply(cp)
+# → coding_rules, architecture_boundaries, risk_thresholds, verification_requirements
+```
+
+### 17.3 Verifier 链
+
+基于 CP 的验证准则自动编排 Verifier，FAIL 停止 + 低置信度升级：
+
+```python
+from zelos.verifier_chain import VerifierChain
+chain = VerifierChain()
+result = chain.execute(artifact, cp.verification_criteria)
+# 自动注册: SchemaVerifier + CodeReviewer + SecurityScanner
+```
+
+### 17.4 自动合并
+
+Policy Gate 批准后自动执行合并：
+
+```python
+rt.auto_decide(goal_id)
+# auto_approve → MergeExecutor 自动合并
+# 策略: event_sourcing_apply / git_merge
 ```
 
 ---
