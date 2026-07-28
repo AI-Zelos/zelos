@@ -167,7 +167,8 @@ flowchart TD
     B & C --> D[AI Code GeneratorConstrained Code Generation]
     D --> E[Verification EngineEvidence Collection & Verification]
     E --> F[Merge DecisionIntelligent Merge Decision]
-    F --> G[Git RepositoryCode Repository Storage]```
+    F --> G[Git RepositoryCode Repository Storage]
+```
 
 The functional positioning of each core module strictly matches the CC five\-dimensional governance model, fundamentally differing from the single\-point execution logic of traditional PR workflows: The CC engine serves as the top\-level core coordinating full\-process change governance rules; the intention parser standardizes change objectives and scopes, corresponding to the intention dimension of the CC model; the constraint engine solidifies architectural specifications, coding rules, and risk thresholds, corresponding to knowledge and structural constraint dimensions; the AI code generator completes constrained code iteration under pre\-defined rules; the verification engine aggregates multi\-dimensional verification evidence to form standardized evidence packages; final automated merging decisions are made based on evidence and confidence scores, realizing human\-free closed\-loop governance\.
 
