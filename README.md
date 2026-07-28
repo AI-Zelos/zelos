@@ -523,6 +523,7 @@ zelos/
 │   │   ├── verifier.md                 ← Verification gate, verdict model, types
 │   │   ├── plugin-architecture.md      ← Discovery, lifecycle, isolation, upgrade
 │   │   ├── runtime-api.md              ← Stable API: Goal, Agent, Admin, Plugin
+│   │   ├── change-evidence-package.md   ← v0.9.0 vision: Evidence-based governance
 │   │   ├── protocol-layer.md           ← HTTP, gRPC, MCP, A2A adapters
 │   │   ├── python-sdk.md               ← Agent base class, ZelosClient, testing
 │   │   └── agent-registration-guide.md  ← How any Agent registers on Zelos
