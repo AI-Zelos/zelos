@@ -38,11 +38,15 @@ from .task_graph import Task, TaskGraphEngine, TaskStatus
 from .verifier import SchemaVerifier, VerificationGate
 
 # ═══ v0.9.0 imports ═══
+from .change_proposal import ChangeProposal, KnowledgeConstraints, RiskSpec, StructuralConstraints, VerificationCriteria  # noqa: E402
 from .confidence import WeightedConfidenceScorer  # noqa: E402
+from .constraint_engine import ConstraintEngine  # noqa: E402
 from .evidence import Evidence, EvidenceBag  # noqa: E402
 from .execution_report import ArchDelta, ExecutionReport, IntentSpec, RollbackPlan  # noqa: E402
 from .execution_trace import ExecutionTrace, TaskTrace, TraceEvent  # noqa: E402
+from .merge_executor import MergeExecutor  # noqa: E402
 from .policy_gate import EvidenceBasedPolicyGate, GateDecision  # noqa: E402
+from .verifier_chain import VerifierChain  # noqa: E402
 
 
 class ZelosRuntime:
@@ -100,6 +104,12 @@ class ZelosRuntime:
         )
         self._policy_gate = EvidenceBasedPolicyGate()
         self._active_evidence: dict[str, EvidenceBag] = {}  # goal_id → EvidenceBag
+
+        # ── v1.0.0: CP (Change Proposal) Governance ──
+        self._constraint_engine = ConstraintEngine()
+        self._verifier_chain = VerifierChain()
+        self._merge_executor = MergeExecutor()
+        self._active_cps: dict[str, ChangeProposal] = {}  # goal_id → ChangeProposal
 
         # ── Phase 3: Security ──
         sec_cfg = self.config.get("security", {})
@@ -826,7 +836,16 @@ class ZelosRuntime:
                 approvers=decision.required_approvers,
                 context={"goal_id": goal_id, "confidence": report.confidence.score if report.confidence else 0},
             )
-        return decision.to_dict()
+
+        # v1.0.0: Auto-merge when approved
+        result = decision.to_dict()
+        if decision.action == "auto_approve":
+            merge_result = self._merge_executor.execute(goal_id, report)
+            result["merge"] = merge_result.to_dict()
+            self._audit("system", "merge.executed", goal_id,
+                        detail=f"{merge_result.strategy}: {merge_result.message}")
+
+        return result
 
     def _try_replan(self, failed_task: Task) -> None:
         """Tier 3: Ask Planner to find an alternative way to achieve the goal."""
@@ -986,6 +1005,18 @@ class ZelosRuntime:
 
         self._audit("system", "task.dispatched", task.task_id, detail=f"Dispatched to agent {agent_id}")
 
+        # v1.0.0: Inject constraints from ChangeProposal into agent execution
+        plan_id = task.plan_id
+        for gid, goal in self._goals.items():
+            if goal.get("plan_id") == plan_id:
+                cp = self._active_cps.get(gid)
+                if cp:
+                    exec_constraints = self._constraint_engine.apply(cp)
+                    self._execution_engine.set_task_input_context(
+                        task.task_id, exec_constraints.to_context_dict()
+                    )
+                break
+
         for name, info in self._agents.items():
             if info["agent_id"] == agent_id:
                 agent = self._agent_instances.get(name)
@@ -1121,6 +1152,11 @@ class ZelosRuntime:
 
         # v0.9.0: Initialize evidence bag for this goal
         self._active_evidence[goal_id] = EvidenceBag(goal_id=goal_id)
+
+        # v1.0.0: Build ChangeProposal from IntentSpec
+        cp = ChangeProposal.from_intent(goal_id, intent)
+        self._active_cps[goal_id] = cp
+        self._constraint_engine.apply(cp)  # solidify constraints
 
         if ns:
             ns.add_goal(goal_id)
@@ -1425,11 +1461,15 @@ class ZelosRuntime:
             ],
         )
 
+        # v1.0.0: Attach ChangeProposal
+        cp = self._active_cps.get(goal_id)
+
         return ExecutionReport(
             goal_id=goal_id,
             status=goal.get("status", "unknown"),
             intent=goal.get("intent"),
             intent_confirmed=bool(goal.get("intent")),
+            change_proposal=cp,
             architecture_delta=arch_delta,
             trace=trace,
             evidence_bag=evidence_bag,
@@ -1948,7 +1988,7 @@ class ZelosRuntime:
                 "hitl": {"pending_approvals": pending_approvals},
                 "cluster": {"enabled": self._cluster_enabled, "is_leader": self._leader_election.is_leader()},
             },
-            "version": "0.9.1",
+            "version": "1.0.0",
         }
 
     def get_metrics(self) -> dict[str, Any]:

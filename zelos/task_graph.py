@@ -54,6 +54,7 @@ class Task:
     max_cost_per_call: float | None = None
     max_latency_ms: int | None = None
     non_retryable_errors: list[str] = field(default_factory=list)  # v0.8.0
+    constraints: dict | None = None  # v1.0.0: CP constraints injected at dispatch
     created_at: float = 0.0
     updated_at: float = 0.0
 
@@ -83,6 +84,7 @@ class Task:
             "max_cost_per_call": self.max_cost_per_call,
             "max_latency_ms": self.max_latency_ms,
             "non_retryable_errors": list(self.non_retryable_errors),
+            "constraints": self.constraints,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }

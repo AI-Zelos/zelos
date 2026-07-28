@@ -132,6 +132,9 @@ class ExecutionReport:
     # ── Architecture Delta ──
     architecture_delta: ArchDelta | None = None
 
+    # ── Change Proposal (v1.0.0) ──
+    change_proposal: Any = None  # ChangeProposal
+
     # ── Execution Trace ──
     trace: Any = None  # ExecutionTrace
 
@@ -161,6 +164,9 @@ class ExecutionReport:
             "changed_files": self.changed_files,
             "total_duration_ms": self.total_duration_ms,
         }
+        # v1.0.0: Add ChangeProposal
+        if self.change_proposal and hasattr(self.change_proposal, 'to_dict'):
+            result["change_proposal"] = self.change_proposal.to_dict()
         # Add trace, evidence, confidence if available
         if self.trace:
             result["trace"] = self.trace.to_dict()

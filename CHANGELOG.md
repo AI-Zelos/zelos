@@ -4,6 +4,36 @@ All notable changes to Zelos will be documented in this file.
 
 ---
 
+## [1.0.0] — 2026-07-28
+
+### Added — CP Governance Platform
+- **ChangeProposal** — first-class CP five-tuple object (I×K×S×R×E) per paper definition
+- **Constraint Engine** — solidifies CP into executable constraints for constrained generation
+- **Verifier Chain** — auto-orchestrated verification pipeline with escalation
+- **Merge Executor** — auto-merge on approve (event_sourcing_apply + git_merge)
+- **Constraint Injection** — Agent execution carries CP constraints at dispatch
+- `Task.constraints` field for constrained generation support
+
+### Changed
+- Version: 0.9.1 → 1.0.0
+- `ExecutionReport` includes `change_proposal` field
+- `submit_goal()` auto-builds `ChangeProposal` from `IntentSpec`
+- `auto_decide()` auto-merges on `auto_approve`
+- `_on_dispatch()` injects CP constraints into agent context
+
+### Reference
+- `docs/v1.0.0-requirements.md`
+- `docs/papers/From PR to CP_ A Novel Software Change Governance Workflow for Large-Scale AI Development.md`
+
+---
+
+## [0.9.0] — 2026-07-28
+
+### Added — Change Evidence Package
+(see git log for full details)
+
+---
+
 ## [0.8.0] — 2026-07-24
 
 ### Added — Event Sourcing + Reliability
