@@ -791,6 +791,63 @@ Never build:
 
 ---
 
+# CAR (Change Approval Request) — PR & Commit Standard
+
+All pull requests and significant commits MUST follow the CAR format defined in `docs/blueprint/CAR-Change-Approval-Request.md`.
+
+The core principle: **review the change, not the code**. Code is supporting evidence.
+
+## When to use CAR format
+
+- **All PRs** (to any branch)
+- **All commits that introduce a new feature, refactor, or breaking change**
+- Bug fix commits: use simplified CAR (Intent + Evidence + Risk only)
+
+## PR / Commit Message Template
+
+```
+## Intent
+[Why this change? What business problem does it solve?]
+
+## Architecture Delta
+[What modules/files changed? New dependencies? API changes?]
+
+## Impact Analysis
+[Affected modules, APIs, DB, events, cache, MQ]
+
+## Evidence
+- [ ] Compile: PASS
+- [ ] Unit Tests: N passed
+- [ ] Integration Tests: N passed
+- [ ] Regression: PASS
+- [ ] Lint: PASS
+
+## Risk Assessment
+Risk Level: [low | medium | high | critical]
+Root Cause: [why is this risky?]
+Mitigation: [rollback steps, feature flags, etc]
+
+## Rollback Plan
+Strategy: [event_sourcing_replay | git_revert | feature_flag_off]
+Estimated downtime: [N seconds/minutes]
+Steps:
+1. [step 1]
+2. [step 2]
+```
+
+## Auto-enforcement
+
+When creating a PR or commit:
+1. Run all tests FIRST — include the test results in Evidence
+2. List ALL modified modules in Architecture Delta — do not omit any
+3. Assign a risk level — never default to "low" without justification
+4. Include a rollback plan — "git revert" is acceptable for low-risk changes
+5. If evidence is incomplete (tests not run, lint not checked), state it explicitly
+
+Reference: `docs/blueprint/CAR-Change-Approval-Request.md`
+
+---
+
 # Ultimate Goal
 
 The long-term goal is not to build another framework.
