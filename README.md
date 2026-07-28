@@ -2,43 +2,109 @@
 
 > The missing operating system for the multi-agent era.
 
-**Status:** Phase 9 Complete · **Version:** 0.9.0 · **116 Tests** · **3 SDKs** · **Apache 2.0**
+**Status:** Phase 9 Complete · **Version:** 0.9.1 · **139 Tests** · **33 Modules** · **3 SDKs** · **Apache 2.0**
 
 <p align="center">
-  <b>Linux manages Processes. Kubernetes manages Containers. Zelos manages Goals.</b>
+  <b>Linux manages Processes. Kubernetes manages Containers. Temporal manages Workflows.</b><br>
+  <b>Zelos manages <em>Goals</em> — and now, <em>verifies</em> them.</b>
 </p>
 
 ---
 
 ## Why Zelos Exists
 
-**The hard problem in AI is no longer building a good agent. The hard problem is running a hundred of them — safely.**
+**Two hard problems define the agent era:**
 
-A single user request in 2026 can trigger planning, research, coding, browser automation, SQL queries, verification, and human approval. Each step is a different agent, built by a different team, using a different stack.
+1. **Running hundreds of agents — safely.** A single request triggers planning, coding, browser automation, SQL, verification, and approval. Each step is a different agent. Who orchestrates them? Who verifies their output? Who keeps the audit trail?
+
+2. **Reviewing AI-generated changes — at scale.** When agents produce 35,000 lines of code per hour, humans cannot read every line. The old model — "write code → code review → merge" — is broken. The new model is: **review the evidence, not the code.**
 
 Nobody planned for this. We got:
-- **LangGraph / CrewAI / AutoGen** — agent construction kits. They help you _build_ agents, but they don't _run_ them.
+- **LangGraph / CrewAI / AutoGen** — agent construction kits. They help you _build_ agents, but they don't _run_ or _verify_ them.
 - **Temporal / Airflow** — workflow engines for deterministic code. Autonomous agents are anything but deterministic.
 - **MCP / A2A** — communication protocols. They let agents talk, but don't govern what they do.
+- **GitHub PRs** — designed for humans writing hundreds of lines. Collapse under AI writing thousands.
 
-All three miss the same thing: **there is no runtime that plans, schedules, verifies, and audits multi-agent execution.**
+All four miss the same thing: **there is no platform that orchestrates agents, collects evidence, scores confidence, and lets humans approve changes instead of reading code.**
 
-Zelos is that runtime.
+**Zelos is that platform.** It started as a runtime. Now it's a governance platform — the missing layer between "agents did something" and "we're confident this change should ship."
 
 ---
 
 ## What Zelos Is
 
-Zelos is **infrastructure**, not a framework. It sits beneath your agents — the same way an OS sits beneath your processes.
+Zelos is a **governance platform for multi-agent execution**, not a framework. It sits beneath your agents — the same way an OS sits beneath your processes.
+
+**Two layers, one platform:**
+
+| Layer | What it does |
+|-------|-------------|
+| **Runtime** (v0.1–v0.8) | Goal → Plan → Task DAG → Schedule → Execute → Retry → Verify → Audit |
+| **Governance** (v0.9+) | Execution Trace → Evidence Collection → Confidence Scoring → Policy Gate → Change Approval Request |
 
 | If you're building... | You need... | Zelos provides... |
 |----------------------|-------------|-------------------|
 | 5 agents in a script | A `for` loop | Overkill — don't use Zelos |
 | 20 agents across 3 teams | A scheduler | Goal → Plan → Task DAG → auto-dispatch |
 | 100 agents in production | A runtime | Distributed coordination, failover, retry, audit |
-| 500+ agents as a service | An OS | Multi-tenancy, quotas, billing audit, compliance |
+| 500+ agents as a service | A governance platform | CAR, evidence scoring, auto-approve/reject, compliance |
 
-**Zelos does not build agents. Zelos runs them, governs them, and keeps the receipts.**
+**Zelos does not build agents. Zelos orchestrates them, verifies their output, scores their quality, and lets you approve changes — not read code.**
+
+---
+
+## v0.9.0: The Governance Layer
+
+v0.9.0 answers the question: **"The agents did something. Should we ship it?"**
+
+### One API call. Complete confidence.
+
+```python
+report = runtime.get_execution_report(goal_id)
+
+# What was the intent?
+print(report.intent.description)
+# → "Implement OAuth2 login with Google/GitHub"
+
+# What changed?
+print(report.architecture_delta.risk_level, report.architecture_delta.modified_modules)
+# → "medium", ["auth-service", "user-model"]
+
+# What happened, step by step?
+for task in report.trace.tasks:
+    print(f"{task.task_id}: {task.description} → {task.status} ({task.agent_name})")
+# → "t1: Design OAuth flow → completed (ClaudeCode)"
+# → "t2: Implement auth endpoints → completed (ClaudeCode)"
+# → "t3: Security review → completed (SecurityBot)"
+
+# What's the evidence?
+print(report.evidence_bag.all_pass, report.confidence.score)
+# → True, 0.97
+
+# What should we do?
+print(report.confidence.recommendation)
+# → "approve"
+
+# How do we roll back if needed?
+print(report.rollback_plan.strategy, report.rollback_plan.estimated_downtime_s)
+# → "event_sourcing_replay", 5.0
+```
+
+**No code review required. The evidence speaks for itself.**
+
+### The CAR (Change Approval Request) Paradigm
+
+```
+Traditional PR:
+  Code Diff (primary) + Description (afterthought)
+  → "Review this code"
+
+CAR (Zelos v0.9.0):
+  Intent → Architecture Delta → Impact Analysis → Evidence → Risk → Rollback → Code (collapsed)
+  → "Approve this change"
+```
+
+See: [`docs/blueprint/CAR-Change-Approval-Request.md`](docs/blueprint/CAR-Change-Approval-Request.md)
 
 ---
 
@@ -242,7 +308,7 @@ pip install -e ".[dev]"
 
 # Quick reference
 make dev        # Start Runtime in hot-reload mode
-make test       # Run all 116 tests
+make test       # Run all 139 tests
 make lint       # Ruff code quality check (zero errors)
 make format     # Auto-format all code
 make check      # Full CI pipeline (lint + test)
@@ -692,7 +758,7 @@ See [ROADMAP.md](ROADMAP.md) for detailed milestones.
 
 ### Online (GitHub Pages)
 
-Full documentation site auto-deployed on every push to `main` — includes **User Manual**, **Operations Guide**, and **API Reference** for all 28 modules.
+Full documentation site auto-deployed on every push to `main` — includes **User Manual**, **Operations Guide**, and **API Reference** for all 33 modules.
 
 Visit: **https://AI-Zelos.github.io/zelos**
 
