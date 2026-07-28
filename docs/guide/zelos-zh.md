@@ -37,6 +37,11 @@
    - [16.5 Policy Gate v2](#165-policy-gate-v2)
    - [16.6 Intent Specification](#166-intent-specification)
    - [16.7 Architecture Delta](#167-architecture-delta)
+17. [v1.0.0 新特性：CP（Change Proposal）治理平台](#17)
+   - [17.1 ChangeProposal 五元模型](#171-changeproposal)
+   - [17.2 约束引擎](#172-约束引擎)
+   - [17.3 Verifier 链](#173-verifier-链)
+   - [17.4 自动合并](#174-自动合并)
 
 ---
 
@@ -935,7 +940,7 @@ pip install zelos-runtime[dev]
 ### 生产环境（Docker）
 
 ```bash
-docker build -t zelos:0.9.0 .
+docker build -t zelos:1.0.0 .
 docker compose up -d
 ```
 
