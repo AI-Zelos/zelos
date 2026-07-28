@@ -715,6 +715,10 @@ class ZelosRuntime:
                         if t.status in (TaskStatus.FAILED, TaskStatus.TIMED_OUT):
                             self._scheduler.evaluate_retry(t)
 
+                # 2.6 v0.9.1: Verification escalation for active goals
+                # Low confidence → trigger additional verification
+                self._verify_and_escalate()
+
                 # 3. Check Goal completion + Sub-goal completion
                 with self._lock:
                     for goal_id, goal in list(self._goals.items()):
@@ -781,6 +785,48 @@ class ZelosRuntime:
                 pass
 
             time.sleep(poll_interval)
+
+    def _verify_and_escalate(self) -> None:
+        """v0.9.1: Check confidence for active goals. Escalate low-confidence
+        goals by deploying additional verification or flagging for human review.
+        """
+        for goal_id, goal in list(self._goals.items()):
+            if goal["status"] in ("completed", "failed", "cancelled"):
+                continue
+            # Score current evidence
+            evidence_bag = self._active_evidence.get(goal_id, EvidenceBag(goal_id=goal_id))
+            if not evidence_bag.items:
+                continue
+            score_result = self._confidence_scorer.score(evidence_bag)
+            # Low confidence with evidence → mark for escalation
+            if score_result.score < 0.70 and score_result.recommendation == "need_human":
+                if goal.get("escalation_level", 0) == 0:
+                    goal["escalation_level"] = 1
+                    goal["escalation_reason"] = (
+                        f"Confidence {score_result.score:.0%} below threshold. "
+                        "Consider additional verification."
+                    )
+
+    def auto_decide(self, goal_id: str) -> dict:
+        """v0.9.1: Run Policy Gate on a completed goal's ExecutionReport.
+        Returns GateDecision dict with action and reason.
+        """
+        report = self.get_execution_report(goal_id)
+        if not report:
+            return {"action": "error", "reason": "Report not available"}
+        decision = self._policy_gate.evaluate(report)
+        # Record decision as audit event
+        self._audit("system", "policy_gate.decide", goal_id,
+                     detail=f"{decision.action}: {decision.reason}")
+        # If require_human, create HITL request
+        if decision.action == "require_human" and decision.required_approvers:
+            self._hitl.create_request(
+                task_id=f"{goal_id}-gate",
+                description=f"Policy Gate requires approval: {decision.reason}",
+                approvers=decision.required_approvers,
+                context={"goal_id": goal_id, "confidence": report.confidence.score if report.confidence else 0},
+            )
+        return decision.to_dict()
 
     def _try_replan(self, failed_task: Task) -> None:
         """Tier 3: Ask Planner to find an alternative way to achieve the goal."""
