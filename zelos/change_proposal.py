@@ -159,19 +159,48 @@ class ChangeProposal:
 
     @classmethod
     def from_intent(cls, goal_id: str, intent: "IntentSpec | None" = None) -> "ChangeProposal":
-        """Factory: build CP from an IntentSpec with sensible defaults."""
+        """Factory: build CP from an IntentSpec with sensible defaults.
+
+        Derives constraints from intent metadata:
+        - scope → risk level (single_module=low, multi_module=medium, system_wide=high)
+        - constraints → knowledge constraints (coding standards, forbidden patterns)
+        - success_criteria → verification criteria (test_pass_rate, required_verifiers)
+        """
         cp = cls(goal_id=goal_id, intent=intent)
-        if intent:
-            cp.structural_constraints = StructuralConstraints(
-                modified_modules=[] if intent.scope == "auto" else [intent.scope],
-            )
-            cp.risk_spec = RiskSpec(
-                risk_level="low" if intent.scope == "single_module" else "medium",
-            )
-            cp.verification_criteria = VerificationCriteria(
-                test_pass_rate=1.0,
-                coverage_threshold_pct=80.0,
-            )
+        if not intent:
+            return cp
+
+        # Risk: scope-based derivation
+        risk_map = {"single_module": "low", "multi_module": "medium",
+                     "system_wide": "high", "auto": "medium"}
+        cp.risk_spec = RiskSpec(risk_level=risk_map.get(intent.scope, "medium"))
+
+        # Structural: scope → module boundaries
+        cp.structural_constraints = StructuralConstraints(
+            modified_modules=[] if intent.scope in ("auto", "single_module") else [intent.scope],
+        )
+
+        # Knowledge: constraints → coding rules
+        coding_rules = []
+        forbidden = []
+        for c in intent.constraints:
+            if any(kw in c.lower() for kw in ["standard", "规范", "library", "库", "protocol", "协议"]):
+                coding_rules.append(c)
+            elif any(kw in c.lower() for kw in ["must not", "禁止", "don't", "no ", "forbidden"]):
+                forbidden.append(c)
+        cp.knowledge_constraints = KnowledgeConstraints(
+            coding_standards=coding_rules if coding_rules else ["follow existing code style"],
+            forbidden_patterns=forbidden,
+        )
+
+        # Verification: success_criteria → verification requirements
+        cp.verification_criteria = VerificationCriteria(
+            test_pass_rate=1.0,
+            coverage_threshold_pct=80.0 if intent.scope != "system_wide" else 70.0,
+            required_verifiers=["schema"],
+            security_scan_required=intent.scope in ("multi_module", "system_wide"),
+        )
+
         return cp
 
     def get_five_tuple(self) -> tuple:

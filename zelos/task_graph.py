@@ -114,6 +114,7 @@ class Task:
             max_cost_per_call=d.get("max_cost_per_call"),
             max_latency_ms=d.get("max_latency_ms"),
             non_retryable_errors=list(d.get("non_retryable_errors", [])),
+            constraints=d.get("constraints"),
             created_at=float(d.get("created_at", 0.0)),
             updated_at=float(d.get("updated_at", 0.0)),
         )

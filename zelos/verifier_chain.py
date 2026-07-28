@@ -39,6 +39,13 @@ class VerifierChain:
         self._available_verifiers: dict[str, Verifier] = {
             "schema": SchemaVerifier(),
         }
+        # Register additional verifiers if available
+        try:
+            from .verifier_v2 import CodeReviewer, SecurityScanner
+            self._available_verifiers["code_review"] = CodeReviewer()
+            self._available_verifiers["security"] = SecurityScanner()
+        except ImportError:
+            pass  # Graceful — extra verifiers are optional
 
     def register(self, name: str, verifier: Verifier) -> None:
         """Register a verifier for auto-selection."""
