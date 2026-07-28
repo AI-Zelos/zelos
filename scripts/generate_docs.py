@@ -97,6 +97,7 @@ h1{font-size:52px;margin-bottom:4px;color:#f0f6fc}h1 span{color:#58a6ff}
 <a class="card" href="zelos-zh.html"><h3>&#127464;&#127475; 中文手册</h3><p>Zelos 全面技术手册 — 为什么存在、怎么用、每个模块详解、部署指南、FAQ</p></a>
 <a class="card" href="operations.html"><h3>&#128640; Operations Guide</h3><p>Deployment (bare-metal/Docker/K8s), multi-node cluster, monitoring, troubleshooting</p></a>
 <a class="card" href="https://github.com/AI-Zelos/zelos"><h3>&#128187; GitHub</h3><p>Source code &middot; 139 tests &middot; 21 demos &middot; Python/TS/Go SDKs</p></a>
+<a class="card" href="beyond-code-formal-theory-ai-se.pdf"><h3>&#128214; Formal Theory Paper</h3><p>Beyond Code: A Formal Theory of Software Engineering in AI-Native Paradigm</p></a>
 </div>
 <p class="footer">Apache 2.0 &middot; <a href="https://github.com/AI-Zelos/zelos">AI-Zelos/zelos</a></p>
 </main></body></html>"""

@@ -9,6 +9,11 @@
   <b>Zelos manages <em>Goals</em> — and now, <em>verifies</em> them.</b>
 </p>
 
+<p align="center">
+  <i>"The ultimate purpose of AI-Native Software Engineering is not to assist humans in writing code, but to replace 'code review' with the formal verification of software changes."</i><br>
+  — <a href="https://ai-zelos.github.io/zelos/beyond-code-formal-theory-ai-se.pdf"><b>Beyond Code: A Formal Theory of Software Engineering in AI-Native Paradigm</b></a>
+</p>
+
 ---
 
 ## Why Zelos Exists
