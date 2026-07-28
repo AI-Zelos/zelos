@@ -1147,6 +1147,10 @@ class ZelosRuntime:
             goal["plan_id"] = plan_id
             goal["updated_at"] = time.time()
 
+            # v0.9.0: Capture architecture delta from planner
+            if planner_plan.architecture_delta:
+                goal["architecture_delta"] = planner_plan.architecture_delta
+
             # v0.8.0: Persist after plan creation
             self._persist_goal_state(goal_id)
 
@@ -1352,11 +1356,15 @@ class ZelosRuntime:
         # Score confidence
         confidence = self._confidence_scorer.score(evidence_bag)
 
-        # Build architecture delta (from goal metadata or default)
-        arch_delta = ArchDelta(
-            risk_level="low" if confidence.score > 0.7 else "medium",
-            explanation=f"Auto-generated from {len(trace.tasks) if trace else 0} tasks",
-        )
+        # Build architecture delta — use Planner's output if available, else default
+        goal_arch = goal.get("architecture_delta")
+        if goal_arch and isinstance(goal_arch, dict):
+            arch_delta = ArchDelta.from_dict(goal_arch)
+        else:
+            arch_delta = ArchDelta(
+                risk_level="low" if confidence.score > 0.7 else "medium",
+                explanation=f"Auto-generated from {len(trace.tasks) if trace else 0} tasks",
+            )
 
         # Build rollback plan
         rollback = RollbackPlan(

@@ -50,9 +50,10 @@ class PlannerPlan:
     planner_version: str = "0.1.0"
     created_at: float = 0.0
     version: int = 1
+    architecture_delta: dict[str, Any] | None = None  # v0.9.0
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "plan_id": self.plan_id or str(uuid.uuid4()),
             "goal_id": self.goal_id,
             "tasks": [t.to_dict() for t in self.tasks],
@@ -62,6 +63,9 @@ class PlannerPlan:
             "created_at": self.created_at or time.time(),
             "version": self.version,
         }
+        if self.architecture_delta:
+            result["architecture_delta"] = self.architecture_delta
+        return result
 
 
 # ═══════════════════════════════════════════
@@ -321,7 +325,18 @@ Respond with ONLY valid JSON. No markdown, no explanation, no code fences.
   ],
   "dependencies": [
     {"from_task_id": "t1", "to_task_id": "t2", "type": "hard", "data_required": true}
-  ]
+  ],
+  "architecture_delta": {
+    "modified_modules": ["auth-service", "user-model"],
+    "new_dependencies": ["oauth2-client-lib"],
+    "removed_dependencies": [],
+    "api_changes": [
+      {"endpoint": "POST /auth/login", "change_type": "modified", "compatibility": "backward_compatible"}
+    ],
+    "data_model_changes": ["users.add(oauth_provider, oauth_id)"],
+    "risk_level": "medium",
+    "explanation": "Short explanation of why this risk level"
+  }
 }
 
 ## Capability Naming
@@ -439,7 +454,7 @@ Respond with the COMPLETE updated plan as JSON (existing tasks + new tasks).
     # ── Response Parsing ──
 
     def _parse_response(self, text: str, goal_id: str) -> PlannerPlan:
-        """Parse LLM JSON response into a PlannerPlan."""
+        """Parse LLM JSON response into a PlannerPlan. v0.9.0: also extracts architecture_delta."""
         # Strip markdown code fences if present
         text = text.strip()
         if text.startswith("```"):
@@ -474,6 +489,20 @@ Respond with the COMPLETE updated plan as JSON (existing tasks + new tasks).
             plan.tasks.append(task)
 
         plan.dependencies = data.get("dependencies", [])
+
+        # v0.9.0: Extract architecture_delta from LLM response
+        arch_delta = data.get("architecture_delta")
+        if arch_delta and isinstance(arch_delta, dict):
+            plan.architecture_delta = {
+                "modified_modules": arch_delta.get("modified_modules", []),
+                "new_dependencies": arch_delta.get("new_dependencies", []),
+                "removed_dependencies": arch_delta.get("removed_dependencies", []),
+                "api_changes": arch_delta.get("api_changes", []),
+                "data_model_changes": arch_delta.get("data_model_changes", []),
+                "risk_level": arch_delta.get("risk_level", "unknown"),
+                "explanation": arch_delta.get("explanation", ""),
+            }
+
         return plan
 
     # ── Validation ──
