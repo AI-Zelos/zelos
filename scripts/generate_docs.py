@@ -77,8 +77,9 @@ if os.path.isdir(papers_dir):
     for pdf in sorted(glob.glob(os.path.join(papers_dir, "*.pdf"))):
         # Use a clean filename for the public copy
         basename = os.path.basename(pdf)
-        clean_name = basename.replace(" ", "-").replace("_", "-").lower()
-        clean_name = clean_name[:80]  # limit filename length
+        import re
+        clean_name = re.sub(r'[_\s]+', '-', basename).lower()
+        clean_name = re.sub(r'-+', '-', clean_name)  # collapse multiple dashes
         dest = os.path.join(PUBLIC, clean_name)
         shutil.copy2(pdf, dest)
         paper_files.append(clean_name)
