@@ -3,8 +3,11 @@
 | Field | Value |
 |-------|-------|
 | **ZEIP** | 0004 |
+| **Title** | Verification |
 | **Status** | Draft |
 | **Version** | 1.0 |
+| **Created** | 2026-07-28 |
+| **Author** | Zelos Core Team |
 
 ## Abstract
 
@@ -20,17 +23,26 @@ AI's biggest problem is not "can it write code?" — it is **"how do we know the
 
 ```python
 class Verifier(ABC):
-    def verify(self, artifact: Artifact, expected_schema: dict) -> Verdict:
-        """Verify an artifact against its expected schema."""
+    def verify(self, artifact_content: Any, criteria: VerificationCriteria) -> Verdict:
+        """Verify artifact content against verification criteria."""
 ```
 
-### Verdict
+### VerificationCriteria
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `expected_schema` | dict | JSON Schema the artifact must conform to |
+| `constraints` | list[str] | Additional constraints to check |
+| `severity` | string | `error` / `warning` — failures at `error` level block the chain |
+
+### Verdict Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `verdict` | string | `PASS` / `FAIL` / `WARN` |
 | `reason` | string | Human-readable explanation |
 | `details` | dict | Detailed findings |
+| `confidence` | float | Per-verifier confidence (0.0-1.0) |
 
 ### Verifier Chain
 

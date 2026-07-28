@@ -3,8 +3,11 @@
 | Field | Value |
 |-------|-------|
 | **ZEIP** | 0006 |
+| **Title** | Policy |
 | **Status** | Draft |
 | **Version** | 1.0 |
+| **Created** | 2026-07-28 |
+| **Author** | Zelos Core Team |
 
 ## Abstract
 
