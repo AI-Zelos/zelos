@@ -51,12 +51,13 @@ if os.path.isdir(papers_dir):
         bn = os.path.splitext(os.path.basename(md_file))[0]
         if "executive-summary" in bn.lower():
             continue
-        words = re.split(r'[_\s]+', bn)
-        aw = [w for w in words[:6] if re.match(r'^[a-zA-Z0-9-]+$', w)]
-        sn = '-'.join(aw[:4]).lower() if len(aw) >= 2 else re.sub(r'[^a-zA-Z0-9]', '', bn)[:40].lower()
-        if not sn:
-            sn = hashlib.md5(bn.encode()).hexdigest()[:8]
+        # Preserve original filename, just replace spaces/underscores
+        sn = re.sub(r'[_\s]+', '-', bn).lower()
+        sn = re.sub(r'[：:]+', '-', sn)
         sn = re.sub(r'-+', '-', sn).strip('-')
+        # If all non-ASCII was stripped and name is empty, use hash
+        if not sn or len(sn) < 2:
+            sn = hashlib.md5(bn.encode()).hexdigest()[:8]
         hname = f"{sn}.html"
         with open(md_file) as f:
             body = markdown.markdown(f.read(), extensions=["tables", "fenced_code"])
@@ -78,12 +79,11 @@ if os.path.isdir(papers_dir):
     for pdf in sorted(glob.glob(os.path.join(papers_dir, "*.pdf"))):
         bn = os.path.basename(pdf)
         stem = os.path.splitext(bn)[0]
-        words = re.split(r'[_\s]+', stem)
-        aw = [w for w in words[:6] if re.match(r'^[a-zA-Z0-9-]+$', w)]
-        sn = '-'.join(aw[:4]).lower() if len(aw) >= 2 else re.sub(r'[^a-zA-Z0-9]', '', stem)[:40].lower()
-        if not sn:
-            sn = hashlib.md5(stem.encode()).hexdigest()[:8]
+        sn = re.sub(r'[_\s]+', '-', stem).lower()
+        sn = re.sub(r'[：:]+', '-', sn)
         sn = re.sub(r'-+', '-', sn).strip('-')
+        if not sn or len(sn) < 2:
+            sn = hashlib.md5(stem.encode()).hexdigest()[:8]
         cname = f"{sn}.pdf"
         shutil.copy2(pdf, os.path.join(PUBLIC, cname))
         papers_rows.append(f'<tr><td><a href="{cname}">{stem[:60]}</a></td><td style="color:#8b949e">PDF</td></tr>')
