@@ -6,14 +6,11 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:920px;margin:0 auto;padding:24px;background:#0d1117;color:#c9d1d9;line-height:1.65}
 a{color:#58a6ff}h1{color:#f0f6fc;margin:24px 0 12px}h2{color:#f0f6fc;margin:28px 0 10px;border-bottom:1px solid #21262d;padding-bottom:6px}h3{color:#f0f6fc;margin:20px 0 8px}
-code{background:#161b22;padding:2px 6px;border-radius:4px;font-size:13px}
-pre{background:#161b22;padding:16px;border-radius:8px;overflow-x:auto;font-size:13px}pre code{background:none;padding:0}
-table{border-collapse:collapse;width:100%;margin:12px 0}
-th,td{border:1px solid #30363d;padding:8px 14px;text-align:left}
-th{background:#161b22;font-weight:600}
+code{background:#161b22;padding:2px 6px;border-radius:4px;font-size:13px}pre{background:#161b22;padding:16px;border-radius:8px;overflow-x:auto;font-size:13px}pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:12px 0}th,td{border:1px solid #30363d;padding:8px 14px;text-align:left}th{background:#161b22;font-weight:600}
 .back{margin-bottom:20px;font-size:14px}strong{color:#f0f6fc}
 </style></head><body>
-<p class="back"><a href="./">← Documentation Home</a></p>
+<p class="back"><a href="./">Home</a> | <a href="papers.html">Papers</a></p>
 <h1>从PR到CP：面向AI大规模开发的新型软件变更治理流程</h1>
 <p><strong>核心矛盾</strong>：AI大模型可在数分钟内生成数千行代码，但传统PR（Pull Request）工作流依赖人工逐行审查，其”生成→评审→合并”的串行拓扑将人工评审永久锁定在迭代关键路径上，导致AI代码生产速度与人工治理带宽之间出现结构性错配——该瓶颈源于流程拓扑设计，无法通过局部优化修复。</p>
 <p><strong>新模型</strong>：本文提出CP（Change Proposal，变更提案）——一种意图驱动、前置治理的软件变更治理工作流。CP以形式化五元信息模型（意图、知识约束、结构约束、风险规范、验证准则）替代PR的纯代码制品驱动，将治理时机从”事后评审”前移至”意图定义与约束固化”，构建”意图定义→约束固化→可控生成→证据核验→合规合并”的闭环治理体系。通过形式化建模与三大命题证明，本文严格论证了PR与CP为结构性异构范式，PR无法通过AI辅助评审、前置CI校验等增量优化演进为CP。</p>
