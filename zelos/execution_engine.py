@@ -4,11 +4,12 @@ Execution Engine — Dispatches Tasks to Agents, monitors lifecycle, enforces ti
 
 import threading
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from .event_bus import EventBus
-from .task_graph import TaskGraphEngine, TaskStatus
+from .event_bus import Event, EventBus
+from .task_graph import Task, TaskGraphEngine, TaskStatus
 
 
 @dataclass
@@ -45,6 +46,7 @@ class ExecutionEngine:
     def __init__(self, task_graph: TaskGraphEngine, event_bus: EventBus):
         self._task_graph = task_graph
         self._event_bus = event_bus
+        task_graph._event_bus = event_bus  # v0.9.0: wire lifecycle events
         self._in_flight: dict[str, InFlightTask] = {}  # task_id → InFlightTask
         self._agents: dict[str, AgentState] = {}
         self._agent_dispatch: Callable | None = None  # Callback: (agent_id, task) → bool
@@ -52,6 +54,8 @@ class ExecutionEngine:
         self._lock = threading.RLock()
         self._monitor_thread: threading.Thread | None = None
         self._running = False
+        self._task_inputs: dict[str, dict] = {}  # v0.9.0: task input context
+        self._task_start_times: dict[str, float] = {}  # v0.9.0: task start timestamps
 
     # ── Agent Management ──
 
@@ -92,6 +96,11 @@ class ExecutionEngine:
 
     # ── Dispatch ──
 
+    def set_task_input_context(self, task_id: str, input_context: dict) -> None:
+        """v0.9.0: Set the input context for a task before dispatch."""
+        with self._lock:
+            self._task_inputs[task_id] = input_context
+
     def dispatch(self, task_id: str, agent_id: str) -> bool:
         """Dispatch a task to an agent. Returns True if agent accepted."""
         task = self._task_graph.get_task(task_id)
@@ -102,18 +111,37 @@ class ExecutionEngine:
         with self._lock:
             self._task_graph.transition(task_id, TaskStatus.STARTED, agent_id=agent_id)
             hb_timeout = getattr(task, 'heartbeat_timeout_ms', 0) or agent.heartbeat_interval_ms * 3
+            now = time.time()
             in_flight = InFlightTask(
                 task_id=task_id,
                 agent_id=agent_id,
                 agent_name=agent.agent_name,
-                started_at=time.time(),
-                timeout_at=time.time() + (task.timeout_ms / 1000),
-                heartbeat_at=time.time(),  # v0.8.0
-                heartbeat_timeout_ms=hb_timeout,  # v0.8.0
+                started_at=now,
+                timeout_at=now + (task.timeout_ms / 1000),
+                heartbeat_at=now,
+                heartbeat_timeout_ms=hb_timeout,
             )
             self._in_flight[task_id] = in_flight
+            self._task_start_times[task_id] = now  # v0.9.0
             agent.current_tasks.append(task_id)
             agent.operational_state = "busy"
+
+        # v0.9.0: Publish task.started event with input context
+        input_ctx = self._task_inputs.pop(task_id, None)
+        self._event_bus.publish(Event(
+            event_id=str(uuid.uuid4()),
+            event_type="task.started",
+            source="execution_engine",
+            timestamp=now,
+            correlation_id=task.plan_id,
+            payload={
+                "task_id": task_id,
+                "agent_id": agent_id,
+                "agent_name": agent.agent_name,
+                "required_capability": task.required_capability,
+                "input_context": input_ctx or {},
+            },
+        ))
 
         # Call the agent dispatch callback (in-process: direct function call)
         if self._agent_dispatch:
@@ -149,34 +177,68 @@ class ExecutionEngine:
                 if not agent.current_tasks:
                     agent.operational_state = "idle"
 
-            if result.get("status") == "completed":
+            status = result.get("status")
+            duration_ms = (time.time() - self._task_start_times.pop(task_id, time.time())) * 1000
+            task = self._task_graph.get_task(task_id)
+
+            if status == "completed":
                 try:
                     self._task_graph.transition(task_id, TaskStatus.COMPLETED)
                 except ValueError:
                     return False
                 if agent:
                     agent.total_completed += 1
+                # v0.9.0: Publish task.completed with artifact
+                artifact = result.get("artifact", {})
+                payload_size = len(str(artifact))
+                event_payload = {
+                    "task_id": task_id, "agent_id": agent_id,
+                    "duration_ms": int(duration_ms),
+                }
+                if payload_size > 100000:
+                    event_payload["content_ref"] = f"storage:task:{task_id}:artifact"
+                    event_payload["output_artifact_summary"] = f"Large artifact ({payload_size} bytes)"
+                else:
+                    event_payload["output_artifact"] = artifact
+                self._event_bus.publish(Event(
+                    event_id=str(uuid.uuid4()),
+                    event_type="task.completed",
+                    source="execution_engine",
+                    timestamp=time.time(),
+                    correlation_id=task.plan_id if task else "",
+                    payload=event_payload,
+                ))
             else:
                 # v0.8.0: Check non_retryable_errors
-                task = self._task_graph.get_task(task_id)
                 error_code = (result.get("error") or {}).get("code", "")
                 if task and error_code and task.non_retryable_errors:
                     if error_code in task.non_retryable_errors:
                         try:
                             self._task_graph.transition(task_id, TaskStatus.FATAL_FAILED)
                         except ValueError:
-                            # Fallback: if FATAL_FAILED transition not valid, use FAILED
                             self._task_graph.transition(task_id, TaskStatus.FAILED)
                         if agent:
                             agent.total_failed += 1
                         return True
-                # Normal failure
                 try:
                     self._task_graph.transition(task_id, TaskStatus.FAILED)
                 except ValueError:
                     return False
                 if agent:
                     agent.total_failed += 1
+                # v0.9.0: Publish task.failed with error
+                self._event_bus.publish(Event(
+                    event_id=str(uuid.uuid4()),
+                    event_type="task.failed",
+                    source="execution_engine",
+                    timestamp=time.time(),
+                    correlation_id=task.plan_id if task else "",
+                    payload={
+                        "task_id": task_id, "agent_id": agent_id,
+                        "error": result.get("error", {}),
+                        "duration_ms": int(duration_ms),
+                    },
+                ))
             return True
 
     # ── Cancellation ──

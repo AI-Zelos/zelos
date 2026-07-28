@@ -1,7 +1,7 @@
 """
 Zelos — Open Multi-Agent Orchestration Runtime
 
-v0.8.1: Event Sourcing + Reliability — Goal persistence, heartbeat timeout, non-retryable errors, retry history.
+v0.9.0: Change Evidence Package — Execution trace, evidence collection, confidence scoring, policy gate v2.
 """
 
-__version__ = "0.8.1"
+__version__ = "0.9.0"

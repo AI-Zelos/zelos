@@ -34,6 +34,33 @@ All notable changes to Zelos will be documented in this file.
 
 ---
 
+## [0.9.0] — 2026-07-28
+
+### Added — Change Evidence Package
+- **Lifecycle Events** — Full Task lifecycle events (`task.created`/`ready`/`assigned`/`started`/`completed`/`failed`) with input/output context
+- **Execution Trace** — `get_goal_trace()` API: complete Task timeline, pagination, lazy-load artifacts
+- **Intent Specification** — `IntentSpec` dataclass: structured intent with success criteria and constraints
+- **Evidence Collection** — `Evidence` + `EvidenceBag`: typed evidence output, auto-aggregation, per-type summaries
+- **Confidence Scoring** — `WeightedConfidenceScorer`: 6-factor weighted, configurable, recommendation output
+- **Execution Report** — `get_execution_report()`: unified Change Evidence Package (trace + evidence + confidence + rollback)
+- **Policy Gate v2** — `EvidenceBasedPolicyGate`: auto-approve/reject/require_human based on confidence + risk
+- **Architecture Delta** — `ArchDelta` + `APIChange` + `RollbackPlan` data models
+- **Evidence API** — `add_evidence(goal_id, evidence)` for runtime evidence injection
+
+### Changed
+- Version bumped: 0.8.1 → 0.9.0
+- `TaskGraphEngine`: publishes `task.created`/`task.ready`/`task.assigned` events on transition
+- `ExecutionEngine`: publishes `task.started`/`task.completed`/`task.failed` with rich payloads
+- `ZelosRuntime`: wired `EventBus` to `TaskGraphEngine`, added trace/report/evidence APIs
+- `submit_goal()`: accepts optional `IntentSpec`
+- Test count: 25 new v0.9.0 tests (REQ-01 through REQ-08)
+
+### Reference
+- Requirements: `docs/v0.9.0-requirements.md`
+- Blueprint: `docs/blueprint/change-evidence-package.md`
+
+---
+
 ## [0.8.1] — 2026-07-28
 
 ### Changed

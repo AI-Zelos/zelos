@@ -37,6 +37,13 @@ from .security import AccessControl, APIKeyManager, AuditLogger, TLSConfig
 from .task_graph import Task, TaskGraphEngine, TaskStatus
 from .verifier import SchemaVerifier, VerificationGate
 
+# ═══ v0.9.0 imports ═══
+from .confidence import WeightedConfidenceScorer  # noqa: E402
+from .evidence import Evidence, EvidenceBag  # noqa: E402
+from .execution_report import ArchDelta, ExecutionReport, IntentSpec, RollbackPlan  # noqa: E402
+from .execution_trace import ExecutionTrace, TaskTrace, TraceEvent  # noqa: E402
+from .policy_gate import EvidenceBasedPolicyGate, GateDecision  # noqa: E402
+
 
 class ZelosRuntime:
     """Central entry point. Owns Kernel lifecycle and Agent lifecycle.
@@ -57,6 +64,7 @@ class ZelosRuntime:
         self._event_bus = EventBus()
         self._capability_registry = CapabilityRegistry()
         self._task_graph = TaskGraphEngine()
+        self._task_graph._event_bus = self._event_bus  # v0.9.0: lifecycle events
         self._plugin_manager = PluginLifecycleManager()
         self._scoring_strategy: ScoringStrategy | None = None
         self._policy_plugin: PolicyPlugin | None = None
@@ -84,6 +92,14 @@ class ZelosRuntime:
             self._storage_backend = InMemoryStorageBackend()
         self._storage_backend.connect()
         self._event_sourcing_engine = EventSourcingEngine()
+
+        # ── v0.9.0: Evidence & Governance ──
+        self._confidence_scorer = WeightedConfidenceScorer(
+            weights=self.config.get("confidence", {}).get("weights"),
+            thresholds=self.config.get("confidence", {}).get("thresholds"),
+        )
+        self._policy_gate = EvidenceBasedPolicyGate()
+        self._active_evidence: dict[str, EvidenceBag] = {}  # goal_id → EvidenceBag
 
         # ── Phase 3: Security ──
         sec_cfg = self.config.get("security", {})
@@ -969,6 +985,7 @@ class ZelosRuntime:
         self,
         description: str,
         *,
+        intent: IntentSpec | None = None,
         budget: float | None = None,
         deadline: str | None = None,
         priority: str = "medium",
@@ -1039,6 +1056,7 @@ class ZelosRuntime:
             "metadata": metadata or {},
             "plan_id": plan_id,
             "tenant_id": tenant_id,
+            "intent": intent,  # v0.9.0
             "created_at": time.time(),
             "updated_at": time.time(),
             "completed_at": None,
@@ -1054,6 +1072,9 @@ class ZelosRuntime:
         }
         with self._lock:
             self._goals[goal_id] = goal
+
+        # v0.9.0: Initialize evidence bag for this goal
+        self._active_evidence[goal_id] = EvidenceBag(goal_id=goal_id)
 
         if ns:
             ns.add_goal(goal_id)
@@ -1232,6 +1253,146 @@ class ZelosRuntime:
     def submit_heartbeat(self, task_id: str) -> bool:
         """v0.8.0: Submit a heartbeat for an in-flight task to prevent timeout."""
         return self._execution_engine.submit_heartbeat(task_id)
+
+    # ═══════════════════ v0.9.0: Execution Trace & Report ═══════════════════
+
+    def get_goal_trace(self, goal_id: str, include_artifacts: bool = False,
+                       limit: int = 50, offset: int = 0) -> ExecutionTrace | None:
+        """v0.9.0: Get the complete execution trace for a Goal.
+
+        Returns an ExecutionTrace with TaskTraces containing timeline events,
+        optionally loading input/output artifacts from storage.
+        Supports pagination for large Goals.
+        """
+        goal = self._goals.get(goal_id)
+        if not goal:
+            return None
+
+        plan_id = goal.get("plan_id", "")
+        # Get all events for this goal's plan
+        all_events = [e for e in self._event_bus.store._events
+                      if e.correlation_id == plan_id]
+
+        # Group events by task_id
+        task_events: dict[str, list] = {}
+        for ev in all_events:
+            tid = ev.payload.get("task_id", "")
+            if tid:
+                task_events.setdefault(tid, []).append(ev)
+
+        # Build TaskTraces
+        task_traces = []
+        for tid, events in task_events.items():
+            task = self._task_graph.get_task(tid)
+            timeline = [TraceEvent(
+                event_type=ev.event_type, timestamp=ev.timestamp,
+                payload=ev.payload,
+            ) for ev in sorted(events, key=lambda e: e.timestamp)]
+
+            tt = TaskTrace(
+                task_id=tid,
+                description=task.description if task else "",
+                required_capability=task.required_capability if task else "",
+                agent_id=task.assigned_agent_id if task else None,
+                status=task.status.value if task else "unknown",
+                attempt=task.attempt if task else 0,
+                timeline=timeline,
+            )
+
+            # Lazy-load artifacts if requested
+            if include_artifacts:
+                for ev in events:
+                    if ev.event_type == "task.started":
+                        tt.input_context = ev.payload.get("input_context")
+                    elif ev.event_type == "task.completed":
+                        tt.output_artifact = ev.payload.get("output_artifact")
+                    elif ev.event_type == "task.failed":
+                        tt.error = ev.payload.get("error")
+
+            task_traces.append(tt)
+
+        # Build ExecutionTrace
+        total = len(task_traces)
+        task_traces.sort(key=lambda t: t.timeline[0].timestamp if t.timeline else 0)
+        if limit and offset >= 0:
+            task_traces = task_traces[offset:offset + limit]
+
+        # Calculate total duration
+        if all_events:
+            timestamps = [e.timestamp for e in all_events]
+            duration_ms = (max(timestamps) - min(timestamps)) * 1000
+        else:
+            duration_ms = 0.0
+
+        return ExecutionTrace(
+            goal_id=goal_id,
+            goal_description=goal.get("description", ""),
+            status=goal.get("status", "unknown"),
+            total_duration_ms=duration_ms,
+            tasks=task_traces,
+            total_tasks=total,
+        )
+
+    def get_execution_report(self, goal_id: str) -> ExecutionReport | None:
+        """v0.9.0: Get the complete ExecutionReport (Change Evidence Package).
+
+        Aggregates intent, architecture delta, execution trace, evidence bag,
+        confidence score, and rollback plan into one structured report.
+        """
+        goal = self._goals.get(goal_id)
+        if not goal:
+            return None
+
+        # Build trace
+        trace = self.get_goal_trace(goal_id)
+
+        # Get evidence bag
+        evidence_bag = self._active_evidence.get(goal_id, EvidenceBag(goal_id=goal_id))
+
+        # Score confidence
+        confidence = self._confidence_scorer.score(evidence_bag)
+
+        # Build architecture delta (from goal metadata or default)
+        arch_delta = ArchDelta(
+            risk_level="low" if confidence.score > 0.7 else "medium",
+            explanation=f"Auto-generated from {len(trace.tasks) if trace else 0} tasks",
+        )
+
+        # Build rollback plan
+        rollback = RollbackPlan(
+            strategy="event_sourcing_replay",
+            restore_to_event_position=goal.get("event_position"),
+            estimated_downtime_s=5.0,
+            steps=[
+                "Pause new task dispatch",
+                f"Restore goal state to event_position={goal.get('event_position', 0)}",
+                "Verify state consistency",
+                "Resume normal operation",
+            ],
+        )
+
+        return ExecutionReport(
+            goal_id=goal_id,
+            status=goal.get("status", "unknown"),
+            intent=goal.get("intent"),
+            intent_confirmed=bool(goal.get("intent")),
+            architecture_delta=arch_delta,
+            trace=trace,
+            evidence_bag=evidence_bag,
+            confidence=confidence,
+            risk_level=arch_delta.risk_level,
+            rollback_plan=rollback,
+            total_duration_ms=trace.total_duration_ms if trace else 0.0,
+        )
+
+    def add_evidence(self, goal_id: str, evidence: Evidence) -> None:
+        """v0.9.0: Add an evidence item to an active goal's evidence bag."""
+        if goal_id in self._active_evidence:
+            self._active_evidence[goal_id].add(evidence)
+        else:
+            bag = EvidenceBag(goal_id=goal_id)
+            bag.add(evidence)
+            self._active_evidence[goal_id] = bag
 
     def get_goal_status(self, goal_id: str, auth_context: dict | None = None) -> dict[str, Any] | None:
         """Get goal status. Phase 3: tenant-filtered."""
@@ -1733,7 +1894,7 @@ class ZelosRuntime:
                 "hitl": {"pending_approvals": pending_approvals},
                 "cluster": {"enabled": self._cluster_enabled, "is_leader": self._leader_election.is_leader()},
             },
-            "version": "0.8.1",
+            "version": "0.9.0",
         }
 
     def get_metrics(self) -> dict[str, Any]:

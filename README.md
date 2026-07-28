@@ -2,7 +2,7 @@
 
 > The missing operating system for the multi-agent era.
 
-**Status:** Phase 8 Complete · **Version:** 0.8.1 · **91 Tests** · **3 SDKs** · **Apache 2.0**
+**Status:** Phase 9 Complete · **Version:** 0.9.0 · **116 Tests** · **3 SDKs** · **Apache 2.0**
 
 <p align="center">
   <b>Linux manages Processes. Kubernetes manages Containers. Zelos manages Goals.</b>
@@ -242,7 +242,7 @@ pip install -e ".[dev]"
 
 # Quick reference
 make dev        # Start Runtime in hot-reload mode
-make test       # Run all 91 tests
+make test       # Run all 116 tests
 make lint       # Ruff code quality check (zero errors)
 make format     # Auto-format all code
 make check      # Full CI pipeline (lint + test)
@@ -578,6 +578,7 @@ After reading these, you should understand the entire Runtime architecture witho
 | **Phase 6** | Demo Enrichment & Documentation (HITL, Multi-tenancy, Docs) | ✅ Complete |
 | **Phase 7** | Advanced Production (etcd, NATS, Go SDK, Perf, OTel) | ✅ Complete |
 | **Phase 8** | Event Sourcing & Reliability (Goal persistence, heartbeat, NonRetryableError) | ✅ Complete |
+| **Phase 9** | Change Evidence Package (Execution trace, evidence, confidence, policy gate) | ✅ Complete |
 
 ### Phase 7 Deliverables
 
@@ -600,6 +601,18 @@ After reading these, you should understand the entire Runtime architecture witho
 | **NonRetryableError** | `Task.non_retryable_errors`, `TaskStatus.FATAL_FAILED` (terminal), no retry on matched errors |
 | **Retry History** | `task.retry_scheduled` event with full context, per-task retry timeline in `get_goal_status()` |
 | **Query Isolation** | Confirmed `get_goal_status()`, `list_agents()`, `get_health()` produce zero events |
+
+### Phase 9 Deliverables
+
+| Module | Components |
+|--------|-----------|
+| **Lifecycle Events** | Full Task lifecycle events with input/output context, large payload content_ref |
+| **Execution Trace** | `get_goal_trace()` — complete Task timeline, pagination, lazy-load artifacts |
+| **Intent Spec** | Structured intent capture with success criteria, constraints, backward compat |
+| **Evidence Collection** | `Evidence` dataclass, `EvidenceBag` auto-aggregation, per-type summaries |
+| **Confidence Scoring** | `WeightedConfidenceScorer` — 6-factor weighted, configurable, recommendation output |
+| **Execution Report** | `get_execution_report()` — unified Change Evidence Package with trace+evidence+confidence |
+| **Policy Gate v2** | `EvidenceBasedPolicyGate` — auto-approve/reject/require_human based on evidence |
 
 ### Phase 6 Deliverables
 

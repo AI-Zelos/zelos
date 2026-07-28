@@ -118,18 +118,24 @@ class Task:
 
 
 class TaskGraphEngine:
-    """Kernel component — manages Tasks and their dependency DAG."""
+    """Kernel component — manages Tasks and their dependency DAG.
+
+    v0.9.0: Publishes task lifecycle events on state transitions.
+    """
 
     def __init__(self):
         self._tasks: dict[str, Task] = {}
         self._dependencies: dict[str, set[str]] = {}  # task_id → {dependency_ids}
         self._dependents_map: dict[str, set[str]] = {}  # task_id → {dependent_ids}
         self._created_task_ids: set[str] = set()  # v0.7.0: O(1) lookup for created tasks
+        self._event_bus = None  # v0.9.0
 
     # ── Task CRUD ──
 
     def add_task(self, task: Task) -> None:
-        task.created_at = __import__("time").time()
+        import time
+
+        task.created_at = time.time()
         task.updated_at = task.created_at
         self._tasks[task.task_id] = task
         self._dependencies[task.task_id] = set(task.dependencies)
@@ -137,6 +143,27 @@ class TaskGraphEngine:
         # Register as dependent on each dependency
         for dep_id in task.dependencies:
             self._dependents_map.setdefault(dep_id, set()).add(task.task_id)
+
+        # v0.9.0: Publish task.created event
+        if self._event_bus:
+            import uuid
+            from .event_bus import Event
+            self._event_bus.publish(Event(
+                event_id=str(uuid.uuid4()),
+                event_type="task.created",
+                source="task_graph",
+                timestamp=time.time(),
+                correlation_id=task.plan_id,
+                payload={
+                    "task_id": task.task_id,
+                    "plan_id": task.plan_id,
+                    "description": task.description,
+                    "required_capability": task.required_capability,
+                    "dependencies": list(task.dependencies),
+                    "priority": task.priority,
+                    "timeout_ms": task.timeout_ms,
+                },
+            ))
 
     def get_task(self, task_id: str) -> Task | None:
         return self._tasks.get(task_id)
@@ -162,7 +189,43 @@ class TaskGraphEngine:
             self._created_task_ids.discard(task_id)
         elif to_status == TaskStatus.CREATED:
             self._created_task_ids.add(task_id)
+
+        # v0.9.0: Publish state transition events
+        if self._event_bus:
+            self._publish_transition_event(task, from_status, to_status)
         return task
+
+    def _publish_transition_event(self, task, from_status, to_status) -> None:
+        """v0.9.0: Publish event for a state transition.
+
+        Note: STARTED/COMPLETED/FAILED are published by ExecutionEngine
+        with richer payloads (input_context/output_artifact/error).
+        TaskGraph publishes pre-execution lifecycle events.
+        """
+        import uuid
+        from .event_bus import Event
+
+        # Maps for pre-execution lifecycle only
+        event_map = {
+            TaskStatus.READY: "task.ready",
+            TaskStatus.ASSIGNED: "task.assigned",
+            TaskStatus.TIMED_OUT: "task.timed_out",
+            TaskStatus.CANCELLED: "task.cancelled",
+        }
+        event_type = event_map.get(to_status)
+        if event_type:
+            payload = {"task_id": task.task_id, "plan_id": task.plan_id,
+                        "from_status": from_status.value, "to_status": to_status.value}
+            if task.assigned_agent_id:
+                payload["agent_id"] = task.assigned_agent_id
+            self._event_bus.publish(Event(
+                event_id=str(uuid.uuid4()),
+                event_type=event_type,
+                source="task_graph",
+                timestamp=__import__("time").time(),
+                correlation_id=task.plan_id,
+                payload=payload,
+            ))
 
     def _get_required(self, task_id: str) -> Task:
         if task_id not in self._tasks:

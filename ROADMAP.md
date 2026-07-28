@@ -242,6 +242,34 @@ Goal state reconstructable from Event History. Heartbeat timeout. NonRetryableEr
 
 ---
 
+## Phase 9: Change Evidence Package
+
+**Status:** Complete
+**Version:** v0.9.0
+**Timeline:** July 2026
+
+### Goal
+Upgrade Zelos from execution engine to governance platform. Human reviews Intent + Evidence + Confidence, not code.
+
+### Scope
+- [x] Full Task lifecycle events (`task.created`/`started`/`completed`/`failed`) with input/output
+- [x] `get_goal_trace()` API — complete execution timeline with pagination
+- [x] IntentSpec — structured intent capture with success criteria
+- [x] Evidence Collection — `Evidence` + `EvidenceBag` with auto-aggregation
+- [x] Confidence Scoring — `WeightedConfidenceScorer` with configurable weights
+- [x] Execution Report — `get_execution_report()` unified Change Evidence Package
+- [x] Policy Gate v2 — `EvidenceBasedPolicyGate` auto-approve/reject/require_human
+- [x] Architecture Delta + RollbackPlan data models
+
+### Test Results
+25 new v0.9.0 tests. All pass. Zero regressions across 116 total tests.
+
+### Reference
+- `docs/v0.9.0-requirements.md`
+- `docs/blueprint/change-evidence-package.md`
+
+---
+
 ## Beyond: Ecosystem Projects
 
 Explicitly NOT part of Zelos core. Future ecosystem:
@@ -256,4 +284,4 @@ Explicitly NOT part of Zelos core. Future ecosystem:
 
 ## Versioning
 
-Semantic Versioning. Current version: **v0.8.0** (Phase 8 Complete).
+Semantic Versioning. Current version: **v0.9.0** (Phase 9 Complete).
