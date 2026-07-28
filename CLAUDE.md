@@ -67,6 +67,11 @@ The Runtime owns:
 - Scheduling
 - Task Lifecycle
 - Execution Plan
+- Event Sourcing
+- Goal State Persistence
+- Heartbeat Timeout
+- Non-Retryable Errors
+- Retry History
 - Memory
 - Context
 - Event Bus
@@ -570,6 +575,16 @@ TaskStarted
 TaskCompleted
 
 TaskFailed
+
+TaskTimedOut
+
+TaskRetryScheduled
+
+TaskFatalFailed
+
+GoalStatePersisted
+
+GoalStateRecovered
 
 VerificationCompleted
 

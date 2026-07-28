@@ -56,7 +56,7 @@ Zelos Runtime:
 
 | 指标 | 数值 |
 |------|------|
-| 版本 | v0.7.0 |
+| 版本 | v0.8.1 |
 | Phases | 0–7 全部完成 |
 | 源码模块 | 28 个 |
 | 自动化测试 | 78 个（71 passed） |
@@ -920,7 +920,7 @@ pip install zelos-runtime[dev]
 ### 生产环境（Docker）
 
 ```bash
-docker build -t zelos:0.7.0 .
+docker build -t zelos:0.8.1 .
 docker compose up -d
 ```
 

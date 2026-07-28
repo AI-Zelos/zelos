@@ -17,7 +17,7 @@
 
 **视觉建议：**
 - 深空黑背景，中央一个发光的蓝色核心（代表 Runtime Kernel），周围环绕多个小型节点（代表 Agents），由细光线连接。
-- 底部小字：`Phase 7 Complete · v0.7.0 · Apache 2.0 · 78 Tests · 3 SDKs`
+- 底部小字：`Phase 8 Complete · v0.8.1 · Apache 2.0 · 91 Tests · 3 SDKs`
 
 **演讲者备注：**
 大家好，今天我要介绍的是 Zelos——一个面向多智能体协同的开源编排运行时。它不是又一个 Agent 框架，而是重新思考了 AI 系统底层基础设施的产物：当你的系统里有几十上百个 Agent 需要协作时，谁来负责规划、调度、验证和审计？这就是 Zelos 要做的事。
@@ -809,7 +809,7 @@ print(f"Goal {result.status}: {result.progress.percent_complete:.0%}")
 - 💰 **成本可控** — Budget + Cost per call 约束 + Policy 强制
 - 🔒 **供应商中立** — 不锁定任何模型或 Agent 提供商
 - ⚖️ **合规原生** — 完整事件审计链，天然适配 EU AI Act 等监管要求
-- 📈 **从单节点到多节点集群** — 7 Phases 全覆盖，etcd + NATS 支持真正的分布式部署
+- 📈 **从单节点到多节点集群** — 8 Phases 全覆盖，etcd + NATS 支持真正的分布式部署
 - 🏷️ **Apache 2.0 开源** — 基础设施不应被私有化
 
 **底层价值：**
@@ -820,7 +820,7 @@ print(f"Goal {result.status}: {result.progress.percent_complete:.0%}")
 > **这是第一个真正完整的多 Agent 编排 Runtime——不是框架，是基础设施。**
 
 **演讲者备注：**
-对开发者，它解放了你——你只写 execute()，Runtime 包办一切。对架构师，它给你宪法性保证——15 条不变式不会因为需求变更而腐化。对业务决策者，它给你合规原生——完整的审计链让监管报告自动生成。截至 v0.7.0，Zelos 已经走完了从架构规格到生产级分布式部署的完整工程闭环——28 个模块、78 个测试、3 种语言 SDK、21 个 Demo。底层价值：Zelos 把 Agent 编排的工程复杂性变成 Runtime 的内置能力，让开发者回归到业务创新。
+对开发者，它解放了你——你只写 execute()，Runtime 包办一切。对架构师，它给你宪法性保证——15 条不变式不会因为需求变更而腐化。对业务决策者，它给你合规原生——完整的审计链让监管报告自动生成。截至 v0.8.1，Zelos 已经走完了从架构规格到生产级分布式部署的完整工程闭环——28 个模块、91 个测试、3 种语言 SDK、21 个 Demo。底层价值：Zelos 把 Agent 编排的工程复杂性变成 Runtime 的内置能力，让开发者回归到业务创新。
 
 ---
 
@@ -864,7 +864,7 @@ NEF 描述的是一个完整文明蓝图——从硬件根信任到链上合约�
 **演讲者备注（可选讲）：**
 这一页是延伸视角。如果你关心的不只是"如何让 5 个 Agent 协同工作"，而是"一个由上百个 Agent 构成的自主经济体如何运转"——那 NEF 白皮书给出了一个宏大的蓝图。Zelos 在这个蓝图中的角色是 Runtime 层——它是让宪法和合约从文本变成可执行的软件系统的那一层。当然，这只是一个视角——Zelos 本身就是独立的基础设施，不依赖任何特定的上层框架。
 
-**版本注记：** 截至 v0.7.0，Zelos 已实现 ce 白皮书描绘的 Runtime 执行层的所有核心能力：分布式协调（etcd）、跨节点消息（NATS）、多租户隔离、人机协同审批、不可变审计链、三语言 SDK。Agent City 需要的"操作系统"已经就绪。
+**版本注记：** 截至 v0.8.1，Zelos 已实现 ce 白皮书描绘的 Runtime 执行层的所有核心能力：分布式协调（etcd）、跨节点消息（NATS）、多租户隔离、人机协同审批、不可变审计链、三语言 SDK。Agent City 需要的"操作系统"已经就绪。
 
 ---
 
@@ -919,6 +919,7 @@ Phase 6  ✅  Demo Enrichment & Docs
 ├─ OpenTelemetry → Jaeger OTLP 导出 + CHANGELOG 全版本历史
 
 Phase 7  ✅  Advanced Production
+Phase 8  ✅  Event Sourcing & Reliability
 ├─ etcd 协调后端（可插拔：InMemory + etcd，选举 + Watch + Heartbeat）
 ├─ NATS 消息队列（可插拔：InMemory + NATS，Pub/Sub + 模式匹配 + Request-Reply）
 ├─ Go SDK（schema / agent / client）编译通过
@@ -930,11 +931,11 @@ Phase 7  ✅  Advanced Production
 28 源码模块 · 78 测试（71 passed）· 21 Demo
 3 语言 SDK（Python + TypeScript + Go）
 4 协议适配器 · 3 存储后端 · 2 协调后端 · 2 消息后端
-7 Phases 全部完成 · v0.7.0 · Apache 2.0
+8 Phases 全部完成 · v0.8.1 · Apache 2.0
 ```
 
 **演讲者备注：**
-Zelos 在 2026 年 7 月完成了全部 7 个 Phase——这不是 PowerPoint 架构，是 28 个模块的可运行代码。78 个自动化测试、21 个 Demo、3 种语言 SDK。从架构规格到生产级硬化的完整工程闭环。
+Zelos 在 2026 年 7 月完成了全部 8 个 Phase——这不是 PowerPoint 架构，是 28 个模块的可运行代码。91 个自动化测试、21 个 Demo、3 种语言 SDK。从架构规格到生产级硬化的完整工程闭环。
 
 ---
 
@@ -965,7 +966,7 @@ Zelos 在 2026 年 7 月完成了全部 7 个 Phase——这不是 PowerPoint �
 **为什么 Zelos 有壁垒：**
 > - **LLM 无关**——Runtime 不需要任何 LLM 依赖，纯 Python stdlib 可运行
 > - **宪法性架构**——15 条不变式 + 三权分立（Planner ≠ Scheduler ≠ Verifier），不会因需求变更腐化
-> - **完整工程闭环**——7 Phases、78 测试、3 SDK、21 Demo、CI/CD + Docker + K8s
+> - **完整工程闭环**——8 Phases、78 测试、3 SDK、21 Demo、CI/CD + Docker + K8s
 > - **协议无关**——HTTP/gRPC/MCP/A2A 都是适配器，Runtime 内核永不绑定外部协议
 > - **不可变审计链**——Event Bus 只追加不修改，所有决策可追溯可重放
 > - **真正的分布式**——etcd 领导者选举 + NATS 消息队列 + 多节点集群部署
@@ -976,7 +977,7 @@ Zelos 在 2026 年 7 月完成了全部 7 个 Phase——这不是 PowerPoint �
 - 项目仓库：github.com/AI-Zelos/zelos
 - 在线文档：`make docs` → public/index.html
 - License：Apache 2.0
-- 当前版本：v0.7.0（Phase 7 Complete）
+- 当前版本：v0.8.1（Phase 8 Complete）
 
 **视觉建议：**
 - 深色背景，中央大字 "Zelos"

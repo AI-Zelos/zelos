@@ -1,4 +1,4 @@
-# Zelos User Manual v0.7.0
+# Zelos User Manual v0.8.1
 
 > **Open Multi-Agent Orchestration Runtime** — The Runtime that executes, coordinates, and governs intelligent agents.
 
@@ -95,7 +95,7 @@ Running this prints:
 ```
 Goal submitted: a1b2c3d4... → planned
 Progress: 0%
-Runtime: healthy, version=0.7.0
+Runtime: healthy, version=0.8.1
 ```
 
 ### Your First Goal
@@ -1552,7 +1552,7 @@ Complete command-line interface.
 ### Available Commands
 
 ```bash
-zelos --version                              # 0.7.0
+zelos --version                              # 0.8.1
 zelos --help
 
 # Runtime

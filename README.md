@@ -2,7 +2,7 @@
 
 > The missing operating system for the multi-agent era.
 
-**Status:** Phase 8 Complete · **Version:** 0.8.0 · **91 Tests** · **3 SDKs** · **Apache 2.0**
+**Status:** Phase 8 Complete · **Version:** 0.8.1 · **91 Tests** · **3 SDKs** · **Apache 2.0**
 
 <p align="center">
   <b>Linux manages Processes. Kubernetes manages Containers. Zelos manages Goals.</b>
@@ -114,7 +114,7 @@ verification, memory, lifecycle, observability — is handled by the Runtime.
 │                                    │                                     │
 │  ┌────────────────────────────────────────────────────────────────────┐  │
 │  │                     RUNTIME INFRASTRUCTURE                          │  │
-│  │ EventBus │ Memory │ Policy │ Verifier │ Context │ Observability    │  │
+│  │ EventBus │ Memory │ Policy │ Verifier │ Context │ EventSourcing │ Observability    │  │
 │  └────────────────────────────────────────────────────────────────────┘  │
 │                                    │                                     │
 │  ┌────────────────────────────────────────────────────────────────────┐  │
@@ -242,7 +242,7 @@ pip install -e ".[dev]"
 
 # Quick reference
 make dev        # Start Runtime in hot-reload mode
-make test       # Run all 78 tests
+make test       # Run all 91 tests
 make lint       # Ruff code quality check (zero errors)
 make format     # Auto-format all code
 make check      # Full CI pipeline (lint + test)
@@ -463,6 +463,10 @@ runtime.shutdown()
 | **Hot-Join / Hot-Leave** | `add_agent()` mid-run → instantly dispatchable. `remove_agent()` → tasks reassigned. |
 | **Separation of Powers** | Planner plans. Agent executes. Verifier verifies. Policy constrains. No single agent holds all powers. |
 | **Pluggable Storage** | InMemory / Redis / PostgreSQL / MySQL — one line in zelos.yaml to switch. Events + State persisted across restarts. |
+| **Event Sourcing** | Every Goal state reconstructable from its immutable event history. `EventSourcingEngine.apply_event()` is a pure function — given the same events, you always get the same state. |
+| **Goal Persistence** | All active Goals auto-persisted to `StorageBackend`. Runtime restart → all incomplete Goals automatically recovered with full task state. |
+| **Heartbeat Timeout** | Agent stops heartbeating → Task auto-FAILED → Scheduler retries. `submit_heartbeat()` API keeps long-running tasks alive. |
+| **NonRetryableError** | `ValidationError` / `AuthError` → `FATAL_FAILED` (terminal). No retry, no replan. The right failure for the right error. |
 
 ---
 
@@ -572,6 +576,7 @@ After reading these, you should understand the entire Runtime architecture witho
 | **Phase 5** | Production Hardening (Anomaly Detection, K8s Probes, Operations) | ✅ Complete |
 | **Phase 6** | Demo Enrichment & Documentation (HITL, Multi-tenancy, Docs) | ✅ Complete |
 | **Phase 7** | Advanced Production (etcd, NATS, Go SDK, Perf, OTel) | ✅ Complete |
+| **Phase 8** | Event Sourcing & Reliability (Goal persistence, heartbeat, NonRetryableError) | ✅ Complete |
 
 ### Phase 7 Deliverables
 
@@ -582,6 +587,18 @@ After reading these, you should understand the entire Runtime architecture witho
 | **Go SDK** | `zelos-go/` — schema types, Agent interface, ZelosClient, DemoAgent |
 | **Performance** | TaskGraph O(1) evaluate_all |
 | **OpenTelemetry** | Jaeger OTLP export, span verification |
+
+### Phase 8 Deliverables
+
+| Module | Components |
+|--------|-----------|
+| **Event Sourcing** | `EventSourcingEngine` — pure-function `apply_event`, full rebuild from events, snapshot + incremental replay |
+| **Goal State** | `GoalState` dataclass — `to_dict()`/`from_dict()`, auto-persisted on every state change, startup recovery |
+| **Event Sequence** | `Event.sequence_id` — monotonic auto-assign, `replay_from()`, backward compatible |
+| **Heartbeat Timeout** | `InFlightTask.heartbeat_at`, monitor loop detection, `submit_heartbeat()` API, auto-retry on timeout |
+| **NonRetryableError** | `Task.non_retryable_errors`, `TaskStatus.FATAL_FAILED` (terminal), no retry on matched errors |
+| **Retry History** | `task.retry_scheduled` event with full context, per-task retry timeline in `get_goal_status()` |
+| **Query Isolation** | Confirmed `get_goal_status()`, `list_agents()`, `get_health()` produce zero events |
 
 ### Phase 6 Deliverables
 

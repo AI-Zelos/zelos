@@ -34,6 +34,16 @@ All notable changes to Zelos will be documented in this file.
 
 ---
 
+## [0.8.1] — 2026-07-28
+
+### Changed
+- README status line corrected to Phase 8 / v0.8.1 / 91 Tests
+- `__version__` in `zelos/__init__.py` bumped to 0.8.1
+- All docs updated: README, User Manual (EN+ZH), Operations Guide, ROADMAP, CHANGELOG, PPT script
+- Public documentation site regenerated with correct version
+
+---
+
 ## [0.7.0] — 2026-07-23
 
 ### Added — Advanced Production

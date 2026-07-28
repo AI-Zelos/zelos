@@ -177,7 +177,7 @@ Comprehensive demos, verified correctness, complete documentation coverage.
 - [x] HITL approval workflow demo (6 scenarios)
 - [x] Multi-tenant isolation demo (5 scenarios)
 - [x] Demo correctness verification (11 demos verified)
-- [x] CHANGELOG full history (v0.1.0–v0.7.0)
+- [x] CHANGELOG full history (v0.1.0–v0.8.1)
 - [x] ROADMAP updated with all phases
 
 ### Completed in Phase 7
@@ -234,7 +234,7 @@ Goal state reconstructable from Event History. Heartbeat timeout. NonRetryableEr
 
 ### Test Results
 
-28 new v0.8.0 tests. All pass. Zero regressions across 62+ total tests.
+28 new v0.8.0 tests. All pass. Zero regressions across 91 total tests (63 passed, 2 skipped for Docker deps).
 
 ### Reference
 - `docs/v0.8.0-requirements.md`

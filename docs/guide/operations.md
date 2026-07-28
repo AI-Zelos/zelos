@@ -1,4 +1,4 @@
-# Zelos Operations Guide v0.7.0
+# Zelos Operations Guide v0.8.1
 
 ## Deployment Modes
 
@@ -23,7 +23,7 @@ make dev
 ### 2. Docker
 
 ```bash
-make build          # zelos:0.7.0
+make build          # zelos:0.8.1
 make run            # docker compose up -d
 make stop           # docker compose down
 
@@ -105,7 +105,7 @@ mgr.validate(key)   # → {"role": "admin", ...}
 mgr.revoke(key)     # → True
 ```
 
-### Anomaly Detection (v0.7.0)
+### Anomaly Detection (v0.8.1)
 
 - Tracks failed auth attempts per key hash
 - Auto-revokes after `max_failures` within `failure_window_seconds`
@@ -120,7 +120,7 @@ logger.export_json_file("/var/log/zelos/audit.json")
 
 ---
 
-## Distributed Coordination (v0.7.0)
+## Distributed Coordination (v0.8.1)
 
 ### etcd Backend
 
