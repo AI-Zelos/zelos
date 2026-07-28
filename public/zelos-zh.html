@@ -27,21 +27,36 @@ hr{border:none;border-top:1px solid #21262d;margin:24px 0}
 <hr />
 <h2 id="_1">目录</h2>
 <ol>
-<li><a href="#1-项目简介">项目简介</a></li>
-<li><a href="#2-为什么存在">为什么存在</a></li>
-<li><a href="#3-什么时候使用">什么时候使用</a></li>
-<li><a href="#4-核心概念">核心概念</a></li>
-<li><a href="#5-快速上手">快速上手</a></li>
-<li><a href="#6-runtime-kernel">Runtime Kernel（内核）</a></li>
-<li><a href="#7-plugin-生态系统">Plugin 生态系统</a></li>
-<li><a href="#8-分布式与生产部署">分布式与生产部署</a></li>
-<li><a href="#9-安全与合规">安全与合规</a></li>
-<li><a href="#10-多租户">多租户</a></li>
-<li><a href="#11-可观测性">可观测性</a></li>
-<li><a href="#12-sdk-参考">SDK 参考</a></li>
-<li><a href="#13-api-参考">API 参考</a></li>
-<li><a href="#14-部署指南">部署指南</a></li>
-<li><a href="#15-常见问题">常见问题</a></li>
+<li><a href="#1">项目简介</a></li>
+<li><a href="#2">为什么存在</a></li>
+<li><a href="#3">什么时候使用</a></li>
+<li><a href="#4">核心概念</a></li>
+<li><a href="#41-goal">4.1 Goal</a></li>
+<li><a href="#42-execution-plan">4.2 Execution Plan</a></li>
+<li><a href="#43-task">4.3 Task</a></li>
+<li><a href="#44-capability">4.4 Capability</a></li>
+<li><a href="#45-agent">4.5 Agent</a></li>
+<li><a href="#46-artifact">4.6 Artifact</a></li>
+<li><a href="#47-event">4.7 Event</a></li>
+<li><a href="#5">快速上手</a></li>
+<li><a href="#6">Runtime Kernel（内核）</a></li>
+<li><a href="#7">Plugin 生态系统</a></li>
+<li><a href="#8">分布式与生产部署</a></li>
+<li><a href="#9">安全与合规</a></li>
+<li><a href="#10">多租户</a></li>
+<li><a href="#11">可观测性</a></li>
+<li><a href="#12">SDK 参考</a></li>
+<li><a href="#13">API 参考</a></li>
+<li><a href="#14">部署指南</a></li>
+<li><a href="#15">常见问题</a></li>
+<li><a href="#16">v0.9.0 新特性：Change Evidence Package</a></li>
+<li><a href="#161-execution-trace">16.1 Execution Trace</a></li>
+<li><a href="#162-evidence-collection">16.2 Evidence Collection</a></li>
+<li><a href="#163-confidence-scoring">16.3 Confidence Scoring</a></li>
+<li><a href="#164-execution-report">16.4 Execution Report</a></li>
+<li><a href="#165-policy-gate-v2">16.5 Policy Gate v2</a></li>
+<li><a href="#166-intent-specification">16.6 Intent Specification</a></li>
+<li><a href="#167-architecture-delta">16.7 Architecture Delta</a></li>
 </ol>
 <hr />
 <h2 id="1">1. 项目简介</h2>
@@ -994,117 +1009,931 @@ readinessProbe:
 <h3 id="q-agent_1">Q: 怎么保证 Agent 不互相调用？</h3>
 <p><strong>架构层面保证。</strong> Agent 只知道 Runtime，不知道其他 Agent 的存在。它收到的 Task 不包含任何其他 Agent 的信息。Agent 无法直接与其他 Agent 通信——所有通信必须通过 EventBus。</p>
 <h2 id="16-v090-change-evidence-package">16. v0.9.0 新特性：Change Evidence Package</h2>
-<p>v0.9.0 将 Zelos 从<strong>执行引擎</strong>升级为<strong>治理平台</strong>。核心思想：人不应逐行审查 AI 生成的代码，而应审查 Intent（意图）、Evidence（证据）和 Confidence（置信度）。</p>
+<p>v0.9.0 将 Zelos 从<strong>执行引擎</strong>升级为<strong>治理平台</strong>。核心设计理念来自一个根本问题：</p>
+<blockquote>
+<p><strong>"Agent 时代，AI 生成的代码还应该让人来逐行审查吗？"</strong></p>
+</blockquote>
+<p>答案是不应该。当 Agent 每小时可以产出数万行代码时，Code Review 已经超出了人的带宽极限。人应该审查的是三件事：</p>
+<ol>
+<li><strong>Intent（意图）</strong> — 这次变更到底要达成什么目标？</li>
+<li><strong>Evidence（证据）</strong> — 凭什么说目标达成了？（测试、Benchmark、安全扫描……）</li>
+<li><strong>Confidence（置信度）</strong> — 综合评估，这次变更值不值得被接受？</li>
+</ol>
+<p>v0.9.0 的所有特性都围绕这个模型构建。</p>
+<hr />
 <h3 id="161-execution-trace">16.1 Execution Trace（执行链路追溯）</h3>
-<p>查询一个 Goal 从提交到完成的完整执行链路：</p>
-<pre><code class="language-python"># 获取完整执行链路
-trace = runtime.get_goal_trace(goal_id)
-for task in trace.tasks:
-    print(f&quot;Task: {task.task_id} → {task.status}&quot;)
-    for event in task.timeline:
-        print(f&quot;  {event.event_type} at {event.timestamp}&quot;)
-
-# 包含输入/输出
-trace = runtime.get_goal_trace(goal_id, include_artifacts=True)
-# 分页
-trace = runtime.get_goal_trace(goal_id, limit=50, offset=100)
+<p><strong>背景：</strong> v0.8.1 只能查询 Goal 的当前状态快照，无法回溯"每一步发生了什么、输入是什么、输出是什么"。v0.9.0 新增了完整的 Task 生命周期事件，并在 EventBus 中持久化。</p>
+<h4 id="api">API</h4>
+<pre><code class="language-python">ExecutionTrace runtime.get_goal_trace(
+    goal_id: str,
+    include_artifacts: bool = False,   # 是否加载输入/输出
+    limit: int = 50,                   # 分页大小
+    offset: int = 0,                   # 分页偏移
+) -&gt; ExecutionTrace | None
 </code></pre>
-<p>每个 TaskTrace 包含完整的时间线：<code>task.created → task.ready → task.assigned → task.started → task.completed</code>，以及 input_context 和 output_artifact。</p>
+<h4 id="executiontrace">返回值：ExecutionTrace</h4>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>goal_id</code></td>
+<td>str</td>
+<td>Goal ID</td>
+</tr>
+<tr>
+<td><code>goal_description</code></td>
+<td>str</td>
+<td>Goal 描述</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>str</td>
+<td>当前状态</td>
+</tr>
+<tr>
+<td><code>total_duration_ms</code></td>
+<td>float</td>
+<td>总执行耗时（毫秒）</td>
+</tr>
+<tr>
+<td><code>tasks</code></td>
+<td>list[TaskTrace]</td>
+<td>每个 Task 的执行链路</td>
+</tr>
+<tr>
+<td><code>total_tasks</code></td>
+<td>int</td>
+<td>总 Task 数（分页前）</td>
+</tr>
+</tbody>
+</table>
+<h4 id="tasktrace">TaskTrace 字段</h4>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_id</code></td>
+<td>str</td>
+<td>Task ID</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>str</td>
+<td>Task 描述</td>
+</tr>
+<tr>
+<td><code>required_capability</code></td>
+<td>str</td>
+<td>所需能力</td>
+</tr>
+<tr>
+<td><code>agent_id</code></td>
+<td>str | None</td>
+<td>分配的 Agent ID</td>
+</tr>
+<tr>
+<td><code>agent_name</code></td>
+<td>str | None</td>
+<td>Agent 名称</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>str</td>
+<td>当前状态</td>
+</tr>
+<tr>
+<td><code>attempt</code></td>
+<td>int</td>
+<td>第几次尝试</td>
+</tr>
+<tr>
+<td><code>timeline</code></td>
+<td>list[TraceEvent]</td>
+<td>时间线事件列表</td>
+</tr>
+<tr>
+<td><code>input_context</code></td>
+<td>dict | None</td>
+<td>输入上下文（include_artifacts=True 时加载）</td>
+</tr>
+<tr>
+<td><code>output_artifact</code></td>
+<td>dict | None</td>
+<td>输出产物（include_artifacts=True 时加载）</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td>dict | None</td>
+<td>错误信息（失败时）</td>
+</tr>
+</tbody>
+</table>
+<h4 id="traceevent">TraceEvent 字段</h4>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>event_type</code></td>
+<td>str</td>
+<td>事件类型：task.created / task.ready / task.assigned / task.started / task.completed / task.failed / task.retry_scheduled</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>float</td>
+<td>Unix 时间戳</td>
+</tr>
+<tr>
+<td><code>payload</code></td>
+<td>dict</td>
+<td>事件负载</td>
+</tr>
+</tbody>
+</table>
+<h4 id="_10">使用示例</h4>
+<pre><code class="language-python"># 基础查询
+trace = runtime.get_goal_trace(goal_id)
+print(f&quot;Goal: {trace.goal_description}&quot;)
+print(f&quot;Status: {trace.status}, Duration: {trace.total_duration_ms:.0f}ms&quot;)
+print(f&quot;Tasks: {trace.total_tasks}&quot;)
+
+for task in trace.tasks:
+    print(f&quot;\n📋 {task.task_id}: {task.description}&quot;)
+    print(f&quot;   Agent: {task.agent_name or 'unassigned'}&quot;)
+    print(f&quot;   Status: {task.status}, Attempt: {task.attempt}&quot;)
+    for event in task.timeline:
+        print(f&quot;   ⏱ {event.event_type} @ {event.timestamp}&quot;)
+
+# 包含输入/输出（大 payload 按需加载）
+trace = runtime.get_goal_trace(goal_id, include_artifacts=True)
+for task in trace.tasks:
+    if task.input_context:
+        print(f&quot;Input: {task.input_context}&quot;)
+    if task.output_artifact:
+        print(f&quot;Output: {task.output_artifact}&quot;)
+
+# 分页查询（大数据量场景）
+page1 = runtime.get_goal_trace(goal_id, limit=20, offset=0)
+page2 = runtime.get_goal_trace(goal_id, limit=20, offset=20)
+</code></pre>
+<h4 id="_11">大数据量设计</h4>
+<ul>
+<li><code>input_context</code> 和 <code>output_artifact</code> 默认不加载（<code>None</code>），传 <code>include_artifacts=True</code> 才加载</li>
+<li>大 payload（&gt;100KB）在事件中只存 <code>content_ref</code> 引用，不存内联数据</li>
+<li>支持 <code>limit/offset</code> 分页，避免一次加载全部 Task</li>
+<li>事件按 <code>correlation_id == plan_id</code> 过滤，一次 O(n) 遍历完成归并</li>
+</ul>
+<hr />
 <h3 id="162-evidence-collection">16.2 Evidence Collection（证据收集）</h3>
-<p>Agent 不再只返回 Artifact，还可以返回结构化的 Evidence：</p>
+<p><strong>背景：</strong> v0.8.1 的 Agent 只返回一个 Artifact（"做完了"），但没有人知道"做得好不好"。v0.9.0 引入了类型化的 Evidence 输出——Agent 必须附带证据，Runtime 负责收集和归并。</p>
+<h4 id="evidence">Evidence 数据结构</h4>
+<pre><code class="language-python">@dataclass
+class Evidence:
+    type: str           # 证据类型：test_result | benchmark | security_scan | api_diff | canary | code_review | custom
+    tool: str           # 产生证据的工具：pytest | wrk | bandit | openapi-diff | custom-tool
+    result: str         # PASS | FAIL | WARN | SKIP
+    data: dict          # 详细数据（passed/failed、TPS 数值、漏洞数等）
+    summary: str        # 人类可读的一行摘要
+    timestamp: float    # 收集时间戳
+</code></pre>
+<h4 id="evidence_1">Evidence 类型约定</h4>
+<table>
+<thead>
+<tr>
+<th>type</th>
+<th>含义</th>
+<th>推荐 tool</th>
+<th>data 示例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>test_result</code></td>
+<td>测试结果</td>
+<td>pytest, jest, go-test</td>
+<td><code>{"passed": 47, "failed": 0, "coverage_pct": 89}</code></td>
+</tr>
+<tr>
+<td><code>benchmark</code></td>
+<td>性能基准</td>
+<td>wrk, k6, locust</td>
+<td><code>{"metric": "tps", "baseline": 850, "actual": 1120}</code></td>
+</tr>
+<tr>
+<td><code>security_scan</code></td>
+<td>安全扫描</td>
+<td>bandit, trivy, snyk</td>
+<td><code>{"issues": 0, "severity_high": 0}</code></td>
+</tr>
+<tr>
+<td><code>api_diff</code></td>
+<td>API 变更</td>
+<td>openapi-diff</td>
+<td><code>{"breaking_changes": 0, "new_endpoints": 2}</code></td>
+</tr>
+<tr>
+<td><code>canary</code></td>
+<td>金丝雀发布</td>
+<td>custom</td>
+<td><code>{"duration_s": 300, "error_rate": 0.001}</code></td>
+</tr>
+<tr>
+<td><code>code_review</code></td>
+<td>代码审查</td>
+<td>sonarqube, codeql</td>
+<td><code>{"issues": 3, "severity": "minor"}</code></td>
+</tr>
+<tr>
+<td><code>custom</code></td>
+<td>自定义</td>
+<td>任意</td>
+<td>任意</td>
+</tr>
+</tbody>
+</table>
+<h4 id="evidencebag">EvidenceBag（证据袋）</h4>
+<p>Runtime 自动收集所有 Task 返回的 Evidence，归并成 EvidenceBag：</p>
+<pre><code class="language-python">@dataclass
+class EvidenceBag:
+    goal_id: str
+    items: list[Evidence]                    # 所有证据项
+    summary: dict[str, EvidenceSummary]      # 按类型汇总
+    all_pass: bool                           # 是否全部 PASS
+    failed_items: list[Evidence]             # 失败的证据项
+</code></pre>
+<h4 id="evidencesummary">EvidenceSummary 字段</h4>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>type</code></td>
+<td>str</td>
+<td>证据类型</td>
+</tr>
+<tr>
+<td><code>total</code></td>
+<td>int</td>
+<td>该类型总数</td>
+</tr>
+<tr>
+<td><code>passed</code></td>
+<td>int</td>
+<td>通过数</td>
+</tr>
+<tr>
+<td><code>failed</code></td>
+<td>int</td>
+<td>失败数</td>
+</tr>
+<tr>
+<td><code>warned</code></td>
+<td>int</td>
+<td>警告数</td>
+</tr>
+<tr>
+<td><code>skipped</code></td>
+<td>int</td>
+<td>跳过数</td>
+</tr>
+</tbody>
+</table>
+<h4 id="_12">使用示例</h4>
 <pre><code class="language-python">from zelos.evidence import Evidence
 
-# Agent 在 execute() 中返回 Evidence
-result = ExecutionResult(
-    status=&quot;completed&quot;,
-    artifact=Artifact(content=code),
-    evidence=[
-        Evidence(type=&quot;test_result&quot;, tool=&quot;pytest&quot;, result=&quot;PASS&quot;,
-                 data={&quot;passed&quot;: 47, &quot;failed&quot;: 0, &quot;coverage&quot;: 0.89}),
-        Evidence(type=&quot;security_scan&quot;, tool=&quot;bandit&quot;, result=&quot;PASS&quot;,
-                 data={&quot;issues&quot;: 0}),
-        Evidence(type=&quot;benchmark&quot;, tool=&quot;wrk&quot;, result=&quot;PASS&quot;,
-                 data={&quot;tps&quot;: 1120, &quot;baseline&quot;: 850}),
-    ],
+# 方式一：Agent 通过 ExecutionResult 返回 Evidence
+def execute(self, task):
+    return ExecutionResult(
+        status=&quot;completed&quot;,
+        artifact=Artifact(content=result),
+        evidence=[
+            Evidence(type=&quot;test_result&quot;, tool=&quot;pytest&quot;, result=&quot;PASS&quot;,
+                     data={&quot;passed&quot;: 47, &quot;failed&quot;: 0, &quot;coverage_pct&quot;: 89},
+                     summary=&quot;47/47 tests passed&quot;),
+            Evidence(type=&quot;security_scan&quot;, tool=&quot;bandit&quot;, result=&quot;PASS&quot;,
+                     data={&quot;issues&quot;: 0},
+                     summary=&quot;No security issues found&quot;),
+        ],
+    )
+
+# 方式二：通过 Runtime API 手动添加 Evidence
+from zelos.evidence import Evidence
+runtime.add_evidence(goal_id, Evidence(
+    type=&quot;benchmark&quot;, tool=&quot;wrk&quot;, result=&quot;PASS&quot;,
+    data={&quot;tps&quot;: 1120, &quot;p99_ms&quot;: 45, &quot;baseline_tps&quot;: 850},
+    summary=&quot;TPS improved 31.8% (850→1120)&quot;
+))
+
+# 查询归并结果
+report = runtime.get_execution_report(goal_id)
+bag = report.evidence_bag
+print(f&quot;All pass: {bag.all_pass}&quot;)          # True/False
+print(f&quot;Failed: {len(bag.failed_items)}&quot;)   # 失败数量
+for ev_type, summary in bag.summary.items():
+    print(f&quot;  {ev_type}: {summary.passed}/{summary.total} passed&quot;)
+</code></pre>
+<h4 id="evidencebag_1">EvidenceBag 特性</h4>
+<ul>
+<li><strong>自动聚合</strong>：相同 type 的 Evidence 自动汇总</li>
+<li><strong>增量添加</strong>：<code>add_evidence()</code> 支持运行时动态追加，O(1) 更新汇总</li>
+<li><strong>批量优化</strong>：100 条 Evidence 聚合在毫秒级完成</li>
+<li><strong>all_pass 判断</strong>：任一 <code>result == "FAIL"</code> → False；空 EvidenceBag → True（无失败 = 通过）</li>
+</ul>
+<hr />
+<h3 id="163-confidence-scoring">16.3 Confidence Scoring（置信度评分）</h3>
+<p><strong>背景：</strong> 即使所有 Task 都完成了，人也需要判断"这次变更质量怎么样？敢不敢上线？"ConfidenceScorer 基于 Evidence 给出 0.0-1.0 的客观评分。</p>
+<h4 id="_13">插件接口</h4>
+<pre><code class="language-python">class ConfidenceScorer(ABC):
+    def score(self, evidence: EvidenceBag, arch_delta: ArchDelta | None = None) -&gt; ConfidenceResult:
+        &quot;&quot;&quot;计算置信度分数&quot;&quot;&quot;
+</code></pre>
+<h4 id="weightedconfidencescorer">WeightedConfidenceScorer（默认实现）</h4>
+<p>六因子加权评分引擎：</p>
+<pre><code class="language-python">scorer = WeightedConfidenceScorer(
+    weights={
+        &quot;test_pass&quot;: 0.30,      # 测试通过率
+        &quot;benchmark&quot;: 0.15,      # 性能基准
+        &quot;security&quot;: 0.20,       # 安全扫描
+        &quot;api_compat&quot;: 0.10,     # API 兼容性
+        &quot;code_review&quot;: 0.10,    # 代码审查
+        &quot;canary&quot;: 0.15,         # 金丝雀发布
+    },
+    thresholds={
+        &quot;auto_approve&quot;: 0.95,   # &gt;= 0.95 自动批准
+        &quot;require_human&quot;: 0.70,  # &lt; 0.70 强制人审
+        &quot;auto_reject&quot;: 0.40,    # &lt; 0.40 自动拒绝
+    }
 )
 </code></pre>
-<p>Runtime 自动收集所有 Task 的 Evidence，归并成 EvidenceBag：</p>
-<pre><code class="language-python">report = runtime.get_execution_report(goal_id)
-print(report.evidence_bag.all_pass)    # True/False
-print(report.evidence_bag.summary)     # 按类型汇总
+<h4 id="_14">评分逻辑</h4>
+<p>每个因子的分数 = 该类型中 <code>PASS</code> 的比例（0.0-1.0），乘以权重。然后按<strong>实际收集到的证据类型</strong>做归一化。</p>
+<p>例如：只收集了 test_result（全 PASS）和 security_scan（全 PASS），没有 benchmark：
+- test_pass: 1.0 × 0.30 = 0.30
+- security: 1.0 × 0.20 = 0.20
+- benchmark: 无数据，不计入
+- active_weight = 0.30 + 0.20 = 0.50
+- score = 0.50 / 0.50 = <strong>1.0</strong></p>
+<p>如果 security_scan 有一条 FAIL：
+- test_pass: 1.0 × 0.30 = 0.30
+- security: 0.0 × 0.20 = 0.00
+- active_weight = 0.50
+- score = 0.30 / 0.50 = <strong>0.60</strong></p>
+<h4 id="benchmark">Benchmark 特殊逻辑</h4>
+<p>Benchmark 类型会额外检查性能回归：如果 <code>actual &lt; baseline × 0.9</code>（下降 &gt;10%），即使 result="PASS" 也视为 0 分。</p>
+<h4 id="confidenceresult">ConfidenceResult 字段</h4>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>score</code></td>
+<td>float</td>
+<td>0.0-1.0 置信度分数</td>
+</tr>
+<tr>
+<td><code>breakdown</code></td>
+<td>dict</td>
+<td>各项得分明细 <code>{"test_pass": 0.30, "security": 0.20, ...}</code></td>
+</tr>
+<tr>
+<td><code>recommendation</code></td>
+<td>str</td>
+<td>"approve" / "reject" / "need_human"</td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td>str</td>
+<td>人类可读的解释</td>
+</tr>
+</tbody>
+</table>
+<h4 id="_15">自定义评分器</h4>
+<pre><code class="language-python">from zelos.confidence import ConfidenceScorer, ConfidenceResult
+
+class MyScorer(ConfidenceScorer):
+    def score(self, evidence, arch_delta=None):
+        # 自定义评分逻辑
+        all_pass = evidence.all_pass
+        score = 0.8 if all_pass else 0.3
+        return ConfidenceResult(
+            score=score,
+            recommendation=&quot;approve&quot; if score &gt; 0.7 else &quot;need_human&quot;,
+            reasoning=&quot;My custom logic&quot;
+        )
+
+# 通过 zelos.yaml 配置
+# plugins:
+#   - id: &quot;my-scorer&quot;
+#     type: &quot;confidence_scorer&quot;
+#     entrypoint: &quot;my_package.MyScorer&quot;
 </code></pre>
-<h3 id="163-confidence-scoring">16.3 Confidence Scoring（置信度评分）</h3>
-<p>基于 Evidence 计算 0.0-1.0 的置信度分数：</p>
-<pre><code class="language-python">print(report.confidence.score)         # 0.97
-print(report.confidence.recommendation) # &quot;approve&quot;
-print(report.confidence.breakdown)     # 各项得分明细
-</code></pre>
-<p>六因子加权评分（可在 zelos.yaml 配置权重）：
-- test_pass: 0.30
-- security: 0.20
-- benchmark: 0.15
-- canary: 0.15
-- api_compat: 0.10
-- code_review: 0.10</p>
+<hr />
 <h3 id="164-execution-report">16.4 Execution Report（变更证据包）</h3>
-<p>统一的结构化报告——人不需要看代码，看报告就够了：</p>
+<p><strong>背景：</strong> v0.9.0 的核心交付物。REQ-01 到 REQ-08 的所有能力最终汇聚到 ExecutionReport 中——一份结构化报告，让人在不看代码的情况下做出批准/拒绝决策。</p>
+<h4 id="api_1">API</h4>
+<pre><code class="language-python">ExecutionReport runtime.get_execution_report(goal_id: str) -&gt; ExecutionReport | None
+</code></pre>
+<h4 id="executionreport">ExecutionReport 字段</h4>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>goal_id</code></td>
+<td>str</td>
+<td>Goal ID</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>str</td>
+<td>Goal 状态</td>
+</tr>
+<tr>
+<td><code>intent</code></td>
+<td>IntentSpec | None</td>
+<td>结构化意图</td>
+</tr>
+<tr>
+<td><code>intent_confirmed</code></td>
+<td>bool</td>
+<td>意图是否已经人确认</td>
+</tr>
+<tr>
+<td><code>architecture_delta</code></td>
+<td>ArchDelta | None</td>
+<td>架构影响分析</td>
+</tr>
+<tr>
+<td><code>trace</code></td>
+<td>ExecutionTrace</td>
+<td>完整执行链路</td>
+</tr>
+<tr>
+<td><code>evidence_bag</code></td>
+<td>EvidenceBag</td>
+<td>证据袋</td>
+</tr>
+<tr>
+<td><code>confidence</code></td>
+<td>ConfidenceResult</td>
+<td>置信度评分</td>
+</tr>
+<tr>
+<td><code>risk_level</code></td>
+<td>str</td>
+<td>风险等级：low / medium / high / critical</td>
+</tr>
+<tr>
+<td><code>rollback_plan</code></td>
+<td>RollbackPlan | None</td>
+<td>回滚方案</td>
+</tr>
+<tr>
+<td><code>changed_files</code></td>
+<td>int</td>
+<td>变更文件数</td>
+</tr>
+<tr>
+<td><code>total_duration_ms</code></td>
+<td>float</td>
+<td>总耗时</td>
+</tr>
+</tbody>
+</table>
+<h4 id="rollbackplan">RollbackPlan 字段</h4>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>strategy</code></td>
+<td>str</td>
+<td>回滚策略：event_sourcing_replay / manual / none</td>
+</tr>
+<tr>
+<td><code>restore_to_event_position</code></td>
+<td>int | None</td>
+<td>恢复到的事件位置</td>
+</tr>
+<tr>
+<td><code>estimated_downtime_s</code></td>
+<td>float</td>
+<td>预计停机时间（秒）</td>
+</tr>
+<tr>
+<td><code>steps</code></td>
+<td>list[str]</td>
+<td>回滚步骤</td>
+</tr>
+</tbody>
+</table>
+<h4 id="_16">完整使用示例</h4>
 <pre><code class="language-python">report = runtime.get_execution_report(goal_id)
 
-# Intent — 这次变更是为了什么
-print(report.intent.description)
-print(report.intent.success_criteria)
+# ── 顶层概览 ──
+print(f&quot;Goal: {report.goal_id}&quot;)
+print(f&quot;Status: {report.status}, Duration: {report.total_duration_ms:.0f}ms&quot;)
+print(f&quot;Risk: {report.risk_level}&quot;)
+print(f&quot;Changed Files: {report.changed_files}&quot;)
 
-# Architecture Delta — 系统结构发生了什么变化
-print(report.architecture_delta.risk_level)
-print(report.architecture_delta.modified_modules)
+# ── Intent ──
+if report.intent:
+    print(f&quot;\n📝 Intent: {report.intent.description}&quot;)
+    print(f&quot;   Success Criteria: {report.intent.success_criteria}&quot;)
+    print(f&quot;   Constraints: {report.intent.constraints}&quot;)
 
-# Execution Trace — 完整执行链路
-print(report.trace.total_duration_ms)
+# ── Architecture Delta ──
+if report.architecture_delta:
+    ad = report.architecture_delta
+    print(f&quot;\n🏗️ Architecture Delta:&quot;)
+    print(f&quot;   Modified: {ad.modified_modules}&quot;)
+    print(f&quot;   New Deps: {ad.new_dependencies}&quot;)
+    print(f&quot;   API Changes: {len(ad.api_changes)}&quot;)
+    for a in ad.api_changes:
+        print(f&quot;     {a.change_type} {a.endpoint} ({a.compatibility})&quot;)
+    print(f&quot;   Risk: {ad.risk_level}&quot;)
+    print(f&quot;   Why: {ad.explanation}&quot;)
 
-# Evidence + Confidence — 证据和置信度
-print(report.confidence.score)
-print(report.evidence_bag.all_pass)
+# ── Evidence ──
+bag = report.evidence_bag
+print(f&quot;\n📊 Evidence: all_pass={bag.all_pass}&quot;)
+for ev_type, summary in bag.summary.items():
+    print(f&quot;   {ev_type}: {summary.passed}/{summary.total} ({summary.failed} failed)&quot;)
 
-# Rollback — 回滚方案
-print(report.rollback_plan.strategy)
+# ── Confidence ──
+c = report.confidence
+print(f&quot;\n🎯 Confidence: {c.score:.0%}&quot;)
+print(f&quot;   Recommendation: {c.recommendation}&quot;)
+print(f&quot;   Breakdown: {c.breakdown}&quot;)
+
+# ── Decision ──
+if c.recommendation == &quot;approve&quot;:
+    print(f&quot;\n✅ AUTO-APPROVED: {c.reasoning}&quot;)
+elif c.recommendation == &quot;reject&quot;:
+    print(f&quot;\n❌ AUTO-REJECTED: {c.reasoning}&quot;)
+else:
+    print(f&quot;\n🤔 NEEDS HUMAN: {c.reasoning}&quot;)
+
+# ── Rollback ──
+if report.rollback_plan:
+    rp = report.rollback_plan
+    print(f&quot;\n🔄 Rollback: {rp.strategy}&quot;)
+    if rp.restore_to_event_position is not None:
+        print(f&quot;   Restore to event #{rp.restore_to_event_position}&quot;)
+    print(f&quot;   Downtime: ~{rp.estimated_downtime_s}s&quot;)
 </code></pre>
+<h4 id="_17">序列化</h4>
+<pre><code class="language-python"># JSON 序列化
+import json
+data = json.dumps(report.to_dict(), indent=2, default=str)
+
+# 存储到文件或发送到外部系统
+with open(f&quot;report-{goal_id}.json&quot;, &quot;w&quot;) as f:
+    json.dump(report.to_dict(), f, indent=2, default=str)
+</code></pre>
+<hr />
 <h3 id="165-policy-gate-v2">16.5 Policy Gate v2（证据驱动自动决策）</h3>
-<p>基于置信度和风险自动批准/拒绝：</p>
-<pre><code class="language-yaml">policy_gate:
-  rules:
-    - if: &quot;confidence &gt;= 0.95 AND risk == 'low'&quot;
-      then: &quot;auto_approve&quot;
-    - if: &quot;confidence &lt; 0.40&quot;
-      then: &quot;auto_reject&quot;
-    - if: &quot;risk == 'critical'&quot;
-      then: &quot;require_human&quot;
-      approvers: [&quot;architect&quot;, &quot;security-lead&quot;]
+<p><strong>背景：</strong> v0.8.1 的 Policy 只能做 CostLimit / RateLimit / Allowlist（执行前的过滤）。v0.9.0 的 Policy Gate v2 是基于<strong>执行后的证据</strong>做决策——要不要批准这次变更？</p>
+<h4 id="_18">插件接口</h4>
+<pre><code class="language-python">class PolicyGate(ABC):
+    def evaluate(self, report: ExecutionReport) -&gt; GateDecision:
+        &quot;&quot;&quot;评估 ExecutionReport，输出决策&quot;&quot;&quot;
 </code></pre>
+<h4 id="gatedecision">GateDecision 字段</h4>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>action</code></td>
+<td>str</td>
+<td>auto_approve / auto_reject / require_human</td>
+</tr>
+<tr>
+<td><code>reason</code></td>
+<td>str</td>
+<td>决策理由</td>
+</tr>
+<tr>
+<td><code>required_approvers</code></td>
+<td>list[str]</td>
+<td>需要审批的人（action=require_human 时）</td>
+</tr>
+</tbody>
+</table>
+<h4 id="evidencebasedpolicygate">EvidenceBasedPolicyGate（默认实现）</h4>
+<p>按优先级依次评估 5 条规则，命中即返回：</p>
+<table>
+<thead>
+<tr>
+<th>优先级</th>
+<th>条件</th>
+<th>动作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>risk_level == "critical"</td>
+<td>require_human，approvers=["architect", "security-lead"]</td>
+</tr>
+<tr>
+<td>2</td>
+<td>evidence 有 FAIL</td>
+<td>require_human，reason="Evidence has failures"</td>
+</tr>
+<tr>
+<td>3</td>
+<td>confidence &gt;= 0.95 AND risk == "low"</td>
+<td>auto_approve</td>
+</tr>
+<tr>
+<td>4</td>
+<td>confidence &gt;= 0.90 AND risk in ("low", "medium")</td>
+<td>auto_approve</td>
+</tr>
+<tr>
+<td>5</td>
+<td>confidence &lt; 0.40</td>
+<td>auto_reject</td>
+</tr>
+<tr>
+<td>default</td>
+<td>以上都不匹配</td>
+<td>require_human</td>
+</tr>
+</tbody>
+</table>
+<h4 id="_19">执行流程</h4>
+<pre><code>ExecutionReport 生成
+    ↓
+PolicyGate.evaluate(report)
+    ↓
+GateDecision
+    ├── auto_approve → 自动通过
+    ├── auto_reject  → 自动拒绝
+    └── require_human → 创建 HITL 审批请求
+</code></pre>
+<h4 id="_20">使用示例</h4>
+<pre><code class="language-python">from zelos.policy_gate import EvidenceBasedPolicyGate
+
+gate = EvidenceBasedPolicyGate()
+
+# 手动评估
+report = runtime.get_execution_report(goal_id)
+decision = gate.evaluate(report)
+print(f&quot;Decision: {decision.action}&quot;)
+print(f&quot;Reason: {decision.reason}&quot;)
+if decision.required_approvers:
+    print(f&quot;Approvers needed: {decision.required_approvers}&quot;)
+</code></pre>
+<hr />
 <h3 id="166-intent-specification">16.6 Intent Specification（意图规格化）</h3>
-<p>提交 Goal 时可以附带结构化的 Intent：</p>
+<p><strong>背景：</strong> 当前 <code>submit_goal(description="实现登录")</code> 太自由，Agent 可能理解偏了。IntentSpec 在 Agent 动手之前，让人和 Agent 对"要做什么、成功标准是什么"达成共识。</p>
+<h4 id="intentspec">IntentSpec 字段</h4>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>默认值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>description</code></td>
+<td>str</td>
+<td>(必填)</td>
+<td>自然语言描述</td>
+</tr>
+<tr>
+<td><code>success_criteria</code></td>
+<td>list[str]</td>
+<td>[]</td>
+<td>可验证的成功标准</td>
+</tr>
+<tr>
+<td><code>constraints</code></td>
+<td>list[str]</td>
+<td>[]</td>
+<td>约束条件</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td>str</td>
+<td>"auto"</td>
+<td>影响范围：auto / single_module / multi_module / system_wide</td>
+</tr>
+<tr>
+<td><code>rollback_on_failure</code></td>
+<td>bool</td>
+<td>True</td>
+<td>失败时是否自动回滚</td>
+</tr>
+</tbody>
+</table>
+<h4 id="_21">使用示例</h4>
 <pre><code class="language-python">from zelos.execution_report import IntentSpec
 
+# 带 Intent 的 Goal 提交
 intent = IntentSpec(
-    description=&quot;实现 OAuth2 登录&quot;,
-    success_criteria=[&quot;用户可用 Google 登录&quot;, &quot;Token 24h 过期&quot;],
-    constraints=[&quot;不破坏现有密码登录&quot;, &quot;使用标准 OAuth2 库&quot;],
+    description=&quot;实现 OAuth2 第三方登录&quot;,
+    success_criteria=[
+        &quot;用户可以使用 Google 账号登录&quot;,
+        &quot;用户可以使用 GitHub 账号登录&quot;,
+        &quot;Token 24 小时后自动过期&quot;,
+        &quot;刷新 Token 功能正常&quot;,
+    ],
+    constraints=[
+        &quot;不破坏现有的用户名/密码登录&quot;,
+        &quot;使用标准的 OAuth2.0 协议&quot;,
+        &quot;不在前端存储 client_secret&quot;,
+        &quot;新增依赖必须经过安全审查&quot;,
+    ],
     scope=&quot;single_module&quot;,
+    rollback_on_failure=True,
 )
-runtime.submit_goal(&quot;OAuth2 login&quot;, intent=intent)
+
+result = runtime.submit_goal(
+    &quot;OAuth2 login&quot;,     # 简短描述（向后兼容）
+    intent=intent,      # 结构化意图（v0.9.0）
+    priority=&quot;high&quot;,
+    budget=50.0,
+)
+
+# 在 ExecutionReport 中查看
+report = runtime.get_execution_report(result[&quot;goal_id&quot;])
+print(report.intent.description)
+print(report.intent.success_criteria)
+print(report.intent_confirmed)  # 是否被人确认
 </code></pre>
+<h4 id="_22">向后兼容</h4>
+<p><code>intent</code> 参数为可选——不传则保持旧行为，完全兼容 v0.8.x 代码：</p>
+<pre><code class="language-python"># 仍然可以这样用
+runtime.submit_goal(&quot;简单任务&quot;)
+</code></pre>
+<hr />
 <h3 id="167-architecture-delta">16.7 Architecture Delta（架构影响分析）</h3>
-<p>Planner 自动从 LLM 输出中推断架构影响：</p>
+<p><strong>背景：</strong> Planner 以前只输出 Task 列表，不输出"改了哪里"。v0.9.0 让 Planner 自动推断架构影响，人一眼就能看出变更范围。</p>
+<h4 id="archdelta">ArchDelta 字段</h4>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>默认值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>modified_modules</code></td>
+<td>list[str]</td>
+<td>[]</td>
+<td>修改的模块/服务名</td>
+</tr>
+<tr>
+<td><code>new_dependencies</code></td>
+<td>list[str]</td>
+<td>[]</td>
+<td>新增的依赖（含版本号）</td>
+</tr>
+<tr>
+<td><code>removed_dependencies</code></td>
+<td>list[str]</td>
+<td>[]</td>
+<td>删除的依赖</td>
+</tr>
+<tr>
+<td><code>api_changes</code></td>
+<td>list[APIChange]</td>
+<td>[]</td>
+<td>API 变更列表</td>
+</tr>
+<tr>
+<td><code>data_model_changes</code></td>
+<td>list[str]</td>
+<td>[]</td>
+<td>数据模型变更</td>
+</tr>
+<tr>
+<td><code>risk_level</code></td>
+<td>str</td>
+<td>"unknown"</td>
+<td>风险等级</td>
+</tr>
+<tr>
+<td><code>explanation</code></td>
+<td>str</td>
+<td>""</td>
+<td>人类可读的解释</td>
+</tr>
+</tbody>
+</table>
+<h4 id="apichange">APIChange 字段</h4>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>endpoint</code></td>
+<td>str</td>
+<td>API 端点（如 "POST /auth/oauth"）</td>
+</tr>
+<tr>
+<td><code>change_type</code></td>
+<td>str</td>
+<td>new / modified / deprecated / removed</td>
+</tr>
+<tr>
+<td><code>compatibility</code></td>
+<td>str</td>
+<td>additive / backward_compatible / breaking</td>
+</tr>
+</tbody>
+</table>
+<h4 id="_23">工作方式</h4>
+<p>LLM Planner 在同一个 prompt 里输出 <code>architecture_delta</code> 字段。<code>_parse_response</code> 自动解析。如果 LLM 没输出这个字段（旧版 prompt 或不支持的模型），<code>ArchDelta.risk_level</code> 基于 confidence score 自动推断。</p>
+<h4 id="planner-prompt-json-schema">Planner prompt 中新增的 JSON schema：</h4>
 <pre><code class="language-json">{
   &quot;architecture_delta&quot;: {
-    &quot;modified_modules&quot;: [&quot;auth-service&quot;, &quot;user-model&quot;],
+    &quot;modified_modules&quot;: [&quot;auth-service&quot;],
     &quot;new_dependencies&quot;: [&quot;oauthlib==3.2.0&quot;],
+    &quot;removed_dependencies&quot;: [],
     &quot;api_changes&quot;: [
       {&quot;endpoint&quot;: &quot;POST /auth/oauth&quot;, &quot;change_type&quot;: &quot;new&quot;, &quot;compatibility&quot;: &quot;additive&quot;}
     ],
+    &quot;data_model_changes&quot;: [&quot;users.add(oauth_provider)&quot;],
     &quot;risk_level&quot;: &quot;medium&quot;,
-    &quot;explanation&quot;: &quot;标准 OAuth2 增量，隔离在 auth 模块&quot;
+    &quot;explanation&quot;: &quot;标准 OAuth2 增量，隔离在 auth 模块，不影响现有登录流程&quot;
   }
 }
+</code></pre>
+<h4 id="_24">使用示例</h4>
+<pre><code class="language-python">report = runtime.get_execution_report(goal_id)
+ad = report.architecture_delta
+
+if ad.risk_level == &quot;critical&quot;:
+    print(&quot;⚠️ 高风险变更，需要额外审批！&quot;)
+elif ad.risk_level == &quot;unknown&quot;:
+    print(&quot;⚠️ 无法评估风险，建议人工审查&quot;)
+
+print(f&quot;影响模块: {ad.modified_modules}&quot;)
+print(f&quot;新增依赖: {ad.new_dependencies}&quot;)
+
+for change in ad.api_changes:
+    if change.compatibility == &quot;breaking&quot;:
+        print(f&quot;❌ Breaking change: {change.endpoint}&quot;)
+    elif change.change_type == &quot;new&quot;:
+        print(f&quot;➕ New endpoint: {change.endpoint}&quot;)
 </code></pre>
 <hr />
 <h3 id="q-planner-llm">Q: Planner 一定要用 LLM 吗？</h3>
