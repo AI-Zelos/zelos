@@ -78,6 +78,8 @@ if os.path.isdir(papers_dir):
     seen_titles = set()
     for md_file in sorted(glob.glob(os.path.join(papers_dir, "*.md"))):
         basename = os.path.splitext(os.path.basename(md_file))[0]
+        if "executive-summary" in basename.lower():
+            continue  # Skip executive summaries — not for public site
         # Generate short name: first 4 ascii words, or first 30 chars of basename
         words = re.split(r'[_\s]+', basename)
         ascii_words = [w for w in words[:6] if re.match(r'^[a-zA-Z0-9-]+$', w)]
