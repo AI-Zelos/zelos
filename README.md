@@ -701,6 +701,15 @@ After reading these, you should understand the entire Runtime architecture witho
 | **Execution Report** | `get_execution_report()` — unified Change Evidence Package with trace+evidence+confidence |
 | **Policy Gate v2** | `EvidenceBasedPolicyGate` — auto-approve/reject/require_human based on evidence |
 
+### Phase 10 Deliverables
+
+| Module | Components |
+|--------|-----------|
+| **ChangeProposal** | CP five-tuple (I×K×S×R×E) dataclass, `to_dict()`/`from_dict()`, `from_intent()` factory |
+| **Constraint Engine** | `ConstraintEngine.apply(cp)` → `ExecutableConstraints`, constraint injection at dispatch |
+| **Verifier Chain** | `VerifierChain` auto-orchestration, FAIL-stop, confidence-based escalation |
+| **Merge Executor** | `MergeExecutor` (event_sourcing_apply + git_merge), auto-rollback on failure |
+
 ### Phase 6 Deliverables
 
 | Module | Components |
