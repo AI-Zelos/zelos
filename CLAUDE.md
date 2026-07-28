@@ -72,6 +72,15 @@ The Runtime owns:
 - Heartbeat Timeout
 - Non-Retryable Errors
 - Retry History
+- Execution Trace
+- Evidence Collection
+- Confidence Scoring
+- Policy Gate
+- Intent Specification
+- Architecture Delta
+- Impact Analysis
+- Rollback Plan
+- Change Approval Request (CAR)
 - Memory
 - Context
 - Event Bus
@@ -484,6 +493,18 @@ The Runtime executes them.
 
 ---
 
+# Change Approval Request (CAR)
+
+Zelos implements the CAR paradigm: from "approve the code" to "approve a complete, verifiable, controllable, rollback-able system change."
+
+Code becomes supporting evidence; the system change becomes the review target.
+
+The CAR standard mandates 10 modules: Intent → Requirement Mapping → Architecture Delta → Implementation Plan → Impact Analysis → Evidence → Risk Assessment → Rollback Plan → Generated Artifacts → Human Decision.
+
+See: `docs/blueprint/CAR-Change-Approval-Request.md`
+
+---
+
 # Verifier
 
 Verification is also a Plugin.
@@ -677,6 +698,20 @@ Included:
 ✅ Runtime API
 
 ✅ Plugin Runtime
+
+✅ Event Sourcing Engine
+
+✅ Goal State Persistence
+
+✅ Execution Trace
+
+✅ Evidence Collection
+
+✅ Confidence Scoring
+
+✅ Policy Gate v2
+
+✅ Change Approval Request (CAR)
 
 ✅ MCP Adapter
 
