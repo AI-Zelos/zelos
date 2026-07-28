@@ -75,11 +75,16 @@ papers_dir = os.path.join(ROOT, "docs", "papers")
 paper_files = []
 if os.path.isdir(papers_dir):
     for pdf in sorted(glob.glob(os.path.join(papers_dir, "*.pdf"))):
-        # Use a clean filename for the public copy
+        # Use a short, clean filename for the public copy
         basename = os.path.basename(pdf)
         import re
-        clean_name = re.sub(r'[_\s]+', '-', basename).lower()
-        clean_name = re.sub(r'-+', '-', clean_name)  # collapse multiple dashes
+        # Extract a short key from the filename: first 3-4 words
+        stem = os.path.splitext(basename)[0]
+        words = re.split(r'[_\s]+', stem)
+        short_name = '-'.join(words[:4]).lower()
+        short_name = re.sub(r'[^a-z0-9-]', '', short_name)
+        short_name = re.sub(r'-+', '-', short_name).strip('-')
+        clean_name = f"{short_name}.pdf"
         dest = os.path.join(PUBLIC, clean_name)
         shutil.copy2(pdf, dest)
         paper_files.append(clean_name)
