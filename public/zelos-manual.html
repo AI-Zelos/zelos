@@ -19,7 +19,7 @@ hr{border:none;border-top:1px solid #21262d;margin:24px 0}
 .back{margin-bottom:20px;font-size:14px}
 </style></head><body>
 <p class="back"><a href="./">← Documentation Home</a></p>
-<h1 id="zelos-user-manual-v081">Zelos User Manual v0.8.1</h1>
+<h1 id="zelos-user-manual-v090">Zelos User Manual v0.9.0</h1>
 <blockquote>
 <p><strong>Open Multi-Agent Orchestration Runtime</strong> — The Runtime that executes, coordinates, and governs intelligent agents.</p>
 </blockquote>
@@ -222,7 +222,7 @@ rt.shutdown()
 <p>Running this prints:</p>
 <pre><code>Goal submitted: a1b2c3d4... → planned
 Progress: 0%
-Runtime: healthy, version=0.8.1
+Runtime: healthy, version=0.9.0
 </code></pre>
 <h3 id="your-first-goal">Your First Goal</h3>
 <p>rt.add_agent(
@@ -1762,11 +1762,62 @@ rt.get_cluster_status()   # → {total_nodes, healthy_nodes, is_leader, ...}
 rt.get_work_queue_depth() # → current task queue depth
 </code></pre>
 <hr />
-<h2 id="23-cli-tool-phase-3">23. CLI Tool (Phase 3)</h2>
+<h2 id="23-v090-change-evidence-package">23. v0.9.0 — Change Evidence Package</h2>
+<p>v0.9.0 upgrades Zelos from execution engine to <strong>governance platform</strong>. Humans review Intent + Evidence + Confidence, not code.</p>
+<h3 id="231-execution-trace">23.1 Execution Trace</h3>
+<p>Query the complete execution timeline of any Goal:</p>
+<pre><code class="language-python">trace = runtime.get_goal_trace(goal_id)
+# Each task has: timeline events, status, agent, input/output
+trace = runtime.get_goal_trace(goal_id, include_artifacts=True)
+trace = runtime.get_goal_trace(goal_id, limit=50, offset=0)  # pagination
+</code></pre>
+<h3 id="232-evidence-collection">23.2 Evidence Collection</h3>
+<p>Agents produce typed Evidence alongside Artifacts:</p>
+<pre><code class="language-python">from zelos.evidence import Evidence
+
+result.evidence = [
+    Evidence(&quot;test_result&quot;, &quot;pytest&quot;, &quot;PASS&quot;, {&quot;passed&quot;: 47}),
+    Evidence(&quot;security_scan&quot;, &quot;bandit&quot;, &quot;PASS&quot;, {&quot;issues&quot;: 0}),
+    Evidence(&quot;benchmark&quot;, &quot;wrk&quot;, &quot;PASS&quot;, {&quot;tps&quot;: 1120}),
+]
+</code></pre>
+<p>Runtime auto-aggregates into <code>EvidenceBag</code> with per-type summaries.</p>
+<h3 id="233-confidence-scoring">23.3 Confidence Scoring</h3>
+<pre><code class="language-python">report = runtime.get_execution_report(goal_id)
+print(report.confidence.score)          # 0.97
+print(report.confidence.recommendation)  # &quot;approve&quot;
+</code></pre>
+<p>6-factor weighted scoring, configurable via <code>zelos.yaml</code>.</p>
+<h3 id="234-execution-report">23.4 Execution Report</h3>
+<p>Unified Change Evidence Package — one API call:</p>
+<pre><code class="language-python">report = runtime.get_execution_report(goal_id)
+# Contains: intent, architecture_delta, trace, evidence, confidence, rollback
+</code></pre>
+<h3 id="235-policy-gate-v2">23.5 Policy Gate v2</h3>
+<p>Evidence-based auto-approve/reject/human-review:</p>
+<pre><code class="language-yaml">policy_gate:
+  rules:
+    - if: &quot;confidence &gt;= 0.95 AND risk == 'low'&quot;
+      then: &quot;auto_approve&quot;
+    - if: &quot;confidence &lt; 0.40&quot;
+      then: &quot;auto_reject&quot;
+    - default: &quot;require_human&quot;
+</code></pre>
+<h3 id="236-intent-specification">23.6 Intent Specification</h3>
+<pre><code class="language-python">from zelos.execution_report import IntentSpec
+intent = IntentSpec(
+    description=&quot;Implement OAuth2 login&quot;,
+    success_criteria=[&quot;Google OAuth&quot;, &quot;Token 24h expiry&quot;],
+    constraints=[&quot;Don't break password login&quot;],
+)
+runtime.submit_goal(&quot;OAuth2 login&quot;, intent=intent)
+</code></pre>
+<hr />
+<h2 id="24-cli-tool-phase-3">24. CLI Tool (Phase 3)</h2>
 <p><strong>Module</strong>: <code>zelos.cli</code> | <strong>Class</strong>: <code>ZelosCLI</code></p>
 <p>Complete command-line interface.</p>
 <h3 id="available-commands">Available Commands</h3>
-<pre><code class="language-bash">zelos --version                              # 0.8.1
+<pre><code class="language-bash">zelos --version                              # 0.9.0
 zelos --help
 
 # Runtime

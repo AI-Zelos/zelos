@@ -1,4 +1,4 @@
-# Zelos User Manual v0.8.1
+# Zelos User Manual v0.9.0
 
 > **Open Multi-Agent Orchestration Runtime** — The Runtime that executes, coordinates, and governs intelligent agents.
 
@@ -95,7 +95,7 @@ Running this prints:
 ```
 Goal submitted: a1b2c3d4... → planned
 Progress: 0%
-Runtime: healthy, version=0.8.1
+Runtime: healthy, version=0.9.0
 ```
 
 ### Your First Goal
@@ -1543,7 +1543,85 @@ rt.get_work_queue_depth() # → current task queue depth
 
 ---
 
-## 23. CLI Tool (Phase 3)
+## 23. v0.9.0 — Change Evidence Package
+
+v0.9.0 upgrades Zelos from execution engine to **governance platform**. Humans review Intent + Evidence + Confidence, not code.
+
+### 23.1 Execution Trace
+
+Query the complete execution timeline of any Goal:
+
+```python
+trace = runtime.get_goal_trace(goal_id)
+# Each task has: timeline events, status, agent, input/output
+trace = runtime.get_goal_trace(goal_id, include_artifacts=True)
+trace = runtime.get_goal_trace(goal_id, limit=50, offset=0)  # pagination
+```
+
+### 23.2 Evidence Collection
+
+Agents produce typed Evidence alongside Artifacts:
+
+```python
+from zelos.evidence import Evidence
+
+result.evidence = [
+    Evidence("test_result", "pytest", "PASS", {"passed": 47}),
+    Evidence("security_scan", "bandit", "PASS", {"issues": 0}),
+    Evidence("benchmark", "wrk", "PASS", {"tps": 1120}),
+]
+```
+
+Runtime auto-aggregates into `EvidenceBag` with per-type summaries.
+
+### 23.3 Confidence Scoring
+
+```python
+report = runtime.get_execution_report(goal_id)
+print(report.confidence.score)          # 0.97
+print(report.confidence.recommendation)  # "approve"
+```
+
+6-factor weighted scoring, configurable via `zelos.yaml`.
+
+### 23.4 Execution Report
+
+Unified Change Evidence Package — one API call:
+
+```python
+report = runtime.get_execution_report(goal_id)
+# Contains: intent, architecture_delta, trace, evidence, confidence, rollback
+```
+
+### 23.5 Policy Gate v2
+
+Evidence-based auto-approve/reject/human-review:
+
+```yaml
+policy_gate:
+  rules:
+    - if: "confidence >= 0.95 AND risk == 'low'"
+      then: "auto_approve"
+    - if: "confidence < 0.40"
+      then: "auto_reject"
+    - default: "require_human"
+```
+
+### 23.6 Intent Specification
+
+```python
+from zelos.execution_report import IntentSpec
+intent = IntentSpec(
+    description="Implement OAuth2 login",
+    success_criteria=["Google OAuth", "Token 24h expiry"],
+    constraints=["Don't break password login"],
+)
+runtime.submit_goal("OAuth2 login", intent=intent)
+```
+
+---
+
+## 24. CLI Tool (Phase 3)
 
 **Module**: `zelos.cli` | **Class**: `ZelosCLI`
 
@@ -1552,7 +1630,7 @@ Complete command-line interface.
 ### Available Commands
 
 ```bash
-zelos --version                              # 0.8.1
+zelos --version                              # 0.9.0
 zelos --help
 
 # Runtime

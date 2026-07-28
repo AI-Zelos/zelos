@@ -72,10 +72,6 @@ The Runtime owns:
 - Heartbeat Timeout
 - Non-Retryable Errors
 - Retry History
-- Execution Trace
-- Evidence Collection
-- Confidence Scoring
-- Policy Gate
 - Memory
 - Context
 - Event Bus
@@ -590,14 +586,6 @@ GoalStatePersisted
 
 GoalStateRecovered
 
-TaskEvidenceCollected
-
-ConfidenceScored
-
-GateDecisionMade
-
-ExecutionReportCreated
-
 VerificationCompleted
 
 ExecutionFinished
@@ -804,4 +792,4 @@ Observability.
 
 This is the vision of Zelos.
 
-git提交的时候 需要按照【AI研发时代团队CAR（变更审批请求）.md】
+git提交的时候 需要按照【AI研发时代团队CAR（变更审批请求）.md】文档中的规范进行提交。

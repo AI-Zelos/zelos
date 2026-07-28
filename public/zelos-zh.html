@@ -100,19 +100,19 @@ Zelos Runtime:
 <tbody>
 <tr>
 <td>版本</td>
-<td>v0.8.1</td>
+<td>v0.9.0</td>
 </tr>
 <tr>
 <td>Phases</td>
-<td>0–7 全部完成</td>
+<td>0–9 全部完成</td>
 </tr>
 <tr>
 <td>源码模块</td>
-<td>28 个</td>
+<td>33 个</td>
 </tr>
 <tr>
 <td>自动化测试</td>
-<td>78 个（71 passed）</td>
+<td>139 个（139 passed）</td>
 </tr>
 <tr>
 <td>Demo</td>
@@ -962,7 +962,7 @@ python3 start.py
 # 配置 zelos.yaml → python3 start.py --config zelos.yaml
 </code></pre>
 <h3 id="docker">生产环境（Docker）</h3>
-<pre><code class="language-bash">docker build -t zelos:0.8.1 .
+<pre><code class="language-bash">docker build -t zelos:0.9.0 .
 docker compose up -d
 </code></pre>
 <h3 id="kubernetes">生产环境（Kubernetes）</h3>
@@ -993,6 +993,120 @@ readinessProbe:
 <p>在单节点上测试过 500 个 Agent 同时注册，Capability 查询 &lt; 1ms。多节点通过 etcd + NATS 横向扩展。</p>
 <h3 id="q-agent_1">Q: 怎么保证 Agent 不互相调用？</h3>
 <p><strong>架构层面保证。</strong> Agent 只知道 Runtime，不知道其他 Agent 的存在。它收到的 Task 不包含任何其他 Agent 的信息。Agent 无法直接与其他 Agent 通信——所有通信必须通过 EventBus。</p>
+<h2 id="16-v090-change-evidence-package">16. v0.9.0 新特性：Change Evidence Package</h2>
+<p>v0.9.0 将 Zelos 从<strong>执行引擎</strong>升级为<strong>治理平台</strong>。核心思想：人不应逐行审查 AI 生成的代码，而应审查 Intent（意图）、Evidence（证据）和 Confidence（置信度）。</p>
+<h3 id="161-execution-trace">16.1 Execution Trace（执行链路追溯）</h3>
+<p>查询一个 Goal 从提交到完成的完整执行链路：</p>
+<pre><code class="language-python"># 获取完整执行链路
+trace = runtime.get_goal_trace(goal_id)
+for task in trace.tasks:
+    print(f&quot;Task: {task.task_id} → {task.status}&quot;)
+    for event in task.timeline:
+        print(f&quot;  {event.event_type} at {event.timestamp}&quot;)
+
+# 包含输入/输出
+trace = runtime.get_goal_trace(goal_id, include_artifacts=True)
+# 分页
+trace = runtime.get_goal_trace(goal_id, limit=50, offset=100)
+</code></pre>
+<p>每个 TaskTrace 包含完整的时间线：<code>task.created → task.ready → task.assigned → task.started → task.completed</code>，以及 input_context 和 output_artifact。</p>
+<h3 id="162-evidence-collection">16.2 Evidence Collection（证据收集）</h3>
+<p>Agent 不再只返回 Artifact，还可以返回结构化的 Evidence：</p>
+<pre><code class="language-python">from zelos.evidence import Evidence
+
+# Agent 在 execute() 中返回 Evidence
+result = ExecutionResult(
+    status=&quot;completed&quot;,
+    artifact=Artifact(content=code),
+    evidence=[
+        Evidence(type=&quot;test_result&quot;, tool=&quot;pytest&quot;, result=&quot;PASS&quot;,
+                 data={&quot;passed&quot;: 47, &quot;failed&quot;: 0, &quot;coverage&quot;: 0.89}),
+        Evidence(type=&quot;security_scan&quot;, tool=&quot;bandit&quot;, result=&quot;PASS&quot;,
+                 data={&quot;issues&quot;: 0}),
+        Evidence(type=&quot;benchmark&quot;, tool=&quot;wrk&quot;, result=&quot;PASS&quot;,
+                 data={&quot;tps&quot;: 1120, &quot;baseline&quot;: 850}),
+    ],
+)
+</code></pre>
+<p>Runtime 自动收集所有 Task 的 Evidence，归并成 EvidenceBag：</p>
+<pre><code class="language-python">report = runtime.get_execution_report(goal_id)
+print(report.evidence_bag.all_pass)    # True/False
+print(report.evidence_bag.summary)     # 按类型汇总
+</code></pre>
+<h3 id="163-confidence-scoring">16.3 Confidence Scoring（置信度评分）</h3>
+<p>基于 Evidence 计算 0.0-1.0 的置信度分数：</p>
+<pre><code class="language-python">print(report.confidence.score)         # 0.97
+print(report.confidence.recommendation) # &quot;approve&quot;
+print(report.confidence.breakdown)     # 各项得分明细
+</code></pre>
+<p>六因子加权评分（可在 zelos.yaml 配置权重）：
+- test_pass: 0.30
+- security: 0.20
+- benchmark: 0.15
+- canary: 0.15
+- api_compat: 0.10
+- code_review: 0.10</p>
+<h3 id="164-execution-report">16.4 Execution Report（变更证据包）</h3>
+<p>统一的结构化报告——人不需要看代码，看报告就够了：</p>
+<pre><code class="language-python">report = runtime.get_execution_report(goal_id)
+
+# Intent — 这次变更是为了什么
+print(report.intent.description)
+print(report.intent.success_criteria)
+
+# Architecture Delta — 系统结构发生了什么变化
+print(report.architecture_delta.risk_level)
+print(report.architecture_delta.modified_modules)
+
+# Execution Trace — 完整执行链路
+print(report.trace.total_duration_ms)
+
+# Evidence + Confidence — 证据和置信度
+print(report.confidence.score)
+print(report.evidence_bag.all_pass)
+
+# Rollback — 回滚方案
+print(report.rollback_plan.strategy)
+</code></pre>
+<h3 id="165-policy-gate-v2">16.5 Policy Gate v2（证据驱动自动决策）</h3>
+<p>基于置信度和风险自动批准/拒绝：</p>
+<pre><code class="language-yaml">policy_gate:
+  rules:
+    - if: &quot;confidence &gt;= 0.95 AND risk == 'low'&quot;
+      then: &quot;auto_approve&quot;
+    - if: &quot;confidence &lt; 0.40&quot;
+      then: &quot;auto_reject&quot;
+    - if: &quot;risk == 'critical'&quot;
+      then: &quot;require_human&quot;
+      approvers: [&quot;architect&quot;, &quot;security-lead&quot;]
+</code></pre>
+<h3 id="166-intent-specification">16.6 Intent Specification（意图规格化）</h3>
+<p>提交 Goal 时可以附带结构化的 Intent：</p>
+<pre><code class="language-python">from zelos.execution_report import IntentSpec
+
+intent = IntentSpec(
+    description=&quot;实现 OAuth2 登录&quot;,
+    success_criteria=[&quot;用户可用 Google 登录&quot;, &quot;Token 24h 过期&quot;],
+    constraints=[&quot;不破坏现有密码登录&quot;, &quot;使用标准 OAuth2 库&quot;],
+    scope=&quot;single_module&quot;,
+)
+runtime.submit_goal(&quot;OAuth2 login&quot;, intent=intent)
+</code></pre>
+<h3 id="167-architecture-delta">16.7 Architecture Delta（架构影响分析）</h3>
+<p>Planner 自动从 LLM 输出中推断架构影响：</p>
+<pre><code class="language-json">{
+  &quot;architecture_delta&quot;: {
+    &quot;modified_modules&quot;: [&quot;auth-service&quot;, &quot;user-model&quot;],
+    &quot;new_dependencies&quot;: [&quot;oauthlib==3.2.0&quot;],
+    &quot;api_changes&quot;: [
+      {&quot;endpoint&quot;: &quot;POST /auth/oauth&quot;, &quot;change_type&quot;: &quot;new&quot;, &quot;compatibility&quot;: &quot;additive&quot;}
+    ],
+    &quot;risk_level&quot;: &quot;medium&quot;,
+    &quot;explanation&quot;: &quot;标准 OAuth2 增量，隔离在 auth 模块&quot;
+  }
+}
+</code></pre>
+<hr />
 <h3 id="q-planner-llm">Q: Planner 一定要用 LLM 吗？</h3>
 <p>不。Planner 是一个可替换的插件。你可以实现一个基于模板的 Planner，或者基于规则引擎的 Planner。LLMPlanner 只是默认实现。</p>
 <hr />

@@ -56,10 +56,10 @@ Zelos Runtime:
 
 | 指标 | 数值 |
 |------|------|
-| 版本 | v0.8.1 |
-| Phases | 0–7 全部完成 |
-| 源码模块 | 28 个 |
-| 自动化测试 | 78 个（71 passed） |
+| 版本 | v0.9.0 |
+| Phases | 0–9 全部完成 |
+| 源码模块 | 33 个 |
+| 自动化测试 | 139 个（139 passed） |
 | Demo | 21 个 |
 | SDK | Python / TypeScript / Go |
 | 外部依赖 | **零**（核心纯 Python stdlib） |
@@ -920,7 +920,7 @@ pip install zelos-runtime[dev]
 ### 生产环境（Docker）
 
 ```bash
-docker build -t zelos:0.8.1 .
+docker build -t zelos:0.9.0 .
 docker compose up -d
 ```
 
@@ -971,6 +971,156 @@ Temporal 管理确定性工作流（纯代码，可回放）。Zelos 管理非�
 ### Q: 怎么保证 Agent 不互相调用？
 
 **架构层面保证。** Agent 只知道 Runtime，不知道其他 Agent 的存在。它收到的 Task 不包含任何其他 Agent 的信息。Agent 无法直接与其他 Agent 通信——所有通信必须通过 EventBus。
+
+## 16. v0.9.0 新特性：Change Evidence Package
+
+v0.9.0 将 Zelos 从**执行引擎**升级为**治理平台**。核心思想：人不应逐行审查 AI 生成的代码，而应审查 Intent（意图）、Evidence（证据）和 Confidence（置信度）。
+
+### 16.1 Execution Trace（执行链路追溯）
+
+查询一个 Goal 从提交到完成的完整执行链路：
+
+```python
+# 获取完整执行链路
+trace = runtime.get_goal_trace(goal_id)
+for task in trace.tasks:
+    print(f"Task: {task.task_id} → {task.status}")
+    for event in task.timeline:
+        print(f"  {event.event_type} at {event.timestamp}")
+
+# 包含输入/输出
+trace = runtime.get_goal_trace(goal_id, include_artifacts=True)
+# 分页
+trace = runtime.get_goal_trace(goal_id, limit=50, offset=100)
+```
+
+每个 TaskTrace 包含完整的时间线：`task.created → task.ready → task.assigned → task.started → task.completed`，以及 input_context 和 output_artifact。
+
+### 16.2 Evidence Collection（证据收集）
+
+Agent 不再只返回 Artifact，还可以返回结构化的 Evidence：
+
+```python
+from zelos.evidence import Evidence
+
+# Agent 在 execute() 中返回 Evidence
+result = ExecutionResult(
+    status="completed",
+    artifact=Artifact(content=code),
+    evidence=[
+        Evidence(type="test_result", tool="pytest", result="PASS",
+                 data={"passed": 47, "failed": 0, "coverage": 0.89}),
+        Evidence(type="security_scan", tool="bandit", result="PASS",
+                 data={"issues": 0}),
+        Evidence(type="benchmark", tool="wrk", result="PASS",
+                 data={"tps": 1120, "baseline": 850}),
+    ],
+)
+```
+
+Runtime 自动收集所有 Task 的 Evidence，归并成 EvidenceBag：
+
+```python
+report = runtime.get_execution_report(goal_id)
+print(report.evidence_bag.all_pass)    # True/False
+print(report.evidence_bag.summary)     # 按类型汇总
+```
+
+### 16.3 Confidence Scoring（置信度评分）
+
+基于 Evidence 计算 0.0-1.0 的置信度分数：
+
+```python
+print(report.confidence.score)         # 0.97
+print(report.confidence.recommendation) # "approve"
+print(report.confidence.breakdown)     # 各项得分明细
+```
+
+六因子加权评分（可在 zelos.yaml 配置权重）：
+- test_pass: 0.30
+- security: 0.20
+- benchmark: 0.15
+- canary: 0.15
+- api_compat: 0.10
+- code_review: 0.10
+
+### 16.4 Execution Report（变更证据包）
+
+统一的结构化报告——人不需要看代码，看报告就够了：
+
+```python
+report = runtime.get_execution_report(goal_id)
+
+# Intent — 这次变更是为了什么
+print(report.intent.description)
+print(report.intent.success_criteria)
+
+# Architecture Delta — 系统结构发生了什么变化
+print(report.architecture_delta.risk_level)
+print(report.architecture_delta.modified_modules)
+
+# Execution Trace — 完整执行链路
+print(report.trace.total_duration_ms)
+
+# Evidence + Confidence — 证据和置信度
+print(report.confidence.score)
+print(report.evidence_bag.all_pass)
+
+# Rollback — 回滚方案
+print(report.rollback_plan.strategy)
+```
+
+### 16.5 Policy Gate v2（证据驱动自动决策）
+
+基于置信度和风险自动批准/拒绝：
+
+```yaml
+policy_gate:
+  rules:
+    - if: "confidence >= 0.95 AND risk == 'low'"
+      then: "auto_approve"
+    - if: "confidence < 0.40"
+      then: "auto_reject"
+    - if: "risk == 'critical'"
+      then: "require_human"
+      approvers: ["architect", "security-lead"]
+```
+
+### 16.6 Intent Specification（意图规格化）
+
+提交 Goal 时可以附带结构化的 Intent：
+
+```python
+from zelos.execution_report import IntentSpec
+
+intent = IntentSpec(
+    description="实现 OAuth2 登录",
+    success_criteria=["用户可用 Google 登录", "Token 24h 过期"],
+    constraints=["不破坏现有密码登录", "使用标准 OAuth2 库"],
+    scope="single_module",
+)
+runtime.submit_goal("OAuth2 login", intent=intent)
+```
+
+### 16.7 Architecture Delta（架构影响分析）
+
+Planner 自动从 LLM 输出中推断架构影响：
+
+```json
+{
+  "architecture_delta": {
+    "modified_modules": ["auth-service", "user-model"],
+    "new_dependencies": ["oauthlib==3.2.0"],
+    "api_changes": [
+      {"endpoint": "POST /auth/oauth", "change_type": "new", "compatibility": "additive"}
+    ],
+    "risk_level": "medium",
+    "explanation": "标准 OAuth2 增量，隔离在 auth 模块"
+  }
+}
+```
+
+---
 
 ### Q: Planner 一定要用 LLM 吗？
 
