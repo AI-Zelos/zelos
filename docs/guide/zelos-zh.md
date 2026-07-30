@@ -1593,6 +1593,125 @@ for change in ad.api_changes:
 
 ---
 
+## 19. 验证与决策：什么时候需要，什么时候不需要
+
+Zelos 的治理层有两个独立的能力：**验证（Verification）**和**决策（Decision）**。它们不是绑定的——有些任务需要验证但不需要决策。
+
+### 两类任务的对比
+
+| 场景 | 需要验证吗 | 需要决策吗 | 为什么 |
+|------|----------|----------|--------|
+| AI 实现了 OAuth 登录（软件变更） | ✅ 测试、安全扫描、架构校验 | ✅ PolicyGate 决定是否合并 | 代码要上线，必须验证+决策 |
+| AI 写了份数据分析报告发邮件 | ✅ 格式校验、数据准确性 | ❌ 不需要 | 验证报告质量，但不需要"批准上线" |
+| AI 修改了支付模块（高风险变更） | ✅ 全量验证链 | ✅ 人工审批 | confidence < 阈值 → 推给人审 |
+| AI 帮你查了个 API 文档 | ❌ 不需要 | ❌ 不需要 | 简单查询，验证和决策都不需要 |
+
+### 验证始终开启，决策按需触发
+
+```python
+# 场景 1：软件变更 — 提供 intent，自动触发决策
+intent = IntentSpec(description="实现 OAuth 登录", success_criteria=[...])
+runtime.submit_goal("OAuth login", intent=intent)
+# → Goal 完成 → 收集 Evidence → 算 Confidence → PolicyGate 自动决策
+
+# 场景 2：普通 Agent 任务 — 不提供 intent，跳过决策
+runtime.submit_goal("分析昨天的销售数据，生成报告发到 team@example.com")
+# → Goal 完成 → 不触发 PolicyGate（因为没有 intent = 不是软件变更）
+
+# 场景 3：需要验证但不需要决策 — 手动获取报告
+runtime.submit_goal("重构用户模块")
+report = runtime.get_execution_report(goal_id)
+print(report.confidence.score)  # 0.85
+# 你可以看验证结果，但决策由你手动做
+```
+
+### 什么时候需要人工审核
+
+PolicyGate 在两种情况下会要求人工审核：
+
+**情况 1：高风险变更**
+
+```python
+# ArchDelta 标记为 critical → 无论 confidence 多高，都需要人审
+# PolicyGate 自动创建 HITL 审批请求，指定审批人
+```
+
+示例：
+
+```
+Goal: "重构支付核心模块"
+Architecture Delta: risk_level = "critical"
+Confidence: 98%
+→ PolicyGate: require_human
+→ 审批人: ["architect", "security-lead"]
+→ 等两人都批准后才执行合并
+```
+
+**情况 2：置信度不足**
+
+```
+Goal: "实现推荐算法"
+Evidence: 测试 80% 通过，安全扫描 FAIL
+Confidence: 55%
+→ PolicyGate: require_human
+→ 审批人: ["tech-lead"]
+→ 等人审查 Evidence 报告后决定
+```
+
+### 人工审核的完整流程
+
+```python
+# 1. Goal 完成后，PolicyGate 判断需要人工审核
+report = runtime.get_execution_report(goal_id)
+# report.confidence.score = 0.55
+# PolicyGate → require_human, approvers=["tech-lead"]
+
+# 2. 审批人查看报告（不看代码！）
+print(f"Intent: {report.intent.description}")
+print(f"Evidence: {report.evidence_bag.all_pass}")
+print(f"Confidence: {report.confidence.score}")
+print(f"Risk: {report.risk_level}")
+# → "测试 80% 通过，安全扫描没通过，置信度 55%"
+# → 审批人决定：驳回，修复安全扫描问题再提交
+
+# 3. 审批人批准或驳回
+runtime.approve_task(f"{goal_id}-gate", "tech-lead", "安全扫描修复后重新提交")
+# 或
+runtime.reject_task(f"{goal_id}-gate", "tech-lead", "安全扫描未通过，修复后重试")
+```
+
+### 自助决策 vs 自动决策
+
+如果你不想用自动决策，可以完全不依赖 PolicyGate：
+
+```python
+# 1. 提交 Goal（不提供 intent）
+runtime.submit_goal("实现推荐算法")
+
+# 2. Goal 完成后，手动查看报告
+runtime.wait_for_goal(goal_id)
+report = runtime.get_execution_report(goal_id)
+
+# 3. 自己判断
+if report.confidence.score > 0.90:
+    print("✅ 质量很高，可以上线")
+elif report.confidence.score > 0.70:
+    print("⚠️ 需要人工审查")
+else:
+    print("❌ 质量不足，驳回")
+```
+
+### 一句话总结
+
+| | 验证（Verification） | 决策（Decision） |
+|---|---|---|
+| 谁触发 | 自动（所有 Task） | 手动或自动（仅 intent 存在的 Goal） |
+| 做什么 | 收集 Evidence、算 Confidence | 根据 Confidence + Risk 做 approve/reject/human |
+| 适用场景 | 所有 Agent 任务 | 仅软件变更 |
+| 开关 | 始终开启 | `intent` 字段 |
+
+---
+
 ## 18. v1.1.0 新特性：Agent 凭据管理（Credential Management）
 
 AI Agent 执行时需要身份凭据（JWT Token、API Key、OAuth Token、mTLS 证书）才能访问外部服务。v1.1.0 让 Runtime 来管理这些凭据，Agent 只管声明自己需要什么——凭据的存储、注入、过期检查、隔离全部由 Runtime 负责。

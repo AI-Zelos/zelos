@@ -1944,6 +1944,152 @@ for change in ad.api_changes:
         print(f&quot;➕ New endpoint: {change.endpoint}&quot;)
 </code></pre>
 <hr />
+<h2 id="19">19. 验证与决策：什么时候需要，什么时候不需要</h2>
+<p>Zelos 的治理层有两个独立的能力：<strong>验证（Verification）</strong>和<strong>决策（Decision）</strong>。它们不是绑定的——有些任务需要验证但不需要决策。</p>
+<h3 id="_25">两类任务的对比</h3>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>需要验证吗</th>
+<th>需要决策吗</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AI 实现了 OAuth 登录（软件变更）</td>
+<td>✅ 测试、安全扫描、架构校验</td>
+<td>✅ PolicyGate 决定是否合并</td>
+<td>代码要上线，必须验证+决策</td>
+</tr>
+<tr>
+<td>AI 写了份数据分析报告发邮件</td>
+<td>✅ 格式校验、数据准确性</td>
+<td>❌ 不需要</td>
+<td>验证报告质量，但不需要"批准上线"</td>
+</tr>
+<tr>
+<td>AI 修改了支付模块（高风险变更）</td>
+<td>✅ 全量验证链</td>
+<td>✅ 人工审批</td>
+<td>confidence &lt; 阈值 → 推给人审</td>
+</tr>
+<tr>
+<td>AI 帮你查了个 API 文档</td>
+<td>❌ 不需要</td>
+<td>❌ 不需要</td>
+<td>简单查询，验证和决策都不需要</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_26">验证始终开启，决策按需触发</h3>
+<pre><code class="language-python"># 场景 1：软件变更 — 提供 intent，自动触发决策
+intent = IntentSpec(description=&quot;实现 OAuth 登录&quot;, success_criteria=[...])
+runtime.submit_goal(&quot;OAuth login&quot;, intent=intent)
+# → Goal 完成 → 收集 Evidence → 算 Confidence → PolicyGate 自动决策
+
+# 场景 2：普通 Agent 任务 — 不提供 intent，跳过决策
+runtime.submit_goal(&quot;分析昨天的销售数据，生成报告发到 team@example.com&quot;)
+# → Goal 完成 → 不触发 PolicyGate（因为没有 intent = 不是软件变更）
+
+# 场景 3：需要验证但不需要决策 — 手动获取报告
+runtime.submit_goal(&quot;重构用户模块&quot;)
+report = runtime.get_execution_report(goal_id)
+print(report.confidence.score)  # 0.85
+# 你可以看验证结果，但决策由你手动做
+</code></pre>
+<h3 id="_27">什么时候需要人工审核</h3>
+<p>PolicyGate 在两种情况下会要求人工审核：</p>
+<p><strong>情况 1：高风险变更</strong></p>
+<pre><code class="language-python"># ArchDelta 标记为 critical → 无论 confidence 多高，都需要人审
+# PolicyGate 自动创建 HITL 审批请求，指定审批人
+</code></pre>
+<p>示例：</p>
+<pre><code>Goal: &quot;重构支付核心模块&quot;
+Architecture Delta: risk_level = &quot;critical&quot;
+Confidence: 98%
+→ PolicyGate: require_human
+→ 审批人: [&quot;architect&quot;, &quot;security-lead&quot;]
+→ 等两人都批准后才执行合并
+</code></pre>
+<p><strong>情况 2：置信度不足</strong></p>
+<pre><code>Goal: &quot;实现推荐算法&quot;
+Evidence: 测试 80% 通过，安全扫描 FAIL
+Confidence: 55%
+→ PolicyGate: require_human
+→ 审批人: [&quot;tech-lead&quot;]
+→ 等人审查 Evidence 报告后决定
+</code></pre>
+<h3 id="_28">人工审核的完整流程</h3>
+<pre><code class="language-python"># 1. Goal 完成后，PolicyGate 判断需要人工审核
+report = runtime.get_execution_report(goal_id)
+# report.confidence.score = 0.55
+# PolicyGate → require_human, approvers=[&quot;tech-lead&quot;]
+
+# 2. 审批人查看报告（不看代码！）
+print(f&quot;Intent: {report.intent.description}&quot;)
+print(f&quot;Evidence: {report.evidence_bag.all_pass}&quot;)
+print(f&quot;Confidence: {report.confidence.score}&quot;)
+print(f&quot;Risk: {report.risk_level}&quot;)
+# → &quot;测试 80% 通过，安全扫描没通过，置信度 55%&quot;
+# → 审批人决定：驳回，修复安全扫描问题再提交
+
+# 3. 审批人批准或驳回
+runtime.approve_task(f&quot;{goal_id}-gate&quot;, &quot;tech-lead&quot;, &quot;安全扫描修复后重新提交&quot;)
+# 或
+runtime.reject_task(f&quot;{goal_id}-gate&quot;, &quot;tech-lead&quot;, &quot;安全扫描未通过，修复后重试&quot;)
+</code></pre>
+<h3 id="vs">自助决策 vs 自动决策</h3>
+<p>如果你不想用自动决策，可以完全不依赖 PolicyGate：</p>
+<pre><code class="language-python"># 1. 提交 Goal（不提供 intent）
+runtime.submit_goal(&quot;实现推荐算法&quot;)
+
+# 2. Goal 完成后，手动查看报告
+runtime.wait_for_goal(goal_id)
+report = runtime.get_execution_report(goal_id)
+
+# 3. 自己判断
+if report.confidence.score &gt; 0.90:
+    print(&quot;✅ 质量很高，可以上线&quot;)
+elif report.confidence.score &gt; 0.70:
+    print(&quot;⚠️ 需要人工审查&quot;)
+else:
+    print(&quot;❌ 质量不足，驳回&quot;)
+</code></pre>
+<h3 id="_29">一句话总结</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>验证（Verification）</th>
+<th>决策（Decision）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>谁触发</td>
+<td>自动（所有 Task）</td>
+<td>手动或自动（仅 intent 存在的 Goal）</td>
+</tr>
+<tr>
+<td>做什么</td>
+<td>收集 Evidence、算 Confidence</td>
+<td>根据 Confidence + Risk 做 approve/reject/human</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>所有 Agent 任务</td>
+<td>仅软件变更</td>
+</tr>
+<tr>
+<td>开关</td>
+<td>始终开启</td>
+<td><code>intent</code> 字段</td>
+</tr>
+</tbody>
+</table>
+<hr />
 <h2 id="18-v110-agent-credential-management">18. v1.1.0 新特性：Agent 凭据管理（Credential Management）</h2>
 <p>AI Agent 执行时需要身份凭据（JWT Token、API Key、OAuth Token、mTLS 证书）才能访问外部服务。v1.1.0 让 Runtime 来管理这些凭据，Agent 只管声明自己需要什么——凭据的存储、注入、过期检查、隔离全部由 Runtime 负责。</p>
 <h3 id="181">18.1 核心原则</h3>
