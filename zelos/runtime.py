@@ -763,6 +763,16 @@ class ZelosRuntime:
                             # v0.8.0: Persist terminal state
                             self._persist_goal_state(goal_id)
 
+                            # v1.1.0: Auto-trigger governance only for governed goals
+                            # A goal is governed only if it has an IntentSpec (software change).
+                            # Plain agent tasks (research, email, data query) skip governance.
+                            if (goal["status"] in ("completed", "failed")
+                                    and goal.get("intent") is not None):
+                                try:
+                                    self.auto_decide(goal_id)
+                                except Exception:
+                                    pass
+
                 # 4. Phase 3: Distributed — real work stealing + dead node cleanup
                 if self._cluster_enabled:
                     # Find the most overloaded peer
