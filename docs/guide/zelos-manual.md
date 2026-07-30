@@ -2082,3 +2082,66 @@ provider.force_flush(timeout_millis=5000)  # Push to Jaeger
 | `Hot reload not detecting changes` | FileWatcher not started | Check `hot_reload.plugin_dir` in config |
 | `Multiple leaders detected` | No peer registration | Register all peers with `register_peer()` |
 | `Expired API key` | TTL too short | Generate key with longer `ttl_seconds` |
+
+---
+
+## 34. v1.1.0 — Agent Credential Management
+
+AI Agents need identity credentials (JWT, API keys, OAuth tokens) to access external services. v1.1.0 makes the Runtime responsible for credential lifecycle — storage, injection, validation, and isolation.
+
+### 34.1 Core Principles
+
+- **Credentials belong to the Runtime, never to Agents**
+- **Zero-leak between Agents**: Agent A never sees Agent B's credentials
+- **Credentials are injected in-memory only** — never appear in EventBus events
+
+### 34.2 Agent Registration
+
+```python
+runtime.add_agent(
+    "GitHubCoder", "agents.coder:CodingAgent",
+    capabilities=[...],
+    required_credentials=["github-token"],  # v1.1.0
+)
+```
+
+### 34.3 Using Credentials in Agents
+
+```python
+class CodingAgent(BaseAgent):
+    def execute(self, task):
+        creds = task.constraints.get("credential_refs", {})
+        token = creds["github-token"]["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get("https://api.github.com/user", headers=headers)
+```
+
+### 34.4 Four Backends
+
+| Backend | Config | Use Case |
+|---------|--------|----------|
+| `env` | `ZELOS_CREDENTIAL_<NAME>` env var | Development |
+| `file` | `/etc/zelos/credentials.json` | Simple deploy |
+| `vault` | HashiCorp Vault KV v2 (`pip install hvac`) | Production |
+| `k8s` | Mounted Secrets in `/etc/zelos/secrets/<name>/` | Kubernetes (zero deps) |
+
+### 34.5 Configuration (zelos.yaml)
+
+```yaml
+credentials:
+  store: "env"              # env | file | vault | k8s
+  policy:
+    validate_on_dispatch: true
+    refresh_before_expiry_seconds: 300
+```
+
+### 34.6 Custom CredentialStore
+
+```python
+from zelos.credential_store import CredentialStore, Credential
+
+class MyStore(CredentialStore):
+    def get(self, credential_name, agent_id):
+        # Custom logic: DB, cloud KMS, encrypted file, etc.
+        return Credential(name=credential_name, token="...")
+```

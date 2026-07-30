@@ -2340,4 +2340,75 @@ provider.force_flush(timeout_millis=5000)  # Push to Jaeger
 </tr>
 </tbody>
 </table>
+<hr />
+<h2 id="34-v110-agent-credential-management">34. v1.1.0 — Agent Credential Management</h2>
+<p>AI Agents need identity credentials (JWT, API keys, OAuth tokens) to access external services. v1.1.0 makes the Runtime responsible for credential lifecycle — storage, injection, validation, and isolation.</p>
+<h3 id="341-core-principles">34.1 Core Principles</h3>
+<ul>
+<li><strong>Credentials belong to the Runtime, never to Agents</strong></li>
+<li><strong>Zero-leak between Agents</strong>: Agent A never sees Agent B's credentials</li>
+<li><strong>Credentials are injected in-memory only</strong> — never appear in EventBus events</li>
+</ul>
+<h3 id="342-agent-registration">34.2 Agent Registration</h3>
+<pre><code class="language-python">runtime.add_agent(
+    &quot;GitHubCoder&quot;, &quot;agents.coder:CodingAgent&quot;,
+    capabilities=[...],
+    required_credentials=[&quot;github-token&quot;],  # v1.1.0
+)
+</code></pre>
+<h3 id="343-using-credentials-in-agents">34.3 Using Credentials in Agents</h3>
+<pre><code class="language-python">class CodingAgent(BaseAgent):
+    def execute(self, task):
+        creds = task.constraints.get(&quot;credential_refs&quot;, {})
+        token = creds[&quot;github-token&quot;][&quot;token&quot;]
+        headers = {&quot;Authorization&quot;: f&quot;Bearer {token}&quot;}
+        response = requests.get(&quot;https://api.github.com/user&quot;, headers=headers)
+</code></pre>
+<h3 id="344-four-backends">34.4 Four Backends</h3>
+<table>
+<thead>
+<tr>
+<th>Backend</th>
+<th>Config</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>env</code></td>
+<td><code>ZELOS_CREDENTIAL_&lt;NAME&gt;</code> env var</td>
+<td>Development</td>
+</tr>
+<tr>
+<td><code>file</code></td>
+<td><code>/etc/zelos/credentials.json</code></td>
+<td>Simple deploy</td>
+</tr>
+<tr>
+<td><code>vault</code></td>
+<td>HashiCorp Vault KV v2 (<code>pip install hvac</code>)</td>
+<td>Production</td>
+</tr>
+<tr>
+<td><code>k8s</code></td>
+<td>Mounted Secrets in <code>/etc/zelos/secrets/&lt;name&gt;/</code></td>
+<td>Kubernetes (zero deps)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="345-configuration-zelosyaml">34.5 Configuration (zelos.yaml)</h3>
+<pre><code class="language-yaml">credentials:
+  store: &quot;env&quot;              # env | file | vault | k8s
+  policy:
+    validate_on_dispatch: true
+    refresh_before_expiry_seconds: 300
+</code></pre>
+<h3 id="346-custom-credentialstore">34.6 Custom CredentialStore</h3>
+<pre><code class="language-python">from zelos.credential_store import CredentialStore, Credential
+
+class MyStore(CredentialStore):
+    def get(self, credential_name, agent_id):
+        # Custom logic: DB, cloud KMS, encrypted file, etc.
+        return Credential(name=credential_name, token=&quot;...&quot;)
+</code></pre>
 </body></html>

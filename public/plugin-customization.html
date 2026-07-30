@@ -72,6 +72,12 @@ hr{border:none;border-top:1px solid #21262d;margin:24px 0}
 <td>需要自定义证据类型（如合规审计、A/B 测试结果）</td>
 </tr>
 <tr>
+<td><strong>CredentialStore</strong></td>
+<td><code>CredentialStore</code> ABC</td>
+<td><code>EnvCredentialStore</code></td>
+<td>需要对接自定义凭据源（DB、云 KMS、加密文件等）</td>
+</tr>
+<tr>
 <td><strong>ConstraintEngine</strong></td>
 <td><code>ConstraintEngine</code> 可扩展</td>
 <td>默认实现</td>
@@ -598,8 +604,120 @@ runtime._constraint_engine = MyConstraintEngine()
 <li>KnowledgeConstraints / StructuralConstraints / RiskSpec / VerificationCriteria 都有 <code>from_dict()</code> 工厂方法</li>
 </ul>
 <hr />
-<h2 id="7-planner">7. Planner — 自定义规划器</h2>
+<h2 id="7-credentialstore">7. CredentialStore — 自定义凭据存储</h2>
 <h3 id="_19">接口</h3>
+<pre><code class="language-python">from zelos.credential_store import CredentialStore, Credential
+
+class CredentialStore(ABC):
+    @abstractmethod
+    def get(self, credential_name: str, agent_id: str) -&gt; Credential | None:
+        &quot;&quot;&quot;获取 Agent 的某个凭据。返回 None 表示不可用。&quot;&quot;&quot;
+        ...
+
+    def validate(self, credential_name: str, agent_id: str) -&gt; bool:
+        &quot;&quot;&quot;检查凭据是否有效。&quot;&quot;&quot;
+
+    def refresh(self, credential_name: str, agent_id: str) -&gt; Credential | None:
+        &quot;&quot;&quot;刷新凭据（OAuth2 等需要刷新的场景）。默认 no-op。&quot;&quot;&quot;
+
+    def revoke(self, credential_name: str, agent_id: str) -&gt; bool:
+        &quot;&quot;&quot;撤销凭据。默认 no-op。&quot;&quot;&quot;
+</code></pre>
+<h3 id="credential">Credential 字段</h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>str</td>
+<td>凭据名称</td>
+</tr>
+<tr>
+<td><code>token</code></td>
+<td>str</td>
+<td>凭据值</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td>str</td>
+<td><code>bearer_token</code> / <code>api_key</code> / <code>jwt</code> / <code>mtls_cert</code> / <code>oauth2</code></td>
+</tr>
+<tr>
+<td><code>agent_ids</code></td>
+<td>list[str]</td>
+<td>哪些 Agent 可以使用此凭据（空 = 全部）</td>
+</tr>
+<tr>
+<td><code>expires_at</code></td>
+<td>float | None</td>
+<td>过期时间戳（None = 永不过期）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="aws-parameter-store">示例：对接 AWS Parameter Store</h3>
+<pre><code class="language-python">from zelos.credential_store import CredentialStore, Credential
+
+class AWSParameterStore(CredentialStore):
+    &quot;&quot;&quot;从 AWS SSM Parameter Store 读取凭据。&quot;&quot;&quot;
+
+    def __init__(self, region=&quot;us-east-1&quot;):
+        import boto3
+        self._client = boto3.client(&quot;ssm&quot;, region_name=region)
+
+    def get(self, credential_name, agent_id):
+        try:
+            resp = self._client.get_parameter(
+                Name=f&quot;/zelos/{credential_name}&quot;,
+                WithDecryption=True,
+            )
+            return Credential(
+                name=credential_name,
+                token=resp[&quot;Parameter&quot;][&quot;Value&quot;],
+                type=&quot;api_key&quot;,
+            )
+        except Exception:
+            return None
+
+# 使用
+from zelos.credential_store import create_credential_store
+# 方式一：直接替换
+runtime._credential_store = AWSParameterStore(region=&quot;ap-northeast-1&quot;)
+# 方式二：通过 zelos.yaml + factory（需注册到 BACKENDS）
+</code></pre>
+<h3 id="_20">示例：对接数据库</h3>
+<pre><code class="language-python">class DBCredentialStore(CredentialStore):
+    &quot;&quot;&quot;从数据库读取凭据。&quot;&quot;&quot;
+
+    def __init__(self, db_url: str):
+        import sqlite3
+        self._conn = sqlite3.connect(db_url)
+
+    def get(self, credential_name, agent_id):
+        cur = self._conn.execute(
+            &quot;SELECT token, type FROM credentials WHERE name=? AND (agent_id=? OR agent_id='*')&quot;,
+            (credential_name, agent_id),
+        )
+        row = cur.fetchone()
+        if row:
+            return Credential(name=credential_name, token=row[0], type=row[1])
+        return None
+</code></pre>
+<h3 id="_21">注意事项</h3>
+<ul>
+<li><code>get()</code> 返回 <code>None</code> 时，<code>CredentialInjector</code> 会抛出 <code>CredentialNotFoundError</code> → Task FAILED</li>
+<li>不要返回过期凭据——<code>CredentialInjector</code> 会调用 <code>validate()</code> 检查，过期也会 FAILED</li>
+<li><code>agent_ids</code> 为空列表时表示<strong>所有 Agent 都可以访问</strong>（开放模式）</li>
+<li>生产环境建议用 Vault 或 K8s Secrets，不要用 env/file</li>
+</ul>
+<hr />
+<h2 id="8-planner">8. Planner — 自定义规划器</h2>
+<h3 id="_22">接口</h3>
 <p>LLMPlanner 是默认实现，支持通过配置切换 LLM Provider：</p>
 <pre><code class="language-python">from zelos.planner import LLMPlanner
 
@@ -639,14 +757,14 @@ class RuleBasedPlanner:
 # 使用
 runtime._planner = RuleBasedPlanner()
 </code></pre>
-<h3 id="_20">注意事项</h3>
+<h3 id="_23">注意事项</h3>
 <ul>
 <li><code>PlannerTask</code> 字段：<code>task_id</code>, <code>description</code>, <code>required_capability</code>, <code>dependencies</code>（list）, <code>priority</code>, <code>timeout_ms</code></li>
 <li>返回 <code>PlannerPlan</code> 即可，Runtime 负责后续调度</li>
 <li>Planner 是插件，替换不影响 Runtime 其他模块</li>
 </ul>
 <hr />
-<h2 id="_21">快速参考：什么时候自定义什么</h2>
+<h2 id="_24">快速参考：什么时候自定义什么</h2>
 <table>
 <thead>
 <tr>

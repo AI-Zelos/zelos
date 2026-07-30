@@ -4,6 +4,24 @@ All notable changes to Zelos will be documented in this file.
 
 ---
 
+## [1.1.0] — 2026-07-30
+
+### Added — Agent Credential Management
+- **CredentialStore** — pluggable credential backend (env/file/vault/k8s)
+- **CredentialInjector** — dispatch-time injection, expired/missing → Task FAILED
+- **AgentState.required_credentials** — agents declare what they need
+- **add_agent(required_credentials=[...])** — new optional parameter
+- **Zero-leak guarantee** — Agent A never sees Agent B's credentials
+- **Four backends**: Env (dev), File (simple), Vault (production, hvac), K8s (zero deps)
+- **create_credential_store()** factory + `zelos.yaml` configuration
+
+### Changed
+- Version: 1.0.0 → 1.1.0
+- `ExecutionEngine.dispatch()`: credential injection before agent execution
+- `AgentState`: new `required_credentials` field
+
+---
+
 ## [1.0.0] — 2026-07-28
 
 ### Added — CP Governance Platform
