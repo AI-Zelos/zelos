@@ -359,7 +359,59 @@ class BaseAgent:
 
 ---
 
-## 十二、里程碑
+## 十二、影响范围
+
+### 新增文件
+
+| 文件 | 行数估算 | 说明 |
+|------|---------|------|
+| `zelos/credential_store.py` | ~120 | `CredentialStore` ABC + `EnvCredentialStore` + `FileCredentialStore` |
+| `zelos/credential_injector.py` | ~60 | `CredentialInjector` — dispatch 时注入凭据 |
+| `tests/test_credential_store.py` | ~80 | CredentialStore 各实现测试 |
+| `tests/test_credential_injection.py` | ~60 | 注入 + 隔离 + 过期 + 撤销测试 |
+
+### 修改文件
+
+| 文件 | 改动量 | 改动内容 |
+|------|--------|---------|
+| `zelos/runtime.py` | ~15 行 | `add_agent()` 新增 `required_credentials` 参数；保存到 `AgentState` |
+| `zelos/execution_engine.py` | ~20 行 | `dispatch()` 调用 `CredentialInjector.inject()`；`AgentState` 新增 `required_credentials` 字段 |
+| `zelos/task_graph.py` | 0 行（无需改动） | `Task.constraints` 字段已存在（v1.0.0），直接用 |
+| `zelos_sdk/schema.py` | ~15 行 | 新增 `CredentialRequirement` dataclass |
+| `zelos_sdk/agent.py` | ~5 行 | `BaseAgent` 新增 `required_credentials` 类属性 |
+| `pyproject.toml` | 1 行 | 版本号 → 1.1.0 |
+| `zelos/__init__.py` | 2 行 | `__version__` + docstring |
+
+### 不影响的部分
+
+| 模块 | 原因 |
+|------|------|
+| `zelos/event_bus.py` | 事件流不变，`task.started` 的 `input_context` 不含凭据明文 |
+| `zelos/scheduler.py` | 调度逻辑不感知凭据 |
+| `zelos/planner.py` | Goal 分解不涉及凭据 |
+| `zelos/verifier.py` | 验证不涉及凭据 |
+| `zelos/change_proposal.py` | CP 五元不变 |
+| `zelos/constraint_engine.py` | 约束引擎不变（凭据注入是独立步骤） |
+| `zelos/verifier_chain.py` | 不变 |
+| `zelos/merge_executor.py` | 不变 |
+| 所有现有测试 | `required_credentials` 是可选参数，默认 `None`，100% 向后兼容 |
+
+### 需更新的文档
+
+| 文档 | 更新内容 |
+|------|---------|
+| `README.md` | 特性列表新增 Credential Management |
+| `CHANGELOG.md` | v1.1.0 条目 |
+| `ROADMAP.md` | 版本号 |
+| `docs/guide/zelos-zh.md` | 新增凭据管理章节 |
+| `docs/guide/zelos-manual.md` | 新增 Credential Management 章节 |
+| `docs/guide/plugin-customization.md` | 新增 CredentialStore 插件说明 |
+| `pyproject.toml` | 版本号 1.0.0 → 1.1.0 |
+| `public/` | 重新生成 |
+
+---
+
+## 十三、里程碑
 
 ```
 Day 1: CredentialStore 接口 + EnvCredentialStore + FileCredentialStore
