@@ -11,7 +11,7 @@ if os.path.exists(PUBLIC):
 os.makedirs(PUBLIC)
 
 # ── Convert guide docs ──
-for md_name in ["zelos-manual.md", "zelos-zh.md", "operations.md"]:
+for md_name in ["zelos-manual.md", "zelos-zh.md", "operations.md", "plugin-customization.md"]:
     src = os.path.join(ROOT, "docs", "guide", md_name)
     if not os.path.exists(src):
         continue
@@ -115,6 +115,7 @@ index += '<p class="badge">v1.0.0 &middot; 10 Phases Complete &middot; Apache 2.
 index += '<a class="card" href="zelos.html"><h3>API Reference</h3><p>Complete API docs for all 37 modules - runtime, kernel, plugins, SDK</p></a>\n'
 index += '<a class="card" href="zelos-manual.html"><h3>User Manual</h3><p>Getting started, architecture deep dive, configuration, and full API walkthrough</p></a>\n'
 index += '<a class="card" href="zelos-zh.html"><h3>中文手册</h3><p>Zelos 全面技术手册 - 为什么存在、怎么用、每个模块详解、部署指南、FAQ</p></a>\n'
+index += '<a class="card" href="plugin-customization.html"><h3>Plugin Guide</h3><p>Customize Verifier, ConfidenceScorer, PolicyGate, Planner with code examples</p></a>\n'
 index += '<a class="card" href="operations.html"><h3>Operations Guide</h3><p>Deployment (bare-metal/Docker/K8s), multi-node cluster, monitoring, troubleshooting</p></a>\n'
 index += '<a class="card" href="papers.html"><h3>Papers</h3><p>Research papers and academic publications from the Zelos project</p></a>\n'
 index += '<a class="card" href="https://github.com/AI-Zelos/zelos"><h3>GitHub</h3><p>Source code &middot; 151 tests &middot; 21 demos &middot; Python/TS/Go SDKs</p></a>\n'

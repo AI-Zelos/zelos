@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plugin Customization - Zelos Documentation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:920px;margin:0 auto;padding:24px;background:#0d1117;color:#c9d1d9;line-height:1.65}
+a{color:#58a6ff;text-decoration:none}a:hover{text-decoration:underline}
+code{background:#161b22;padding:2px 6px;border-radius:4px;font-size:13px}
+pre{background:#161b22;padding:16px;border-radius:8px;overflow-x:auto;font-size:13px}pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:12px 0}
+th,td{border:1px solid #30363d;padding:8px 14px;text-align:left}
+th{background:#161b22;font-weight:600}
+h1{font-size:32px;margin:24px 0 12px;color:#f0f6fc}
+h2{font-size:22px;margin:28px 0 10px;color:#f0f6fc;padding-bottom:6px;border-bottom:1px solid #21262d}
+h3{font-size:17px;margin:20px 0 8px;color:#f0f6fc}
+hr{border:none;border-top:1px solid #21262d;margin:24px 0}
+.back{margin-bottom:20px;font-size:14px}
+</style></head><body>
+<p class="back"><a href="./">Home</a></p>
+<h1 id="zelos-plugin-customization-guide">Zelos Plugin Customization Guide</h1>
+<blockquote>
+<p>如何自定义 Zelos 的插件、什么时候需要、注意事项。所有示例均基于 v1.0.0 实测接口。</p>
+</blockquote>
+<hr />
+<h2 id="_1">概述</h2>
+<p>Zelos 的 Kernel 是封闭的，所有行为通过可替换的插件实现。目前有 7 类可自定义的插件：</p>
+<table>
+<thead>
+<tr>
+<th>插件</th>
+<th>接口</th>
+<th>默认实现</th>
+<th>什么时候需要自定义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Verifier</strong></td>
+<td><code>Verifier</code> ABC</td>
+<td><code>SchemaVerifier</code></td>
+<td>需要自定义验证逻辑（如检查业务规范、合规要求）</td>
+</tr>
+<tr>
+<td><strong>ConfidenceScorer</strong></td>
+<td><code>ConfidenceScorer</code> ABC</td>
+<td><code>WeightedConfidenceScorer</code></td>
+<td>需要自定义置信度评分算法（如安全优先、合规优先）</td>
+</tr>
+<tr>
+<td><strong>PolicyGate</strong></td>
+<td><code>PolicyGate</code> ABC</td>
+<td><code>EvidenceBasedPolicyGate</code></td>
+<td>需要自定义决策规则（如多级审批流、行业合规检查）</td>
+</tr>
+<tr>
+<td><strong>ScoringStrategy</strong></td>
+<td><code>ScoringStrategy</code> ABC</td>
+<td><code>DefaultScoringStrategy</code></td>
+<td>需要自定义 Agent 选择排名逻辑（如成本优先、延迟优先）</td>
+</tr>
+<tr>
+<td><strong>Planner</strong></td>
+<td>LLM 可替换</td>
+<td><code>LLMPlanner</code></td>
+<td>需要用不同 LLM 或纯规则引擎做 Goal 分解</td>
+</tr>
+<tr>
+<td><strong>Evidence</strong></td>
+<td>开放 dataclass</td>
+<td>—</td>
+<td>需要自定义证据类型（如合规审计、A/B 测试结果）</td>
+</tr>
+<tr>
+<td><strong>ConstraintEngine</strong></td>
+<td><code>ConstraintEngine</code> 可扩展</td>
+<td>默认实现</td>
+<td>需要自定义 K/S/R/E 各维度的约束规则</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-verifier">1. Verifier — 自定义验证器</h2>
+<h3 id="_2">接口</h3>
+<pre><code class="language-python">from zelos.verifier import Verifier, Verdict, VerificationCriteria
+
+class Verifier(ABC):
+    def __init__(self, verifier_id: str = &quot;base-verifier&quot;, config: dict | None = None):
+        self.verifier_id = verifier_id
+        self.config = config or {}
+
+    @abstractmethod
+    def verify(self, artifact_content: Any, criteria: VerificationCriteria) -&gt; Verdict:
+        &quot;&quot;&quot;验证 artifact 是否满足 criteria。&quot;&quot;&quot;
+</code></pre>
+<h3 id="verdict">Verdict 字段</h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>verdict</code></td>
+<td>str</td>
+<td><code>"passed"</code> / <code>"failed"</code> / <code>"needs_review"</code></td>
+</tr>
+<tr>
+<td><code>score</code></td>
+<td>float</td>
+<td>0.0–1.0 置信度</td>
+</tr>
+<tr>
+<td><code>issues</code></td>
+<td>list[dict]</td>
+<td>发现的问题列表</td>
+</tr>
+<tr>
+<td><code>summary</code></td>
+<td>str</td>
+<td>人类可读摘要</td>
+</tr>
+</tbody>
+</table>
+<h3 id="verificationcriteria">VerificationCriteria 字段</h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>expected_output_schema</code></td>
+<td>dict</td>
+<td>期望的 JSON Schema</td>
+</tr>
+<tr>
+<td><code>severity</code></td>
+<td>str</td>
+<td><code>"error"</code> / <code>"warning"</code> — error 级别失败阻断链</td>
+</tr>
+<tr>
+<td><code>constraints</code></td>
+<td>list[str]</td>
+<td>额外约束</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_3">示例：自定义代码复杂度验证器</h3>
+<pre><code class="language-python">from zelos.verifier import Verifier, Verdict, VerificationCriteria
+
+class ComplexityVerifier(Verifier):
+    &quot;&quot;&quot;检查代码复杂度是否超标。&quot;&quot;&quot;
+
+    def __init__(self, max_complexity: int = 10):
+        super().__init__(verifier_id=&quot;complexity-checker&quot;)
+        self.max_complexity = max_complexity
+
+    def verify(self, artifact_content, criteria):
+        # 从 artifact 中提取函数列表
+        functions = artifact_content.get(&quot;functions&quot;, [])
+        issues = []
+
+        for fn in functions:
+            if fn.get(&quot;cyclomatic_complexity&quot;, 0) &gt; self.max_complexity:
+                issues.append({
+                    &quot;function&quot;: fn[&quot;name&quot;],
+                    &quot;complexity&quot;: fn[&quot;cyclomatic_complexity&quot;],
+                    &quot;threshold&quot;: self.max_complexity,
+                })
+
+        if issues:
+            return Verdict(
+                verdict=&quot;failed&quot;,
+                score=0.3,
+                issues=issues,
+                summary=f&quot;{len(issues)} functions exceed complexity threshold of {self.max_complexity}&quot;
+            )
+        return Verdict(
+            verdict=&quot;passed&quot;,
+            score=1.0,
+            summary=f&quot;All functions within complexity threshold&quot;
+        )
+
+# 注册到 VerifierChain
+from zelos.verifier_chain import VerifierChain
+chain = VerifierChain()
+chain.register(&quot;complexity&quot;, ComplexityVerifier(max_complexity=15))
+</code></pre>
+<h3 id="_4">注意事项</h3>
+<ul>
+<li><code>verdict</code> 值为 <code>"passed"</code> / <code>"failed"</code> / <code>"needs_review"</code>（小写），不是 <code>"PASS"</code> / <code>"FAIL"</code></li>
+<li><code>failed</code> 会阻断 VerifierChain，后续 Verifier 不再执行</li>
+<li>构造 <code>Verdict</code> 时至少给 <code>verdict</code> 和 <code>summary</code>，其他字段可选</li>
+</ul>
+<hr />
+<h2 id="2-confidencescorer">2. ConfidenceScorer — 自定义置信度评分</h2>
+<h3 id="_5">接口</h3>
+<pre><code class="language-python">from zelos.confidence import ConfidenceScorer, ConfidenceResult
+
+class ConfidenceScorer(ABC):
+    @abstractmethod
+    def score(self, evidence: EvidenceBag, arch_delta=None) -&gt; ConfidenceResult:
+        &quot;&quot;&quot;基于证据计算置信度。&quot;&quot;&quot;
+</code></pre>
+<h3 id="confidenceresult">ConfidenceResult 字段</h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>score</code></td>
+<td>float</td>
+<td>0.0–1.0</td>
+</tr>
+<tr>
+<td><code>breakdown</code></td>
+<td>dict[str, float]</td>
+<td>各维度得分明细</td>
+</tr>
+<tr>
+<td><code>recommendation</code></td>
+<td>str</td>
+<td><code>"approve"</code> / <code>"reject"</code> / <code>"need_human"</code></td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td>str</td>
+<td>评分逻辑解释</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_6">示例：安全优先评分器</h3>
+<pre><code class="language-python">from zelos.confidence import ConfidenceScorer, ConfidenceResult
+from zelos.evidence import EvidenceBag
+
+class SecurityFirstScorer(ConfidenceScorer):
+    &quot;&quot;&quot;安全扫描失败 → 直接 0 分。其他按正常权重。&quot;&quot;&quot;
+
+    def score(self, evidence, arch_delta=None):
+        # 安全扫描有失败 → 直接零分
+        sec_items = [e for e in evidence.items
+                     if e.type == &quot;security_scan&quot; and e.result == &quot;FAIL&quot;]
+        if sec_items:
+            return ConfidenceResult(
+                score=0.0,
+                breakdown={&quot;security&quot;: 0.0},
+                recommendation=&quot;reject&quot;,
+                reasoning=f&quot;Security scan failed: {sec_items[0].summary}&quot;
+            )
+
+        # 正常评分逻辑
+        test_pass = sum(1 for e in evidence.items
+                       if e.type == &quot;test_result&quot; and e.result == &quot;PASS&quot;)
+        total_tests = sum(1 for e in evidence.items if e.type == &quot;test_result&quot;)
+        test_score = test_pass / max(total_tests, 1)
+
+        score = test_score * 0.7  # 测试权重 70%
+        return ConfidenceResult(
+            score=min(1.0, score),
+            breakdown={&quot;test_pass&quot;: test_score * 0.7},
+            recommendation=&quot;approve&quot; if score &gt; 0.8 else &quot;need_human&quot;,
+            reasoning=f&quot;Security-first scoring: test_score={test_score:.0%}&quot;
+        )
+
+# 使用：替换默认评分器
+runtime._confidence_scorer = SecurityFirstScorer()
+</code></pre>
+<h3 id="_7">注意事项</h3>
+<ul>
+<li><code>recommendation</code> 必须是 <code>"approve"</code> / <code>"reject"</code> / <code>"need_human"</code> 之一</li>
+<li>无证据时返回 <code>score=0.0, recommendation="need_human"</code></li>
+<li><code>arch_delta</code> 可能为 <code>None</code>，做空值检查</li>
+</ul>
+<hr />
+<h2 id="3-policygate">3. PolicyGate — 自定义决策规则</h2>
+<h3 id="_8">接口</h3>
+<pre><code class="language-python">from zelos.policy_gate import PolicyGate, GateDecision
+
+class PolicyGate(ABC):
+    @abstractmethod
+    def evaluate(self, report) -&gt; GateDecision:
+        &quot;&quot;&quot;根据 ExecutionReport 做出决策。&quot;&quot;&quot;
+</code></pre>
+<h3 id="gatedecision">GateDecision 字段</h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>action</code></td>
+<td>str</td>
+<td><code>"auto_approve"</code> / <code>"auto_reject"</code> / <code>"require_human"</code></td>
+</tr>
+<tr>
+<td><code>reason</code></td>
+<td>str</td>
+<td>决策理由</td>
+</tr>
+<tr>
+<td><code>required_approvers</code></td>
+<td>list[str]</td>
+<td>需要谁审批（action=require_human 时）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_9">示例：合规优先策略门</h3>
+<pre><code class="language-python">from zelos.policy_gate import PolicyGate, GateDecision
+
+class CompliancePolicyGate(PolicyGate):
+    &quot;&quot;&quot;金融合规场景：任何涉及 payment 模块 → 强制人工审批。&quot;&quot;&quot;
+
+    def evaluate(self, report):
+        # 检查架构变更是否涉及敏感模块
+        arch = report.architecture_delta
+        if arch:
+            sensitive = {&quot;payment&quot;, &quot;settlement&quot;, &quot;auth&quot;, &quot;user-data&quot;}
+            touched = set(arch.modified_modules) &amp; sensitive
+            if touched:
+                return GateDecision(
+                    action=&quot;require_human&quot;,
+                    reason=f&quot;Changes touch sensitive modules: {touched}&quot;,
+                    required_approvers=[&quot;security-lead&quot;, &quot;compliance-officer&quot;],
+                )
+
+        # 否则走默认逻辑
+        if report.confidence and report.confidence.score &gt;= 0.95:
+            return GateDecision(
+                action=&quot;auto_approve&quot;,
+                reason=f&quot;Confidence {report.confidence.score:.0%}&quot;
+            )
+        return GateDecision(
+            action=&quot;require_human&quot;,
+            reason=&quot;Standard review required&quot;
+        )
+
+# 使用
+runtime._policy_gate = CompliancePolicyGate()
+</code></pre>
+<h3 id="_10">注意事项</h3>
+<ul>
+<li><code>report</code> 是 <code>ExecutionReport</code> 对象，首次访问可能为 <code>None</code> 的属性要做空值检查</li>
+<li><code>action</code> 的三个值必须精确匹配 <code>"auto_approve"</code> / <code>"auto_reject"</code> / <code>"require_human"</code></li>
+<li><code>require_human</code> 时建议提供 <code>required_approvers</code> 列表</li>
+</ul>
+<hr />
+<h2 id="4-scoringstrategy-agent">4. ScoringStrategy — 自定义 Agent 排名</h2>
+<h3 id="_11">接口</h3>
+<pre><code class="language-python">from zelos.scheduler import ScoringStrategy, AgentCandidate, ScoredCandidate
+
+class ScoringStrategy(ABC):
+    @abstractmethod
+    def score(self, task: Task, candidates: list[AgentCandidate]) -&gt; list[ScoredCandidate]:
+        &quot;&quot;&quot;对候选 Agent 打分排序。&quot;&quot;&quot;
+</code></pre>
+<h3 id="agentcandidate">AgentCandidate 字段（传入）</h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>agent_id</code></td>
+<td>str</td>
+<td>Agent 标识</td>
+</tr>
+<tr>
+<td><code>agent_name</code></td>
+<td>str</td>
+<td>Agent 名称</td>
+</tr>
+<tr>
+<td><code>success_rate</code></td>
+<td>float</td>
+<td>历史成功率</td>
+</tr>
+<tr>
+<td><code>cost_per_call</code></td>
+<td>float</td>
+<td>单次调用成本</td>
+</tr>
+<tr>
+<td><code>avg_latency_ms</code></td>
+<td>float</td>
+<td>平均延迟</td>
+</tr>
+<tr>
+<td><code>availability</code></td>
+<td>float</td>
+<td>可用性</td>
+</tr>
+<tr>
+<td><code>current_load</code></td>
+<td>float</td>
+<td>当前负载</td>
+</tr>
+<tr>
+<td><code>tags</code></td>
+<td>list[str]</td>
+<td>能力标签</td>
+</tr>
+</tbody>
+</table>
+<h3 id="scoredcandidate">ScoredCandidate 字段（返回）</h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>candidate</code></td>
+<td>AgentCandidate</td>
+<td>原始候选</td>
+</tr>
+<tr>
+<td><code>score</code></td>
+<td>float</td>
+<td>0.0–1.0 得分</td>
+</tr>
+<tr>
+<td><code>reason</code></td>
+<td>str</td>
+<td>打分理由</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_12">示例：成本优先策略</h3>
+<pre><code class="language-python">from zelos.scheduler import ScoringStrategy, ScoredCandidate
+
+class CostFirstStrategy(ScoringStrategy):
+    &quot;&quot;&quot;成本最低且可用的 Agent 优先。&quot;&quot;&quot;
+
+    def score(self, task, candidates):
+        results = []
+        for c in candidates:
+            # 不可用 → 0 分
+            if c.availability &lt; 0.9:
+                results.append(ScoredCandidate(c, score=0, reason=&quot;Unavailable&quot;))
+                continue
+
+            # 成本驱动：成本越低分数越高
+            max_cost = task.max_cost_per_call or 1.0
+            cost_score = max(0, 1.0 - c.cost_per_call / max_cost)
+            results.append(ScoredCandidate(
+                c,
+                score=cost_score,
+                reason=f&quot;cost={c.cost_per_call:.3f}, available={c.availability:.0%}&quot;
+            ))
+
+        return sorted(results, key=lambda r: r.score, reverse=True)
+</code></pre>
+<h3 id="_13">注意事项</h3>
+<ul>
+<li>返回的列表必须按 <code>score</code> 降序排列（最高分在前）</li>
+<li><code>score</code> 为 0 的候选不会被选中</li>
+<li><code>AgentCandidate</code> 是 dataclass，直接读字段即可</li>
+</ul>
+<hr />
+<h2 id="5-evidence">5. Evidence — 自定义证据类型</h2>
+<h3 id="_14">接口</h3>
+<pre><code class="language-python">from zelos.evidence import Evidence
+
+Evidence(
+    type: str,       # 证据类型；用 &quot;custom&quot; 表示自定义
+    tool: str,       # 产生证据的工具名
+    result: str,     # &quot;PASS&quot; / &quot;FAIL&quot; / &quot;WARN&quot; / &quot;SKIP&quot;
+    data: dict,      # 详细数据
+    summary: str,    # 人类可读摘要
+)
+</code></pre>
+<h3 id="ab">示例：A/B 测试证据</h3>
+<pre><code class="language-python">from zelos.evidence import Evidence
+
+ab_evidence = Evidence(
+    type=&quot;custom&quot;,              # 自定义类型
+    tool=&quot;ab-test-platform&quot;,
+    result=&quot;PASS&quot;,
+    data={
+        &quot;experiment_id&quot;: &quot;exp-042&quot;,
+        &quot;variant&quot;: &quot;B&quot;,
+        &quot;metric&quot;: &quot;conversion_rate&quot;,
+        &quot;control&quot;: 0.032,
+        &quot;treatment&quot;: 0.041,
+        &quot;p_value&quot;: 0.003,
+        &quot;sample_size&quot;: 50000,
+    },
+    summary=&quot;Variant B: +28% conversion (p=0.003, significant)&quot;
+)
+
+runtime.add_evidence(goal_id, ab_evidence)
+</code></pre>
+<h3 id="_15">注意事项</h3>
+<ul>
+<li><code>type</code> 建议用预定义类型（<code>test_result</code>, <code>benchmark</code>, <code>security_scan</code>, <code>api_diff</code>, <code>canary</code>, <code>code_review</code>）以便 ConfidenceScorer 自动识别</li>
+<li>不匹配预定义类型时用 <code>"custom"</code>，但 ConfidenceScorer 不会自动为其计算分数</li>
+<li><code>result</code> 必须是 <code>"PASS"</code> / <code>"FAIL"</code> / <code>"WARN"</code> / <code>"SKIP"</code>（大写）</li>
+</ul>
+<hr />
+<h2 id="6-constraintengine">6. ConstraintEngine — 自定义约束</h2>
+<h3 id="_16">接口</h3>
+<pre><code class="language-python">from zelos.constraint_engine import ConstraintEngine, ExecutableConstraints
+
+class ConstraintEngine:
+    def apply(self, cp: ChangeProposal) -&gt; ExecutableConstraints:
+        &quot;&quot;&quot;将 CP 五元模型固化为可执行约束。&quot;&quot;&quot;
+</code></pre>
+<h3 id="changeproposal">ChangeProposal 五元</h3>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>字段</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>I</td>
+<td><code>cp.intent</code></td>
+<td>意图（IntentSpec）</td>
+</tr>
+<tr>
+<td>K</td>
+<td><code>cp.knowledge_constraints</code></td>
+<td>知识约束（编码规范、禁用模式、技术栈限制）</td>
+</tr>
+<tr>
+<td>S</td>
+<td><code>cp.structural_constraints</code></td>
+<td>结构约束（模块边界、依赖白名单、API 契约）</td>
+</tr>
+<tr>
+<td>R</td>
+<td><code>cp.risk_spec</code></td>
+<td>风险规范（风险等级、安全要求、性能基线）</td>
+</tr>
+<tr>
+<td>E</td>
+<td><code>cp.verification_criteria</code></td>
+<td>验证准则（测试通过率、覆盖率门槛、必选 Verifier）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_17">示例：扩展约束引擎添加自定义编码规范</h3>
+<pre><code class="language-python">from zelos.constraint_engine import ConstraintEngine, ExecutableConstraints
+from zelos.change_proposal import ChangeProposal, KnowledgeConstraints
+
+class MyConstraintEngine(ConstraintEngine):
+    &quot;&quot;&quot;在默认约束基础上，追加团队自定义规范。&quot;&quot;&quot;
+
+    def apply(self, cp):
+        ec = super().apply(cp)  # 先走默认逻辑
+
+        # 追加团队自定义规范
+        ec.coding_rules.extend([
+            &quot;REQUIRED: all public functions must have type hints&quot;,
+            &quot;REQUIRED: no function exceeds 50 lines&quot;,
+            &quot;FORBIDDEN: print() statements in production code&quot;,
+        ])
+
+        # 追加自定义架构边界
+        if &quot;core&quot; not in ec.architecture_boundaries.get(&quot;protected_modules&quot;, []):
+            ec.architecture_boundaries.setdefault(&quot;protected_modules&quot;, []).append(&quot;core&quot;)
+
+        return ec
+
+# 使用
+runtime._constraint_engine = MyConstraintEngine()
+</code></pre>
+<h3 id="_18">注意事项</h3>
+<ul>
+<li><code>ExecutableConstraints.to_context_dict()</code> 是注入到 Agent 执行上下文的格式</li>
+<li>约束在 dispatch 时自动注入 <code>Task.constraints</code> 字段</li>
+<li>KnowledgeConstraints / StructuralConstraints / RiskSpec / VerificationCriteria 都有 <code>from_dict()</code> 工厂方法</li>
+</ul>
+<hr />
+<h2 id="7-planner">7. Planner — 自定义规划器</h2>
+<h3 id="_19">接口</h3>
+<p>LLMPlanner 是默认实现，支持通过配置切换 LLM Provider：</p>
+<pre><code class="language-python">from zelos.planner import LLMPlanner
+
+planner = LLMPlanner({
+    &quot;provider&quot;: &quot;openai&quot;,           # openai / anthropic / google / mock
+    &quot;model&quot;: &quot;gpt-4o&quot;,
+    &quot;api_key&quot;: &quot;${OPENAI_API_KEY}&quot;,
+    &quot;temperature&quot;: 0.3,
+})
+</code></pre>
+<h3 id="planner-llm">自定义 Planner（非 LLM）</h3>
+<p>可以实现自己的 Planner 替代 LLM：</p>
+<pre><code class="language-python">from zelos.planner import PlannerPlan, PlannerTask
+
+class RuleBasedPlanner:
+    &quot;&quot;&quot;基于模板规则的 Planner，不依赖 LLM。&quot;&quot;&quot;
+
+    def __init__(self, config=None):
+        self.planner_id = &quot;rule-based&quot;
+        self.planner_version = &quot;1.0.0&quot;
+
+    def plan(self, goal_description, goal_id=&quot;&quot;, context=None):
+        plan = PlannerPlan(goal_id=goal_id, planner_id=self.planner_id)
+        # 基于规则拆解 Goal
+        if &quot;deploy&quot; in goal_description.lower():
+            plan.tasks = [
+                PlannerTask(&quot;t1&quot;, &quot;Run tests&quot;, &quot;verification.unit-test&quot;),
+                PlannerTask(&quot;t2&quot;, &quot;Build image&quot;, &quot;automation.docker&quot;),
+                PlannerTask(&quot;t3&quot;, &quot;Deploy to K8s&quot;, &quot;automation.k8s&quot;, dependencies=[&quot;t1&quot;, &quot;t2&quot;]),
+            ]
+        else:
+            plan.tasks = [
+                PlannerTask(&quot;t1&quot;, goal_description, &quot;code-generation.python&quot;),
+            ]
+        return plan
+
+# 使用
+runtime._planner = RuleBasedPlanner()
+</code></pre>
+<h3 id="_20">注意事项</h3>
+<ul>
+<li><code>PlannerTask</code> 字段：<code>task_id</code>, <code>description</code>, <code>required_capability</code>, <code>dependencies</code>（list）, <code>priority</code>, <code>timeout_ms</code></li>
+<li>返回 <code>PlannerPlan</code> 即可，Runtime 负责后续调度</li>
+<li>Planner 是插件，替换不影响 Runtime 其他模块</li>
+</ul>
+<hr />
+<h2 id="_21">快速参考：什么时候自定义什么</h2>
+<table>
+<thead>
+<tr>
+<th>需求</th>
+<th>自定义什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>验证 Agent 输出是否符合业务规范</td>
+<td><code>Verifier</code> → <code>VerifierChain.register()</code></td>
+</tr>
+<tr>
+<td>改变"能不能上线"的评分标准</td>
+<td><code>ConfidenceScorer</code></td>
+</tr>
+<tr>
+<td>改变审批流程（多级、合规等）</td>
+<td><code>PolicyGate</code></td>
+</tr>
+<tr>
+<td>改变"选哪个 Agent 执行任务"的排名规则</td>
+<td><code>ScoringStrategy</code></td>
+</tr>
+<tr>
+<td>不用 LLM 做 Goal 分解</td>
+<td>自定义 <code>Planner</code></td>
+</tr>
+<tr>
+<td>增加新的证据类型</td>
+<td><code>Evidence(type="custom", ...)</code></td>
+</tr>
+<tr>
+<td>增加编码规范、架构边界约束</td>
+<td>扩展 <code>ConstraintEngine</code> 或配置 <code>ChangeProposal</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<blockquote>
+<p>所有接口均基于 v1.0.0 代码验证，示例可运行。</p>
+</blockquote>
+</body></html>
