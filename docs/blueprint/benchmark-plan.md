@@ -1,199 +1,183 @@
-# Zelos Governance Benchmark Plan
+# Zelos Runtime Benchmark Plan
 
-> 用 SWE-bench 证明：AI 写完代码以后，Zelos 能在零人工干预下做出和人类 Review 同等或更优的 accept/reject 决策。
-
----
-
-## 一、为什么选 SWE-bench
-
-SWE-bench（Princeton + Stanford）是 AI 编程能力的事实标准评测。2300 个真实 GitHub issue，Docker 隔离验证，无人为主观偏差。
-
-当前所有参赛者都只比 **"谁解的题多"**。Zelos 第一个问 **"解出来以后你敢不敢上线"**——这才是差异化。
+> 证明 Runtime 的价值：和裸 Python、LangGraph、CrewAI 比，Zelos 能不能让多 Agent 执行更快、更稳、更可靠。
 
 ---
 
-## 二、实验设计
+## 一、测什么（不测什么）
 
-### 2.1 数据集
+**测的：Runtime 的核心能力**
 
-**SWE-bench Verified（500 实例）** 或 **SWE-bench Lite（300 实例）**。
+| 能力 | 为什么重要 |
+|------|-----------|
+| **调度吞吐** | 100 个 Task 来了，多快能派出去？ |
+| **故障恢复** | Agent 挂了，Runtime 能不能自动重试、切到备用 Agent？ |
+| **伸缩性** | Agent 数量从 10 → 100 → 500，性能怎么变？ |
+| **资源开销** | 每多一个 Agent，Runtime 多吃多少 CPU/内存？ |
+| **冷启动** | Agent 注册到能接 Task，要多久？ |
 
-建议先用 10 个实例做 pilot，验证流程后再跑全量。
+**不测的：CP/治理层的能力**
 
-### 2.2 三组对照
+Evidence、Confidence、PolicyGate 是 v0.9+ 的治理能力，不是 Runtime 的核心价值。本次 benchmark 不涉及。
 
-同一批任务，同一个 AI 模型（Claude Code 或 GPT-5），只变量是治理方式：
+---
 
-| 组别 | AI 行为 | 人行为 | Zelos 行为 |
-|------|--------|--------|-----------|
-| **PR 组**（基线） | 生成 patch | 读 diff、审代码、决定是否合并 | 无 |
-| **AI-PR 组** | 生成 patch + 自审 | 看 AI 建议 + 最终决定 | 无 |
-| **Zelos 组** | 生成 patch | 不看代码 | 自动跑验证 → 算 Confidence → PolicyGate 自动 approve/reject |
+## 二、对比对象
 
-### 2.3 统一环境
+| 方案 | 是什么 | 为什么比 |
+|------|--------|---------|
+| **裸 Python**（threading.Queue + 手动管理） | 没有 Runtime 的基线 | 证明 Runtime 有存在的价值 |
+| **LangGraph** | Agent 工作流框架 | 目前最火的 Agent 编排工具 |
+| **CrewAI** | 多 Agent 协作框架 | 另一个热门选择 |
+| **Zelos** | 我们的 Runtime | 实验组 |
+
+---
+
+## 三、实验场景
+
+### 场景 1：吞吐压力测试
+
+```
+100 个独立 Task，每个 100ms work，10 个 Agent 可调度
+```
+
+**测什么**：从第一个 Task 提交到最后一个 Task 完成的总耗时。
+
+| 方案 | 预期 |
+|------|------|
+| 裸 Python | 最快（无框架开销），但无故障恢复 |
+| LangGraph | 中等（有编排开销） |
+| CrewAI | 中等 |
+| **Zelos** | 接近裸 Python（核心零依赖），显著优于框架 |
+
+### 场景 2：故障恢复测试
+
+```
+20 个 Task，其中第 5、10、15 个 Task 的目标 Agent 在执行中途崩溃。
+```
+
+**测什么**：Runtime 检测到 Agent 失联（心跳超时）→ 标记 Task FAILED → 自动重试或切到备用 Agent → 最终成功率。
+
+| 方案 | 预期 |
+|------|------|
+| 裸 Python | **失败**，需要人手动介入 |
+| LangGraph | 有限支持（需手动配置 retry） |
+| CrewAI | 有限支持 |
+| **Zelos** | **自动恢复**，心跳检测 + 调度器重试 + fallback 机制 |
+
+### 场景 3：伸缩性测试
+
+```
+Agent 数量：10 → 50 → 100 → 500
+每个 Agent 注册 3 个 Capability
+Capability 查询：随机查找匹配的 Capability
+```
+
+**测什么**：Capability 匹配延迟、Scheduler 评分延迟随 Agent 数量的增长曲线。
+
+| 方案 | 预期 |
+|------|------|
+| Zelos（已有 benchmark） | Capability 匹配 37M queries/s，500 Agent 下 <1ms |
+
+### 场景 4：资源开销测试
+
+```
+100 个 Agent 注册后，Runtime 的内存占用和 CPU 消耗。
+对比：裸 Python 管理同等数量的 worker thread。
+```
+
+**测什么**：Runtime 本身的开销占多少。
+
+---
+
+## 四、核心指标
+
+| 指标 | 定义 | 目标 |
+|------|------|------|
+| **调度延迟** | Task READY → dispatch 的时间 | <10ms (p99) |
+| **吞吐量** | Tasks/秒（100 Task 并发） | >500 tasks/s |
+| **故障恢复率** | Agent 崩溃后 Task 最终成功比例 | >99% |
+| **恢复时间** | Agent 崩溃 → Task 重新 dispatch | <3s（心跳间隔 × 3） |
+| **内存开销** | 500 Agent 注册后 Runtime 内存 | <200MB |
+| **冷启动** | Agent 注册 → 可接 Task | <1s |
+
+---
+
+## 五、实验环境
 
 | 项目 | 规格 |
 |------|------|
-| AI 模型 | Claude Code（固定版本） |
-| 硬件 | 同一台机器 / 同规格云实例 |
-| SWE-bench 版本 | Verified v1.0 |
-| 超时 | 每任务 1800 秒 |
-| 评测 | Docker 容器内跑项目自带测试 |
+| CPU | 8 核 |
+| 内存 | 16 GB |
+| OS | macOS 14 / Ubuntu 22.04 |
+| Python | 3.12 |
+| Zelos | v1.1.0 |
 
 ---
 
-## 三、评测指标
+## 六、实施
 
-### 核心指标
-
-| 指标 | 定义 | 怎么算 |
-|------|------|--------|
-| **解决率 (Resolved %)** | patch 通过 SWE-bench 测试的占比 | SWE-bench 自带 |
-| **人工耗时** | 人类完成 Review 的平均时间 | 计时（PR 组/AI-PR 组）/ Zelos 组 = 0 |
-| **误批率 (False Accept)** | Zelos approved 但实际 FAIL 的占比 | approved ∩ failed / approved |
-| **误拒率 (False Reject)** | Zelos rejected 但实际 PASS 的占比 | rejected ∩ passed / rejected |
-| **置信度准确率** | Confidence ≥ 0.95 的实例中实际 PASS 的占比 | TP / (TP + FP) at threshold=0.95 |
-
-### 辅助指标
-
-| 指标 | 意义 |
-|------|------|
-| 返工次数 | 每任务平均修改轮数 |
-| Evidence 覆盖率 | 每个 Task 平均产生几条 Evidence |
-| 决策分布 | auto_approve / auto_reject / require_human 的比例 |
-
----
-
-## 四、Zelos 组的具体流程
+### Phase 1：已有 Benchmark（已完成）
 
 ```
-1. SWE-bench 给一个 issue
-     ↓
-2. Claude Code 生成 patch
-     ↓
-3. Zelos Runtime：
-   ├── 自动跑 lint（代码规范）
-   ├── 自动跑项目测试（SWE-bench Docker）
-   ├── 自动跑安全扫描（bandit）
-   ├── 收集 Evidence
-   ├── 算 Confidence（WeightedConfidenceScorer）
-   └── PolicyGate 决策：
-       ├── Confidence ≥ 0.95 → auto_approve
-       ├── Confidence < 0.40 → auto_reject
-       └── 其他 → require_human（本实验中记入 reject）
-     ↓
-4. 对比 SWE-bench 真实结果：
-   ├── Zelos approved + SWE-bench PASS → ✅ 正确批准
-   ├── Zelos approved + SWE-bench FAIL → ❌ 误批
-   ├── Zelos rejected + SWE-bench PASS → ❌ 误拒
-   └── Zelos rejected + SWE-bench FAIL → ✅ 正确拒绝
+test_benchmark.py (5 tests)
+  EventBus: 890,000 events/s
+  TaskGraph: 2,250,000 transitions/s
+  Capability: 37,500,000 queries/s
+  Scheduler: 570,000 scores/s
+  Ring Buffer: 200 events → cap 100, correct
 ```
 
----
-
-## 五、成功标准
-
-| 指标 | 目标 | 说明 |
-|------|------|------|
-| 解决率 | ≥ PR 组的 90% | 不比人审差太多 |
-| 人工耗时 | **0** | Zelos 组零人工 |
-| 误批率 | < 5% | 批准的不合格 patch < 5% |
-| 误拒率 | < 20% | 拒绝的合格 patch < 20%（宁可误拒，不可误批） |
-| 置信度准确率 | > 80% | Confidence ≥ 0.95 时有 80%+ 是真的 PASS |
-
----
-
-## 六、实施步骤
-
-### Phase 1：Pilot（1-2 天）
-
-```bash
-# 1. 装 SWE-bench
-pip install swebench datasets
-git clone https://github.com/princeton-nlp/SWE-bench.git
-
-# 2. 跑 10 个实例的 baseline（PR 组）
-# 手动 Review，记录耗时和结果
-
-# 3. 跑 10 个实例的 Zelos 组
-# 脚本自动化，记录所有指标
-```
-
-输出：Pilot 报告 + 流程验证 + 指标初值。
-
-### Phase 2：全量（3-5 天）
-
-```bash
-# 跑全部 300 个实例
-# 三组各自完成
-# 统计显著性检验（Mann-Whitney U）
-```
-
-### Phase 3：论文/Blog（1-2 天）
-
-输出：
-- 一篇 arXiv preprint（Benchmark 论文）
-- 一篇博客（带对比表的推广文章）
-- README 更新（Benchmark 数据放首页）
-
----
-
-## 七、脚本框架
+### Phase 2：对比 Benchmark（需实施）
 
 ```python
-# run_zelos_swebench.py — 骨架
-import subprocess, json, time
+# benchmark_runtime.py — 骨架
+import time, threading, queue
 from zelos.runtime import ZelosRuntime
 
-def evaluate_single_instance(instance):
-    """跑一个 SWE-bench 实例的 Zelos 治理流程。"""
-    issue = instance["problem_statement"]
-    repo = instance["repo"]
-
-    # 1. Claude Code 生成 patch
-    patch = generate_patch_with_claude_code(issue, repo)
-
-    # 2. Zelos 治理
+def bench_throughput():
+    """100 tasks, 10 agents, measure total time."""
     rt = ZelosRuntime()
-    rt.add_agent("ClaudeCode", "claude:cli", [capability("code-generation")])
+    for i in range(10):
+        rt.add_agent(f"agent-{i}", f"test:Agent", [cap("code")])
     rt.start()
-    goal = rt.submit_goal(
-        f"Fix: {issue[:100]}",
-        intent=IntentSpec(description=issue, scope="single_module"),
-    )
 
-    # 3. 自动验证
-    rt.add_evidence(goal["goal_id"], run_tests(patch, repo))
-    rt.add_evidence(goal["goal_id"], run_lint(patch))
-    rt.add_evidence(goal["goal_id"], run_security_scan(patch))
+    t0 = time.perf_counter()
+    goal = rt.submit_goal("Throughput test")
+    rt.wait_for_goal(goal["goal_id"], timeout_seconds=60)
+    elapsed = time.perf_counter() - t0
 
-    # 4. 等待完成 + 决策
-    rt.wait_for_goal(goal["goal_id"])
-    report = rt.get_execution_report(goal["goal_id"])
-    decision = rt.auto_decide(goal["goal_id"])
-
-    # 5. 返回结果
     rt.shutdown()
-    return {
-        "instance_id": instance["instance_id"],
-        "zelos_decision": decision["action"],
-        "confidence": report.confidence.score,
-        "evidence_all_pass": report.evidence_bag.all_pass,
-        "swebench_result": evaluate_on_swebench(patch, instance),  # Docker 内跑测试
-    }
+    return elapsed
+
+def bench_fault_recovery():
+    """20 tasks, kill agent at task 5/10/15, measure recovery."""
+    ...
+
+def bench_scaling():
+    """10 → 500 agents, measure capability matching latency."""
+    ...
 ```
 
----
+### Phase 3：出报告
 
-## 八、成本估算
-
-| 项目 | 估算 |
-|------|------|
-| 300 × Claude Code API 调用 | ~$150-300（取决于 prompt 长度） |
-| Docker 镜像存储 | ~120 GB |
-| 机时（300 × 30min） | ~150 CPU-hours |
-| 人工 Review 时间（PR 组） | ~50 小时（300 × 10min） |
+输出：
+- 一张对比表（Zelos vs LangGraph vs CrewAI vs 裸 Python）
+- 一篇博客：**"We benchmarked 4 ways to run 100 agents. Here's what happened."**
+- README 更新：核心 benchmark 数据放首页
 
 ---
 
-> 下一步：决定是否开始 Pilot。10 个实例，1 天能出初步数据。
+## 七、对比表模板
+
+| 指标 | 裸 Python | LangGraph | CrewAI | **Zelos** |
+|------|----------|-----------|--------|----------|
+| 100 Task 耗时 | ?ms | ?ms | ?ms | ?ms |
+| 故障自动恢复 | ❌ | 手动配置 | 手动配置 | ✅ 自动 |
+| Capability 匹配延迟 | N/A | 无此能力 | 无此能力 | <1ms |
+| 内存开销 (500 Agent) | ?MB | ?MB | ?MB | ?MB |
+| 外部依赖 | 0 | N | N | **0** |
+
+---
+
+> 下一步：先跑裸 Python baseline，再跑 LangGraph/CrewAI，出第一版数据。
