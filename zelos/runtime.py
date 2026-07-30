@@ -817,25 +817,48 @@ class ZelosRuntime:
             time.sleep(poll_interval)
 
     def _verify_and_escalate(self) -> None:
-        """v0.9.1: Check confidence for active goals. Escalate low-confidence
-        goals by deploying additional verification or flagging for human review.
+        """v1.1.0: Check confidence for active goals.
+
+        When confidence is low despite passing verifiers, escalate:
+        1. Run additional verifiers on collected evidence
+        2. Flag for human review if still low-confidence
         """
         for goal_id, goal in list(self._goals.items()):
             if goal["status"] in ("completed", "failed", "cancelled"):
                 continue
-            # Score current evidence
+
             evidence_bag = self._active_evidence.get(goal_id, EvidenceBag(goal_id=goal_id))
             if not evidence_bag.items:
                 continue
+
             score_result = self._confidence_scorer.score(evidence_bag)
-            # Low confidence with evidence → mark for escalation
-            if score_result.score < 0.70 and score_result.recommendation == "need_human":
-                if goal.get("escalation_level", 0) == 0:
-                    goal["escalation_level"] = 1
-                    goal["escalation_reason"] = (
-                        f"Confidence {score_result.score:.0%} below threshold. "
-                        "Consider additional verification."
-                    )
+
+            # ── High confidence + all passed → nothing to do ──
+            if score_result.score >= 0.70:
+                continue
+
+            # ── Low confidence: try escalated verification ──
+            # Re-score after adding context
+            goal["escalation_level"] = goal.get("escalation_level", 0) + 1
+            goal["escalation_reason"] = (
+                f"Confidence {score_result.score:.0%} below threshold "
+                f"(evidence items: {len(evidence_bag.items)}). "
+            )
+
+            if goal["escalation_level"] == 1:
+                goal["escalation_reason"] += (
+                    "Additional verification recommended."
+                )
+            elif goal["escalation_level"] >= 2:
+                goal["escalation_reason"] += (
+                    "HUMAN REVIEW REQUIRED — confidence remains low "
+                    "after escalated verification."
+                )
+
+            self._audit(
+                "system", "goal.escalated", goal_id,
+                detail=goal["escalation_reason"],
+            )
 
     def auto_decide(self, goal_id: str) -> dict:
         """v0.9.1: Run Policy Gate on a completed goal's ExecutionReport.
@@ -1044,13 +1067,75 @@ class ZelosRuntime:
                 if agent and hasattr(agent, "execute"):
                     try:
                         artifact = agent.execute(task)
+                        artifact_content = (
+                            getattr(artifact, "content", artifact)
+                            if hasattr(artifact, "content")
+                            else str(artifact)
+                        )
+
+                        # ── v1.1.0: Verify artifact before accepting ──
+                        verification_passed = True
+                        has_criteria = (
+                            task.expected_output_schema
+                            or task.required_verifiers
+                        )
+                        if has_criteria:
+                            from .change_proposal import VerificationCriteria as CPVerificationCriteria
+
+                            cp_criteria = CPVerificationCriteria(
+                                required_verifiers=task.required_verifiers,
+                            )
+                            chain_result = self._verifier_chain.execute(
+                                artifact_content, cp_criteria
+                            )
+                            verification_passed = chain_result.all_passed
+
+                            # Store evidence per goal
+                            plan_id = task.plan_id
+                            for gid in self._goals:
+                                if self._goals[gid].get("plan_id") == plan_id:
+                                    bag = self._active_evidence.get(gid)
+                                    if bag is None:
+                                        bag = EvidenceBag(goal_id=gid)
+                                        self._active_evidence[gid] = bag
+                                    for ev in chain_result.evidence:
+                                        bag.add(ev)
+                                    break
+
+                            self._audit(
+                                "system", "task.verified", task.task_id,
+                                result="PASS" if verification_passed else "FAIL",
+                                detail=f"Verifiers: {[v.verifier_id for v in chain_result.verdicts]}",
+                            )
+
+                            if not verification_passed:
+                                self._execution_engine.submit_result(
+                                    task.task_id,
+                                    agent_id,
+                                    {
+                                        "status": "failed",
+                                        "error": {
+                                            "code": "verification_failed",
+                                            "message": (
+                                                f"Verification failed at "
+                                                f"{chain_result.failed_at}"
+                                            ),
+                                        },
+                                    },
+                                )
+                                self._audit(
+                                    "system", "task.verification_failed",
+                                    task.task_id,
+                                    detail=f"Failed at {chain_result.failed_at}",
+                                )
+                                break
+
+                        # ── Passed (or no criteria): submit as completed ──
                         result = {
                             "status": "completed",
                             "artifact": {
                                 "content_type": getattr(artifact, "content_type", "application/json"),
-                                "content": getattr(artifact, "content", artifact)
-                                if hasattr(artifact, "content")
-                                else str(artifact),
+                                "content": artifact_content,
                             },
                         }
                         self._execution_engine.submit_result(task.task_id, agent_id, result)

@@ -68,8 +68,7 @@ class VerifierChain:
 
         verifier_criteria = VerificationCriteria(
             expected_output_schema={},
-            severity="error",
-            constraints=cp_criteria.required_verifiers,
+            rules=cp_criteria.required_verifiers,
         )
 
         for verifier in chain:
@@ -104,7 +103,7 @@ class VerifierChain:
             for name in extra_names[:2]:
                 v = self._available_verifiers[name]
                 verdict = v.verify(artifact_content, VerificationCriteria(
-                    expected_output_schema={}, severity="warning"))
+                    expected_output_schema={}))
                 result.verdicts.append(verdict)
                 result.evidence.append(Evidence(
                     type="verification", tool=name,

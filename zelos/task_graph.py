@@ -55,6 +55,8 @@ class Task:
     max_latency_ms: int | None = None
     non_retryable_errors: list[str] = field(default_factory=list)  # v0.8.0
     constraints: dict | None = None  # v1.0.0: CP constraints injected at dispatch
+    expected_output_schema: dict | None = None  # v1.1.0: Schema the artifact must satisfy
+    required_verifiers: list[str] = field(default_factory=list)  # v1.1.0: Verifiers to run
     created_at: float = 0.0
     updated_at: float = 0.0
 
@@ -85,6 +87,8 @@ class Task:
             "max_latency_ms": self.max_latency_ms,
             "non_retryable_errors": list(self.non_retryable_errors),
             "constraints": self.constraints,
+            "expected_output_schema": self.expected_output_schema,
+            "required_verifiers": list(self.required_verifiers),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -115,6 +119,8 @@ class Task:
             max_latency_ms=d.get("max_latency_ms"),
             non_retryable_errors=list(d.get("non_retryable_errors", [])),
             constraints=d.get("constraints"),
+            expected_output_schema=d.get("expected_output_schema"),
+            required_verifiers=list(d.get("required_verifiers", [])),
             created_at=float(d.get("created_at", 0.0)),
             updated_at=float(d.get("updated_at", 0.0)),
         )
