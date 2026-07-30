@@ -41,6 +41,8 @@ from .verifier import SchemaVerifier, VerificationGate
 from .change_proposal import ChangeProposal, KnowledgeConstraints, RiskSpec, StructuralConstraints, VerificationCriteria  # noqa: E402
 from .confidence import WeightedConfidenceScorer  # noqa: E402
 from .constraint_engine import ConstraintEngine  # noqa: E402
+from .credential_injector import CredentialInjector  # noqa: E402
+from .credential_store import CredentialStore, EnvCredentialStore  # noqa: E402
 from .evidence import Evidence, EvidenceBag  # noqa: E402
 from .execution_report import ArchDelta, ExecutionReport, IntentSpec, RollbackPlan  # noqa: E402
 from .execution_trace import ExecutionTrace, TaskTrace, TraceEvent  # noqa: E402
@@ -110,6 +112,11 @@ class ZelosRuntime:
         self._verifier_chain = VerifierChain()
         self._merge_executor = MergeExecutor()
         self._active_cps: dict[str, ChangeProposal] = {}  # goal_id → ChangeProposal
+
+        # ── v1.1.0: Credential Management ──
+        self._credential_store: CredentialStore = EnvCredentialStore()
+        self._credential_injector = CredentialInjector(self._credential_store)
+        self._execution_engine._credential_injector = self._credential_injector
 
         # ── Phase 3: Security ──
         sec_cfg = self.config.get("security", {})
@@ -233,6 +240,7 @@ class ZelosRuntime:
         heartbeat_interval_ms: int = 30000,
         restart_policy: str = "always",
         config: dict | None = None,
+        required_credentials: list[str] | None = None,
         auth_context: dict | None = None,
     ) -> str:
         """Register an agent. If Runtime is running, hot-join.
@@ -255,6 +263,7 @@ class ZelosRuntime:
             return {"status": "rejected", "reason": f"Agent quota exceeded for tenant '{tenant_id}'"}
 
         agent_id = str(uuid.uuid4())
+        required_creds = required_credentials or []
         agent_info = {
             "agent_id": agent_id,
             "name": name,
@@ -265,6 +274,7 @@ class ZelosRuntime:
             "restart_policy": restart_policy,
             "config": config or {},
             "tenant_id": tenant_id,
+            "required_credentials": required_creds,
         }
         with self._lock:
             self._agents[name] = agent_info
@@ -932,6 +942,7 @@ class ZelosRuntime:
             agent_name=name,
             max_concurrent_tasks=info["max_concurrent_tasks"],
             heartbeat_interval_ms=info["heartbeat_interval_ms"],
+            required_credentials=info.get("required_credentials", []),
         )
 
         caps = info["capabilities"]
@@ -1988,7 +1999,7 @@ class ZelosRuntime:
                 "hitl": {"pending_approvals": pending_approvals},
                 "cluster": {"enabled": self._cluster_enabled, "is_leader": self._leader_election.is_leader()},
             },
-            "version": "1.0.0",
+            "version": "1.1.0",
         }
 
     def get_metrics(self) -> dict[str, Any]:

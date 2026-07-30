@@ -35,6 +35,7 @@ class AgentState:
     max_concurrent_tasks: int = 5
     current_tasks: list[str] = field(default_factory=list)
     capabilities: list[dict] = field(default_factory=list)
+    required_credentials: list[str] = field(default_factory=list)  # v1.1.0
     historical_success_rate: float = 0.0
     total_completed: int = 0
     total_failed: int = 0
@@ -56,6 +57,7 @@ class ExecutionEngine:
         self._running = False
         self._task_inputs: dict[str, dict] = {}  # v0.9.0: task input context
         self._task_start_times: dict[str, float] = {}  # v0.9.0: task start timestamps
+        self._credential_injector = None  # v1.1.0: set by runtime
 
     # ── Agent Management ──
 
@@ -125,6 +127,20 @@ class ExecutionEngine:
             self._task_start_times[task_id] = now  # v0.9.0
             agent.current_tasks.append(task_id)
             agent.operational_state = "busy"
+
+        # v1.1.0: Inject credentials before dispatch
+        if self._credential_injector and agent.required_credentials:
+            try:
+                self._credential_injector.inject(task, agent_id, agent.required_credentials)
+            except Exception:
+                # Credential failure → reject task for retry
+                self._in_flight.pop(task_id, None)
+                agent.current_tasks.remove(task_id)
+                try:
+                    self._task_graph.transition(task_id, TaskStatus.FAILED)
+                except ValueError:
+                    pass
+                return False
 
         # v0.9.0: Publish task.started event with input context
         input_ctx = self._task_inputs.pop(task_id, None)

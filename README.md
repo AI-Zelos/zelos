@@ -2,7 +2,7 @@
 
 > The missing operating system for the multi-agent era.
 
-**Status:** Phase 10 Complete · **Version:** 1.0.0 · **139 Tests** · **37 Modules** · **3 SDKs** · **Apache 2.0**
+**Status:** Phase 11 Complete · **Version:** 1.1.0 · **156 Tests** · **39 Modules** · **3 SDKs** · **Apache 2.0**
 
 <p align="center">
   <b>Linux manages Processes. Kubernetes manages Containers. Temporal manages Workflows.</b><br>
@@ -663,6 +663,7 @@ After reading these, you should understand the entire Runtime architecture witho
 | **Phase 8** | Event Sourcing & Reliability (Goal persistence, heartbeat, NonRetryableError) | ✅ Complete |
 | **Phase 9** | Change Evidence Package (Execution trace, evidence, confidence, policy gate) | ✅ Complete |
 | **Phase 10** | CP Governance (ChangeProposal, constraint engine, verifier chain, auto-merge) | ✅ Complete |
+| **Phase 11** | Credential Management (CredentialStore, CredentialInjector, per-agent identity) | ✅ Complete |
 
 ### Phase 7 Deliverables
 
