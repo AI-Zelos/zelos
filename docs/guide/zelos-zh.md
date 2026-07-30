@@ -7,45 +7,35 @@
 
 ## 目录
 
+**基础篇**
 1. [项目简介](#1)
 2. [为什么存在](#2)
 3. [什么时候使用](#3)
 4. [核心概念](#4)
-   - [4.1 Goal](#41-goal)
-   - [4.2 Execution Plan](#42-execution-plan)
-   - [4.3 Task](#43-task)
-   - [4.4 Capability](#44-capability)
-   - [4.5 Agent](#45-agent)
-   - [4.6 Artifact](#46-artifact)
-   - [4.7 Event](#47-event)
+   - [4.1 Goal](#41-goal) · [4.2 Execution Plan](#42-execution-plan) · [4.3 Task](#43-task) · [4.4 Capability](#44-capability) · [4.5 Agent](#45-agent) · [4.6 Artifact](#46-artifact) · [4.7 Event](#47-event)
 5. [快速上手](#5)
+
+**架构篇**
 6. [Runtime Kernel（内核）](#6)
 7. [Plugin 生态系统](#7)
 8. [分布式与生产部署](#8)
 9. [安全与合规](#9)
 10. [多租户](#10)
 11. [可观测性](#11)
+
+**开发篇**
 12. [SDK 参考](#12)
 13. [API 参考](#13)
 14. [部署指南](#14)
-15. [常见问题](#15)
-16. [v0.9.0 新特性：Change Evidence Package](#16)
-17. [v1.0.0 新特性：CP（Change Proposal）治理平台](#17)
-18. [v1.1.0 新特性：Agent 凭据管理](#18)
 📎 [插件自定义指南 →](plugin-customization.html)
-16. [v0.9.0 新特性：Change Evidence Package](#16)
-   - [16.1 Execution Trace](#161-execution-trace)
-   - [16.2 Evidence Collection](#162-evidence-collection)
-   - [16.3 Confidence Scoring](#163-confidence-scoring)
-   - [16.4 Execution Report](#164-execution-report)
-   - [16.5 Policy Gate v2](#165-policy-gate-v2)
-   - [16.6 Intent Specification](#166-intent-specification)
-   - [16.7 Architecture Delta](#167-architecture-delta)
-17. [v1.0.0 新特性：CP（Change Proposal）治理平台](#17)
-   - [17.1 ChangeProposal 五元模型](#171-changeproposal)
-   - [17.2 约束引擎](#172-约束引擎)
-   - [17.3 Verifier 链](#173-verifier-链)
-   - [17.4 自动合并](#174-自动合并)
+
+**治理篇** — Zelos 治理能力的版本演进
+16. [v0.9.0：Change Evidence Package](#16) — 执行链路、证据收集、置信度、策略门
+   - [16.1 Execution Trace](#161-execution-trace) · [16.2 Evidence](#162-evidence-collection) · [16.3 Confidence](#163-confidence-scoring) · [16.4 Execution Report](#164-execution-report) · [16.5 Policy Gate v2](#165-policy-gate-v2) · [16.6 IntentSpec](#166-intent-specification) · [16.7 Architecture Delta](#167-architecture-delta)
+17. [v1.0.0：CP 治理平台](#17) — ChangeProposal 五元模型、约束引擎、Verifier链、自动合并
+   - [17.1 ChangeProposal](#171-changeproposal) · [17.2 约束引擎](#172-约束引擎) · [17.3 Verifier 链](#173-verifier-链) · [17.4 自动合并](#174-自动合并)
+18. [v1.1.0：Agent 凭据管理](#18) — 四种后端、Agent隔离、零泄漏
+19. [验证 vs 决策：什么时候需要什么](#19) — 概念辨析、使用场景、人工审核流程
 
 ---
 

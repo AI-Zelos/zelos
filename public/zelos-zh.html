@@ -25,47 +25,32 @@ hr{border:none;border-top:1px solid #21262d;margin:24px 0}
 </blockquote>
 <hr />
 <h2 id="_1">目录</h2>
-<ol>
-<li><a href="#1">项目简介</a></li>
-<li><a href="#2">为什么存在</a></li>
-<li><a href="#3">什么时候使用</a></li>
-<li><a href="#4">核心概念</a></li>
-<li><a href="#41-goal">4.1 Goal</a></li>
-<li><a href="#42-execution-plan">4.2 Execution Plan</a></li>
-<li><a href="#43-task">4.3 Task</a></li>
-<li><a href="#44-capability">4.4 Capability</a></li>
-<li><a href="#45-agent">4.5 Agent</a></li>
-<li><a href="#46-artifact">4.6 Artifact</a></li>
-<li><a href="#47-event">4.7 Event</a></li>
-<li><a href="#5">快速上手</a></li>
-<li><a href="#6">Runtime Kernel（内核）</a></li>
-<li><a href="#7">Plugin 生态系统</a></li>
-<li><a href="#8">分布式与生产部署</a></li>
-<li><a href="#9">安全与合规</a></li>
-<li><a href="#10">多租户</a></li>
-<li><a href="#11">可观测性</a></li>
-<li><a href="#12">SDK 参考</a></li>
-<li><a href="#13">API 参考</a></li>
-<li><a href="#14">部署指南</a></li>
-<li><a href="#15">常见问题</a></li>
-<li><a href="#16">v0.9.0 新特性：Change Evidence Package</a></li>
-<li><a href="#17">v1.0.0 新特性：CP（Change Proposal）治理平台</a></li>
-<li><a href="#18">v1.1.0 新特性：Agent 凭据管理</a>
-📎 <a href="plugin-customization.html">插件自定义指南 →</a></li>
-<li><a href="#16">v0.9.0 新特性：Change Evidence Package</a></li>
-<li><a href="#161-execution-trace">16.1 Execution Trace</a></li>
-<li><a href="#162-evidence-collection">16.2 Evidence Collection</a></li>
-<li><a href="#163-confidence-scoring">16.3 Confidence Scoring</a></li>
-<li><a href="#164-execution-report">16.4 Execution Report</a></li>
-<li><a href="#165-policy-gate-v2">16.5 Policy Gate v2</a></li>
-<li><a href="#166-intent-specification">16.6 Intent Specification</a></li>
-<li><a href="#167-architecture-delta">16.7 Architecture Delta</a></li>
-<li><a href="#17">v1.0.0 新特性：CP（Change Proposal）治理平台</a></li>
-<li><a href="#171-changeproposal">17.1 ChangeProposal 五元模型</a></li>
-<li><a href="#172-约束引擎">17.2 约束引擎</a></li>
-<li><a href="#173-verifier-链">17.3 Verifier 链</a></li>
-<li><a href="#174-自动合并">17.4 自动合并</a></li>
-</ol>
+<p><strong>基础篇</strong>
+1. <a href="#1">项目简介</a>
+2. <a href="#2">为什么存在</a>
+3. <a href="#3">什么时候使用</a>
+4. <a href="#4">核心概念</a>
+   - <a href="#41-goal">4.1 Goal</a> · <a href="#42-execution-plan">4.2 Execution Plan</a> · <a href="#43-task">4.3 Task</a> · <a href="#44-capability">4.4 Capability</a> · <a href="#45-agent">4.5 Agent</a> · <a href="#46-artifact">4.6 Artifact</a> · <a href="#47-event">4.7 Event</a>
+5. <a href="#5">快速上手</a></p>
+<p><strong>架构篇</strong>
+6. <a href="#6">Runtime Kernel（内核）</a>
+7. <a href="#7">Plugin 生态系统</a>
+8. <a href="#8">分布式与生产部署</a>
+9. <a href="#9">安全与合规</a>
+10. <a href="#10">多租户</a>
+11. <a href="#11">可观测性</a></p>
+<p><strong>开发篇</strong>
+12. <a href="#12">SDK 参考</a>
+13. <a href="#13">API 参考</a>
+14. <a href="#14">部署指南</a>
+📎 <a href="plugin-customization.html">插件自定义指南 →</a></p>
+<p><strong>治理篇</strong> — Zelos 治理能力的版本演进
+16. <a href="#16">v0.9.0：Change Evidence Package</a> — 执行链路、证据收集、置信度、策略门
+   - <a href="#161-execution-trace">16.1 Execution Trace</a> · <a href="#162-evidence-collection">16.2 Evidence</a> · <a href="#163-confidence-scoring">16.3 Confidence</a> · <a href="#164-execution-report">16.4 Execution Report</a> · <a href="#165-policy-gate-v2">16.5 Policy Gate v2</a> · <a href="#166-intent-specification">16.6 IntentSpec</a> · <a href="#167-architecture-delta">16.7 Architecture Delta</a>
+17. <a href="#17">v1.0.0：CP 治理平台</a> — ChangeProposal 五元模型、约束引擎、Verifier链、自动合并
+   - <a href="#171-changeproposal">17.1 ChangeProposal</a> · <a href="#172-约束引擎">17.2 约束引擎</a> · <a href="#173-verifier-链">17.3 Verifier 链</a> · <a href="#174-自动合并">17.4 自动合并</a>
+18. <a href="#18">v1.1.0：Agent 凭据管理</a> — 四种后端、Agent隔离、零泄漏
+19. <a href="#19">验证 vs 决策：什么时候需要什么</a> — 概念辨析、使用场景、人工审核流程</p>
 <hr />
 <h2 id="1">1. 项目简介</h2>
 <h3 id="zelos_1">Zelos 是什么</h3>
