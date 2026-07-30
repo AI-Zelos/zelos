@@ -32,35 +32,32 @@ Nobody planned for this. We got:
 
 All four miss the same thing: **there is no platform that orchestrates agents, collects evidence, scores confidence, and lets humans approve changes instead of reading code.**
 
-**Zelos is that platform.** It started as a runtime. Now it's a governance platform — the missing layer between "agents did something" and "we're confident this change should ship."
+**Zelos is that runtime.** An AI Agent Runtime that doesn't just orchestrate — it verifies. Because when an AI agent says "done," you need to know if that's true.
 
 ---
 
 ## What Zelos Is
 
-Zelos is a **governance platform for multi-agent execution**, not a framework. It sits beneath your agents — the same way an OS sits beneath your processes.
+Zelos is an **AI Agent Runtime** — infrastructure, not a framework. It sits beneath your agents the same way an OS sits beneath your processes.
 
-**Two layers, one platform:**
+**Why validation is part of the Runtime:**
 
-| Layer | What it does |
-|-------|-------------|
-| **Runtime** (v0.1–v0.8) | Goal → Plan → Task DAG → Schedule → Execute → Retry → Verify → Audit |
-| **Governance** (v0.9–v1.0) | Execution Trace → Evidence Collection → Confidence Scoring → Policy Gate → Change Proposal (CP) → Verifier Chain → Auto-Merge |
+Linux only needs to run processes correctly. But AI agents are probabilistic — they hallucinate, violate constraints, produce incorrect output. A runtime for AI agents must close the loop: **orchestrate → verify → decide**. Verification isn't a feature. It's table stakes.
 
 | If you're building... | You need... | Zelos provides... |
 |----------------------|-------------|-------------------|
 | 5 agents in a script | A `for` loop | Overkill — don't use Zelos |
 | 20 agents across 3 teams | A scheduler | Goal → Plan → Task DAG → auto-dispatch |
-| 100 agents in production | A runtime | Distributed coordination, failover, retry, audit |
-| 500+ agents as a service | A governance platform | CAR, evidence scoring, auto-approve/reject, compliance |
+| 100 agents in production | A runtime | Orchestration + verification + evidence + auto-approve |
+| 500+ agents as a service | An AI-native OS | Multi-tenancy, quotas, compliance, audit trail |
 
-**Zelos does not build agents. Zelos orchestrates them, verifies their output, scores their quality, and lets you approve changes — not read code.**
+**Zelos does not build agents. Zelos runs them — and verifies them.**
 
 ---
 
-## v0.9.0: The Governance Layer
+## The Runtime Closes the Loop
 
-v0.9.0 answers the question: **"The agents did something. Should we ship it?"**
+An AI Agent Runtime must answer: **"The agents did something. Should we trust it?"**
 
 ### One API call. Complete confidence.
 

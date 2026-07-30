@@ -1,8 +1,8 @@
 # Zelos
 
-> **Zelos orchestrates trustworthy software changes produced by AI.**
+> **Zelos is an AI Agent Runtime. It doesn't just run agents — it verifies them.**
 >
-> It is the runtime between AI-generated code and production systems — the layer that collects evidence, scores confidence, and lets humans approve changes instead of reading code.
+> A traditional runtime only needs to execute correctly. An AI Agent Runtime must close the loop: orchestrate → verify → decide. Because when an AI agent says "done," you need to know if that's true.
 
 ---
 
