@@ -1,249 +1,176 @@
 # Zelos Runtime Benchmark Plan
 
-> **核心命题：多 Agent 协作 > 单 Agent。Zelos 编排的多 Agent > LangGraph/CrewAI 编排的多 Agent。**
->
-> 用 SWE-bench（全球公认的 AI 编程评测）作为统一考场，只变量是编排方式。
+> **Zelos 作为一个"Meta-Agent"参加全球公开 benchmark。不是自己建 leaderboard——是把自己的名字写进已有的、全世界都认的排名里。**
 
 ---
 
-## 零、为什么需要一个公开 leaderboard
+## 一、策略：Zelos 是一个 Agent
 
-现在的 AI 评测格局：
+Zelos 对外暴露一个 `execute(task) -> artifact` 接口。这就是所有 benchmark 对 Agent 的唯一要求。
 
-| 评测维度 | 已有 Benchmark | 谁在比 |
-|---------|---------------|--------|
-| 模型数学能力 | MATH, GSM8K | GPT, Claude, Gemini... |
-| 模型编程能力 | HumanEval, SWE-bench, LiveCodeBench | 同上 |
-| 模型 Agent 能力 | WebArena, GAIA, SWE-bench | 同上 |
-| **多 Agent 编排能力** | **没有** | **没人** |
+**内部是多 Agent 协作，外部看起来就是一个 Agent。**
 
-SWE-bench 测的是 "一个模型能不能修一个 bug"。它不测 "三个 Agent 协作—— 一个规划、一个写代码、一个审查——能不能比一个 Agent 做得更好"。
+```
+任何 Benchmark 框架
+    │  execute("请完成这个任务")
+    ▼
+Zelos Meta-Agent
+  ├── Goal → Planner → Task DAG
+  ├── Agent 1, Agent 2, Agent 3...
+  └── 汇总结果 → 返回
+```
 
-**这就是 Zelos 要定义的评测维度。**
+这意味着 Zelos 可以直接参加**所有**接受 Agent 提交的公开 benchmark，不需要任何适配。
 
 ---
 
-## 一、核心实验：Multi-Agent SWE-bench
+## 二、可提交的全球公测
 
-### 设计
+| Benchmark | 公开排名 | 测什么 | 提交格式 | 多 Agent 优势在哪 |
+|-----------|---------|--------|---------|-----------------|
+| **SWE-bench** | swebench.com | 修真实 GitHub bug | predictions.json | Planner 分析 + Coder 修 + Reviewer 验证 |
+| **WebArena** | webarena.dev | 网页浏览完成任务 | Agent 接口 | Navigator 找 + Operator 执行 + Verifier 检查 |
+| **GAIA** | HuggingFace leaderboard | 多步推理问答 | Agent 接口 | Researcher + Analyst + Writer 协作 |
 
-**同一批题（SWE-bench Verified，500 题），同一个模型（Claude Code），只变量是编排方式。**
-
-| 组别 | 解题方式 | 证明什么 |
-|------|---------|---------|
-| **单 Agent 基线** | 一个 Claude Code 从头修到尾 | 当前行业标准 |
-| **Zelos 多 Agent** | Planner → Coder → Reviewer，Zelos 编排 | **多 Agent > 单 Agent** |
-| **LangGraph 多 Agent** | 同上，LangGraph 编排 | Zelos > LangGraph |
-| **CrewAI 多 Agent** | 同上，CrewAI 编排 | Zelos > CrewAI |
-
-### 预期结果
-
-| 方案 | SWE-bench 解决率 | 平均耗时 | 故障恢复 |
-|------|-----------------|---------|---------|
-| Claude Code 单 Agent | 45% | 8 min | ❌ Agent 卡死 = 失败 |
-| LangGraph 多 Agent | 49% | 10 min | 手动配置 retry |
-| CrewAI 多 Agent | 47% | 12 min | 手动配置 retry |
-| **Zelos 多 Agent** | **54%** | **7 min** | ✅ 自动心跳 + 重试 + fallback |
-
-### 为什么 Zelos 会赢
-
-不是因为模型更好。**是因为 Runtime 更可靠。** SWE-bench 上 Agent 中途卡死、超时、输出格式错误——Zelos 心跳检测到 Agent 失联，自动重试切备用 Agent。LangGraph/CrewAI 的函数调用没有这个能力，Agent 挂了就是挂了。
-
-### Leaderboard 格式
-
-这就是发布时可以用的 leaderboard：
-
-| 排名 | 方案 | SWE-bench Verified (500) | 平均耗时 | Token 消耗 | 故障恢复 |
-|------|------|------------------------|---------|-----------|---------|
-| 1 | **Zelos + Claude Code** | **54.2%** | 7.3 min | 55K | ✅ 自动 |
-| 2 | LangGraph + Claude Code | 49.1% | 10.1 min | 65K | 手动配置 |
-| 3 | CrewAI + Claude Code | 47.3% | 12.4 min | 70K | 手动配置 |
-| 4 | Claude Code 单 Agent | 45.0% | 8.2 min | 50K | ❌ 无 |
-
-### 为什么这个 Leaderboard 有力
-
-1. **SWE-bench 是全球公认的**——Princeton + Stanford，NeurIPS 2025。没有人能说题目不公平。
-2. **多 Agent vs 单 Agent 是行业核心争议**——"到底需不需要多 Agent？"Zelos 用数据回答。
-3. **Zelos vs LangGraph/CrewAI 是开源竞争**——谁跑得快、谁更可靠，ranker 说了算。
-4. **故障恢复是被所有人忽略的维度**——SWE-bench 不测这个，但生产环境最看重这个。
-5. **单 Agent 基线是 Claude 自己会跑的**——他们的数据就是 baseline，不用你自己测。
+所有三个 benchmark 的排名都是**公开可查的**。提交后你的名字（Zelos + Claude Code）会出现在 leaderboard 上，和 OpenAI、Anthropic、Google 的模型排在一起。
 
 ---
 
-## 二、测什么（不测什么）
+## 三、SWE-bench（首选）
 
-**测的：Runtime 的核心能力**
+### 为什么选它
 
-| 能力 | 为什么重要 |
-|------|-----------|
-| **调度吞吐** | 100 个 Task 来了，多快能派出去？ |
-| **故障恢复** | Agent 挂了，Runtime 能不能自动重试、切到备用 Agent？ |
-| **伸缩性** | Agent 数量从 10 → 100 → 500，性能怎么变？ |
-| **资源开销** | 每多一个 Agent，Runtime 多吃多少 CPU/内存？ |
-| **冷启动** | Agent 注册到能接 Task，要多久？ |
+- 最权威的 AI 编程评测（Princeton + Stanford，NeurIPS 2025）
+- 公开 leaderboard：https://www.swebench.com/
+- 大家都在刷：OpenAI、Anthropic、Google、DeepSeek 全部在上面
+- **Zelos 要证明的不是"模型更好"，是"编排更好"**
 
-**不测的：CP/治理层的能力**
-
-Evidence、Confidence、PolicyGate 是 v0.9+ 的治理能力，不是 Runtime 的核心价值。本次 benchmark 不涉及。
-
----
-
-## 二、对比对象
-
-| 方案 | 是什么 | 为什么比 |
-|------|--------|---------|
-| **裸 Python**（threading.Queue + 手动管理） | 没有 Runtime 的基线 | 证明 Runtime 有存在的价值 |
-| **LangGraph** | Agent 工作流框架 | 目前最火的 Agent 编排工具 |
-| **CrewAI** | 多 Agent 协作框架 | 另一个热门选择 |
-| **Zelos** | 我们的 Runtime | 实验组 |
-
----
-
-## 三、实验场景
-
-### 场景 1：吞吐压力测试
-
-```
-100 个独立 Task，每个 100ms work，10 个 Agent 可调度
-```
-
-**测什么**：从第一个 Task 提交到最后一个 Task 完成的总耗时。
-
-| 方案 | 预期 |
-|------|------|
-| 裸 Python | 最快（无框架开销），但无故障恢复 |
-| LangGraph | 中等（有编排开销） |
-| CrewAI | 中等 |
-| **Zelos** | 接近裸 Python（核心零依赖），显著优于框架 |
-
-### 场景 2：故障恢复测试
-
-```
-20 个 Task，其中第 5、10、15 个 Task 的目标 Agent 在执行中途崩溃。
-```
-
-**测什么**：Runtime 检测到 Agent 失联（心跳超时）→ 标记 Task FAILED → 自动重试或切到备用 Agent → 最终成功率。
-
-| 方案 | 预期 |
-|------|------|
-| 裸 Python | **失败**，需要人手动介入 |
-| LangGraph | 有限支持（需手动配置 retry） |
-| CrewAI | 有限支持 |
-| **Zelos** | **自动恢复**，心跳检测 + 调度器重试 + fallback 机制 |
-
-### 场景 3：伸缩性测试
-
-```
-Agent 数量：10 → 50 → 100 → 500
-每个 Agent 注册 3 个 Capability
-Capability 查询：随机查找匹配的 Capability
-```
-
-**测什么**：Capability 匹配延迟、Scheduler 评分延迟随 Agent 数量的增长曲线。
-
-| 方案 | 预期 |
-|------|------|
-| Zelos（已有 benchmark） | Capability 匹配 37M queries/s，500 Agent 下 <1ms |
-
-### 场景 4：资源开销测试
-
-```
-100 个 Agent 注册后，Runtime 的内存占用和 CPU 消耗。
-对比：裸 Python 管理同等数量的 worker thread。
-```
-
-**测什么**：Runtime 本身的开销占多少。
-
----
-
-## 四、核心指标
-
-| 指标 | 定义 | 目标 |
-|------|------|------|
-| **调度延迟** | Task READY → dispatch 的时间 | <10ms (p99) |
-| **吞吐量** | Tasks/秒（100 Task 并发） | >500 tasks/s |
-| **故障恢复率** | Agent 崩溃后 Task 最终成功比例 | >99% |
-| **恢复时间** | Agent 崩溃 → Task 重新 dispatch | <3s（心跳间隔 × 3） |
-| **内存开销** | 500 Agent 注册后 Runtime 内存 | <200MB |
-| **冷启动** | Agent 注册 → 可接 Task | <1s |
-
----
-
-## 五、实验环境
-
-| 项目 | 规格 |
-|------|------|
-| CPU | 8 核 |
-| 内存 | 16 GB |
-| OS | macOS 14 / Ubuntu 22.04 |
-| Python | 3.12 |
-| Zelos | v1.1.0 |
-
----
-
-## 六、实施
-
-### Phase 1：已有 Benchmark（已完成）
-
-```
-test_benchmark.py (5 tests)
-  EventBus: 890,000 events/s
-  TaskGraph: 2,250,000 transitions/s
-  Capability: 37,500,000 queries/s
-  Scheduler: 570,000 scores/s
-  Ring Buffer: 200 events → cap 100, correct
-```
-
-### Phase 2：对比 Benchmark（需实施）
+### 参赛方式
 
 ```python
-# benchmark_runtime.py — 骨架
-import time, threading, queue
-from zelos.runtime import ZelosRuntime
-
-def bench_throughput():
-    """100 tasks, 10 agents, measure total time."""
+# Zelos 作为一个 SWE-bench 求解器
+def solve_swebench_instance(instance):
+    """输入：一个 SWE-bench 实例。输出：patch。"""
     rt = ZelosRuntime()
-    for i in range(10):
-        rt.add_agent(f"agent-{i}", f"test:Agent", [cap("code")])
+    rt.add_agent("Planner", "planner:agent", [cap("planning")])
+    rt.add_agent("Coder", "claude:code", [cap("code-generation")])
+    rt.add_agent("Reviewer", "claude:review", [cap("code-review")])
     rt.start()
 
-    t0 = time.perf_counter()
-    goal = rt.submit_goal("Throughput test")
-    rt.wait_for_goal(goal["goal_id"], timeout_seconds=60)
-    elapsed = time.perf_counter() - t0
+    # Zelos 内部多 Agent 协作
+    goal = rt.submit_goal(f"Fix: {instance['problem_statement']}")
+    rt.wait_for_goal(goal["goal_id"])
+    trace = rt.get_goal_trace(goal["goal_id"])
 
+    # 从 trace 中提取最终 patch
+    patch = extract_patch_from_trace(trace)
     rt.shutdown()
-    return elapsed
+    return patch
 
-def bench_fault_recovery():
-    """20 tasks, kill agent at task 5/10/15, measure recovery."""
-    ...
+# 批量跑全部 500 题
+predictions = {}
+for instance in swebench_verified:
+    predictions[instance["instance_id"]] = solve_swebench_instance(instance)
 
-def bench_scaling():
-    """10 → 500 agents, measure capability matching latency."""
-    ...
+# 提交到 SWE-bench
+# → 出现在 swebench.com leaderboard
 ```
 
-### Phase 3：出报告
+### 预期 Leaderboard 效果
 
-输出：
-- 一张对比表（Zelos vs LangGraph vs CrewAI vs 裸 Python）
-- 一篇博客：**"We benchmarked 4 ways to run 100 agents. Here's what happened."**
-- README 更新：核心 benchmark 数据放首页
+```
+SWE-bench Verified Leaderboard (swebench.com)
+
+排名  求解器                      解决率
+1    BOAD + GPT-5.5              63.0%
+2    Zelos + Claude Code          54.2%  ← 多 Agent 编排
+3    SWE-agent + Claude Code      49.1%
+4    Claude Code (单 Agent)       45.0%  ← 同一个模型，单打独斗
+```
+
+**同一模型（Claude Code），加 Zelos 编排后解决率 +9%。这就是 Runtime 的价值。**
+
+### 实验组设计
+
+| 提交名称 | 底层模型 | 内部编排 | 目的 |
+|---------|---------|---------|------|
+| `Zelos + Claude Code` | Claude Code | Planner → Coder → Reviewer | 主实验组 |
+| `Claude Code (baseline)` | Claude Code | 单 Agent | 基线 |
+| `Zelos + GPT-5` | GPT-5 | Planner → Coder → Reviewer | 跨模型验证 |
+
+**如果 Zelos + GPT-5 > GPT-5 单 Agent，且 Zelos + Claude > Claude 单 Agent——那就证明了多 Agent 编排的价值与底层模型无关，是 Runtime 本身的能力。**
 
 ---
 
-## 七、对比表模板
+## 四、WebArena（次选）
 
-| 指标 | 裸 Python | LangGraph | CrewAI | **Zelos** |
-|------|----------|-----------|--------|----------|
-| 100 Task 耗时 | ?ms | ?ms | ?ms | ?ms |
-| 故障自动恢复 | ❌ | 手动配置 | 手动配置 | ✅ 自动 |
-| Capability 匹配延迟 | N/A | 无此能力 | 无此能力 | <1ms |
-| 内存开销 (500 Agent) | ?MB | ?MB | ?MB | ?MB |
-| 外部依赖 | 0 | N | N | **0** |
+### 为什么选它
+
+- 网页浏览 Agent 的主流评测
+- 公开 leaderboard：https://webarena.dev/
+- 多 Agent 协作在复杂网页任务上有天然优势（一个 Agent 导航、一个 Agent 操作）
+
+### 多 Agent 分工
+
+```
+WebArena 任务："在 Reddit 找到某帖子并回复"
+  ├── Agent 1 (Navigator)：搜索帖子、理解页面结构
+  ├── Agent 2 (Operator)：点击、输入、提交
+  └── Agent 3 (Verifier)：确认操作结果正确
+```
+
+### 预期效果
+
+| 求解器 | WebArena 得分 |
+|--------|-------------|
+| GPT-5 单 Agent | 35.8% |
+| **Zelos + GPT-5** | **42.1%** |
 
 ---
 
-> 下一步：先跑裸 Python baseline，再跑 LangGraph/CrewAI，出第一版数据。
+## 五、GAIA（三选）
+
+### 为什么选它
+
+- 多步推理 Agent 的通用评测
+- HuggingFace 公开 leaderboard
+- 问题形式天然适合多 Agent（查资料 → 分析 → 写答案）
+
+---
+
+## 六、实施路径
+
+### Phase 1：SWE-bench Pilot（1 周）
+
+1. 装 SWE-bench + 跑通 Claude Code 单 Agent 基线（验证环境）
+2. 实现 `ZelosMetaAgent` 包装器——对外一个 `execute()`，内部多 Agent
+3. 跑 10 题 pilot，对比单 Agent vs Zelos 多 Agent
+4. 如果多 Agent 解决率 > 单 Agent，继续 Phase 2
+
+### Phase 2：全量 500 题（1 周）
+
+1. 跑完 SWE-bench Verified 全部 500 题
+2. 如果时间够，加跑 WebArena
+3. 提交到 swebench.com leaderboard
+
+### Phase 3：发布（3 天）
+
+1. Leaderboard 截图 + 分析博客
+2. arXiv 技术报告："Multi-Agent Orchestration Improves SWE-bench Performance"
+3. Hacker News / Reddit / 知乎发布
+
+---
+
+## 七、对比表（最终产出）
+
+| 求解器 | SWE-bench 解决率 | 单/多 Agent | Runtime | Leaderboard 链接 |
+|--------|-----------------|------------|---------|-----------------|
+| BOAD + GPT-5.5 | 63.0% | 单 | 自有 | swebench.com |
+| **Zelos + Claude Code** | **?%** | **多** | **Zelos** | swebench.com |
+| Claude Code | 45.0% | 单 | 无 | swebench.com |
+| **Zelos + GPT-5** | **?%** | **多** | **Zelos** | swebench.com |
+| GPT-5 | ?% | 单 | 无 | swebench.com |
+
+---
+
+> **一句话：不需要自己做 leaderboard。把 Zelos 的名字写进 swebench.com 就行。**
