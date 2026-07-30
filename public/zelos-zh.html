@@ -49,7 +49,8 @@ hr{border:none;border-top:1px solid #21262d;margin:24px 0}
 <li><a href="#14">部署指南</a></li>
 <li><a href="#15">常见问题</a></li>
 <li><a href="#16">v0.9.0 新特性：Change Evidence Package</a></li>
-<li><a href="#17">v1.0.0 新特性：CP（Change Proposal）治理平台</a>
+<li><a href="#17">v1.0.0 新特性：CP（Change Proposal）治理平台</a></li>
+<li><a href="#18">v1.1.0 新特性：Agent 凭据管理</a>
 📎 <a href="plugin-customization.html">插件自定义指南 →</a></li>
 <li><a href="#16">v0.9.0 新特性：Change Evidence Package</a></li>
 <li><a href="#161-execution-trace">16.1 Execution Trace</a></li>
@@ -1941,6 +1942,113 @@ for change in ad.api_changes:
         print(f&quot;❌ Breaking change: {change.endpoint}&quot;)
     elif change.change_type == &quot;new&quot;:
         print(f&quot;➕ New endpoint: {change.endpoint}&quot;)
+</code></pre>
+<hr />
+<h2 id="18-v110-agent-credential-management">18. v1.1.0 新特性：Agent 凭据管理（Credential Management）</h2>
+<p>AI Agent 执行时需要身份凭据（JWT Token、API Key、OAuth Token、mTLS 证书）才能访问外部服务。v1.1.0 让 Runtime 来管理这些凭据，Agent 只管声明自己需要什么——凭据的存储、注入、过期检查、隔离全部由 Runtime 负责。</p>
+<h3 id="181">18.1 核心原则</h3>
+<ul>
+<li><strong>凭据不属于 Agent</strong>：Agent 只声明 <code>required_credentials</code>，Runtime 注入</li>
+<li><strong>Agent 间零泄漏</strong>：Agent A 的 Task 永远看不到 Agent B 的凭据</li>
+<li><strong>凭据是引用，不是值</strong>：<code>task.started</code> 事件不含凭据明文</li>
+</ul>
+<h3 id="182-agent">18.2 Agent 注册时声明凭据</h3>
+<pre><code class="language-python">runtime.add_agent(
+    &quot;GitHubCoder&quot;,
+    &quot;agents.coder:CodingAgent&quot;,
+    capabilities=[...],
+    required_credentials=[&quot;github-token&quot;],  # v1.1.0 新增
+)
+</code></pre>
+<h3 id="183-agent">18.3 Agent 执行时使用凭据</h3>
+<pre><code class="language-python">class CodingAgent(BaseAgent):
+    def execute(self, task):
+        creds = task.constraints.get(&quot;credential_refs&quot;, {})
+        token = creds[&quot;github-token&quot;][&quot;token&quot;]
+        headers = {&quot;Authorization&quot;: f&quot;Bearer {token}&quot;}
+        response = requests.get(&quot;https://api.github.com/user&quot;, headers=headers)
+</code></pre>
+<h3 id="184">18.4 四种凭据存储后端</h3>
+<table>
+<thead>
+<tr>
+<th>后端</th>
+<th>配置</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>env</code></td>
+<td><code>ZELOS_CREDENTIAL_&lt;NAME&gt;</code> 环境变量</td>
+<td>开发环境</td>
+</tr>
+<tr>
+<td><code>file</code></td>
+<td>JSON 文件 <code>/etc/zelos/credentials.json</code></td>
+<td>简单部署</td>
+</tr>
+<tr>
+<td><code>vault</code></td>
+<td>HashiCorp Vault KV v2</td>
+<td>生产环境（需 <code>pip install hvac</code>）</td>
+</tr>
+<tr>
+<td><code>k8s</code></td>
+<td>K8s Secrets 挂载文件 <code>/etc/zelos/secrets/&lt;name&gt;/</code></td>
+<td>K8s 部署（零依赖）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="185-zelosyaml">18.5 配置 zelos.yaml</h3>
+<pre><code class="language-yaml">credentials:
+  store: &quot;env&quot;              # env | file | vault | k8s
+  policy:
+    validate_on_dispatch: true
+    refresh_before_expiry_seconds: 300
+</code></pre>
+<h3 id="186">18.6 各后端对接方式</h3>
+<p><strong>Env 后端（开发环境）</strong>：</p>
+<pre><code class="language-bash">export ZELOS_CREDENTIAL_GITHUB_TOKEN='{&quot;token&quot;:&quot;ghp_xxx&quot;,&quot;type&quot;:&quot;bearer_token&quot;,&quot;agent_ids&quot;:[&quot;agent-coder&quot;]}'
+</code></pre>
+<p><strong>File 后端</strong>：创建 <code>/etc/zelos/credentials.json</code>：</p>
+<pre><code class="language-json">{
+  &quot;github-token&quot;: {&quot;token&quot;: &quot;ghp_xxx&quot;, &quot;type&quot;: &quot;bearer_token&quot;, &quot;agent_ids&quot;: [&quot;agent-coder&quot;]},
+  &quot;k8s-sa&quot;: {&quot;token&quot;: &quot;eyJhbG...&quot;, &quot;type&quot;: &quot;jwt&quot;, &quot;agent_ids&quot;: [&quot;agent-deployer&quot;]}
+}
+</code></pre>
+<p><strong>Vault 后端（生产环境）</strong>：</p>
+<pre><code class="language-yaml">credentials:
+  store: &quot;vault&quot;
+  vault:
+    url: &quot;https://vault.example.com:8200&quot;
+    token: &quot;${VAULT_TOKEN}&quot;
+    path: &quot;secret/zelos/credentials&quot;
+</code></pre>
+<p>Vault 中每个凭据是一个独立的 KV v2 secret：</p>
+<pre><code>secret/zelos/credentials/github-token → {&quot;token&quot;:&quot;ghp_xxx&quot;,&quot;type&quot;:&quot;bearer_token&quot;,&quot;agent_ids&quot;:[&quot;agent-coder&quot;]}
+</code></pre>
+<p><strong>K8s 后端（零依赖）</strong>：创建 Secret 并挂载：</p>
+<pre><code class="language-yaml">apiVersion: v1
+kind: Secret
+metadata:
+  name: zelos-github-token
+data:
+  token: Z2hwX3h4eA==     # base64: &quot;ghp_xxx&quot;
+  type: YmVhcmVyX3Rva2Vu # base64: &quot;bearer_token&quot;
+</code></pre>
+<p>Secret 挂载到 <code>/etc/zelos/secrets/github-token/</code>，文件系统即 API。</p>
+<h3 id="187-credentialstore">18.7 自定义 CredentialStore</h3>
+<pre><code class="language-python">from zelos.credential_store import CredentialStore, Credential
+
+class AWSParameterStore(CredentialStore):
+    def get(self, credential_name, agent_id):
+        import boto3
+        client = boto3.client('ssm')
+        resp = client.get_parameter(Name=f&quot;/zelos/{credential_name}&quot;, WithDecryption=True)
+        return Credential(name=credential_name, token=resp['Parameter']['Value'])
+
+runtime._credential_store = AWSParameterStore()
 </code></pre>
 <hr />
 <h2 id="17-v100-cpchange-proposal">17. v1.0.0 新特性：CP（Change Proposal）治理平台</h2>

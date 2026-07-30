@@ -31,6 +31,7 @@
 15. [常见问题](#15)
 16. [v0.9.0 新特性：Change Evidence Package](#16)
 17. [v1.0.0 新特性：CP（Change Proposal）治理平台](#17)
+18. [v1.1.0 新特性：Agent 凭据管理](#18)
 📎 [插件自定义指南 →](plugin-customization.html)
 16. [v0.9.0 新特性：Change Evidence Package](#16)
    - [16.1 Execution Trace](#161-execution-trace)
@@ -1588,6 +1589,115 @@ for change in ad.api_changes:
         print(f"❌ Breaking change: {change.endpoint}")
     elif change.change_type == "new":
         print(f"➕ New endpoint: {change.endpoint}")
+```
+
+---
+
+## 18. v1.1.0 新特性：Agent 凭据管理（Credential Management）
+
+AI Agent 执行时需要身份凭据（JWT Token、API Key、OAuth Token、mTLS 证书）才能访问外部服务。v1.1.0 让 Runtime 来管理这些凭据，Agent 只管声明自己需要什么——凭据的存储、注入、过期检查、隔离全部由 Runtime 负责。
+
+### 18.1 核心原则
+
+- **凭据不属于 Agent**：Agent 只声明 `required_credentials`，Runtime 注入
+- **Agent 间零泄漏**：Agent A 的 Task 永远看不到 Agent B 的凭据
+- **凭据是引用，不是值**：`task.started` 事件不含凭据明文
+
+### 18.2 Agent 注册时声明凭据
+
+```python
+runtime.add_agent(
+    "GitHubCoder",
+    "agents.coder:CodingAgent",
+    capabilities=[...],
+    required_credentials=["github-token"],  # v1.1.0 新增
+)
+```
+
+### 18.3 Agent 执行时使用凭据
+
+```python
+class CodingAgent(BaseAgent):
+    def execute(self, task):
+        creds = task.constraints.get("credential_refs", {})
+        token = creds["github-token"]["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get("https://api.github.com/user", headers=headers)
+```
+
+### 18.4 四种凭据存储后端
+
+| 后端 | 配置 | 适用场景 |
+|------|------|---------|
+| `env` | `ZELOS_CREDENTIAL_<NAME>` 环境变量 | 开发环境 |
+| `file` | JSON 文件 `/etc/zelos/credentials.json` | 简单部署 |
+| `vault` | HashiCorp Vault KV v2 | 生产环境（需 `pip install hvac`） |
+| `k8s` | K8s Secrets 挂载文件 `/etc/zelos/secrets/<name>/` | K8s 部署（零依赖） |
+
+### 18.5 配置 zelos.yaml
+
+```yaml
+credentials:
+  store: "env"              # env | file | vault | k8s
+  policy:
+    validate_on_dispatch: true
+    refresh_before_expiry_seconds: 300
+```
+
+### 18.6 各后端对接方式
+
+**Env 后端（开发环境）**：
+```bash
+export ZELOS_CREDENTIAL_GITHUB_TOKEN='{"token":"ghp_xxx","type":"bearer_token","agent_ids":["agent-coder"]}'
+```
+
+**File 后端**：创建 `/etc/zelos/credentials.json`：
+```json
+{
+  "github-token": {"token": "ghp_xxx", "type": "bearer_token", "agent_ids": ["agent-coder"]},
+  "k8s-sa": {"token": "eyJhbG...", "type": "jwt", "agent_ids": ["agent-deployer"]}
+}
+```
+
+**Vault 后端（生产环境）**：
+```yaml
+credentials:
+  store: "vault"
+  vault:
+    url: "https://vault.example.com:8200"
+    token: "${VAULT_TOKEN}"
+    path: "secret/zelos/credentials"
+```
+Vault 中每个凭据是一个独立的 KV v2 secret：
+```
+secret/zelos/credentials/github-token → {"token":"ghp_xxx","type":"bearer_token","agent_ids":["agent-coder"]}
+```
+
+**K8s 后端（零依赖）**：创建 Secret 并挂载：
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: zelos-github-token
+data:
+  token: Z2hwX3h4eA==     # base64: "ghp_xxx"
+  type: YmVhcmVyX3Rva2Vu # base64: "bearer_token"
+```
+Secret 挂载到 `/etc/zelos/secrets/github-token/`，文件系统即 API。
+
+### 18.7 自定义 CredentialStore
+
+```python
+from zelos.credential_store import CredentialStore, Credential
+
+class AWSParameterStore(CredentialStore):
+    def get(self, credential_name, agent_id):
+        import boto3
+        client = boto3.client('ssm')
+        resp = client.get_parameter(Name=f"/zelos/{credential_name}", WithDecryption=True)
+        return Credential(name=credential_name, token=resp['Parameter']['Value'])
+
+runtime._credential_store = AWSParameterStore()
 ```
 
 ---
