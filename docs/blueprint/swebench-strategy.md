@@ -1,113 +1,126 @@
-# Zelos SWE-bench Strategy — 终极方案
+# Zelos SWE-bench Strategy — Fixer Loop
 
-> 从"更好的一次生成"到"迭代优化"—Zelos 把 SWE-bench 从单次考试变成反复校对的作业。
-
----
-
-## 一、放弃"一次写对"的幻想
-
-SWE-bench top 选手（BOAD 63%）的秘密不是更好的模型，是**内部评测循环**。他们在提交前已经把每个 patch 跑了 N 次测试、修了 M 轮。
-
-单 Agent 做不到这一点——每次调用是独立的，中间没有 Runtime 管理状态、没有反馈、没有迭代。
-
-**Zelos 能做的是：把 SWE-bench 从"一次高考"变成"模拟考+订正+再考"。**
+> **核心洞察：SWE-bench 的竞争不是"谁生成得更好"，是"谁从失败中救得回来"。** 目前没有人做第二件事。
 
 ---
 
-## 二、四阶段 Pipeline
+## 一、当前格局
+
+SWE-bench Verified（Standardized Harness），2026-07：
+
+| 排名 | 方案 | 分数 |
+|------|------|------|
+| 1 | Claude 4.5 Opus + mini-SWE-agent | 76.8% |
+| 2 | Gemini 3 Flash + mini-SWE-agent | 75.8% |
+| 3 | MiniMax M2.5 + mini-SWE-agent | 75.8% |
+
+所有人都用同一个 harss。所有人都用同一个模型。**差距在 agent 框架，不在模型。**
+
+---
+
+## 二、76.8% 的天花板怎么来的
+
+mini-SWE-agent 做了三件事：
+1. 多轮交互——不是一次生成，是多次对话（"看看这个文件""再看看那个"）
+2. 文件导航——能读 repo 里的文件来理解上下文
+3. 测试反馈——跑测试，知道 patch 过没过
+
+但这三件事都是**"帮你写对"**——优化的是第一次生成的质量。
+
+**没有人做"写错了以后怎么办"。**
+
+当前第一名的流程：
 
 ```
-Phase 1: 并行探索 (Parallel Exploration)
-  │
-  ├── Claude Code × 3 prompts  ──→ 3 patches
-  ├── GPT-5 × 2 prompts        ──→ 2 patches
-  ├── Gemini × 2 prompts       ──→ 2 patches
-  └── 专用 Agent × 3           ──→ 3 patches (astropy专/Django专/通用)
-       │
-       ▼  10 patches
-       │
-Phase 2: Zelos 内部预评测 (Pre-Evaluation)
-  │
-  ├── 格式检查（0成本）→ 筛掉 2 个
-  ├── dry-run（0成本）  → 筛掉 1 个
-  ├── Docker 内跑 SWE-bench 一模一样的测试 → 7 个进入
-  │
-  │  astropy-12907:
-  │    patch-1 (Claude-A): 12/15 tests pass
-  │    patch-3 (GPT-A):    15/15 tests pass  ← 全过！
-  │    patch-5 (Claude-B): 8/15 tests pass
-  │    ...
-  │
-  ▼  按测试通过率排序，保留 top 3
-  │
-Phase 3: 修复循环 (Fixer Loop)
-  │
-  │  For each patch in top 3:
-  │    跑测试 → 提取失败的 test case → 喂给 Fixer Agent →
-  │    "这 3 个用例没过，请针对这些用例修复 patch"
-  │    → 重新预评测 → 如果还没全过 → 再修一轮
-  │    最多 3 轮
-  │
-  ▼  第一个全过的 patch → 提交
-  │
-Phase 4: 提交 SWE-bench
-  │
-  └── 只提交 Zelos 内部评测通过的 patch
-      解决率 = Zelos 内部通过率（不是猜的，是验证过的）
+生成 patch → 跑测试 → 过了 → 提交
+                     → 没过 → 算了，这题放弃
 ```
 
----
-
-## 三、每个 Phase 用了 Zelos 的什么能力
-
-| Phase | 用到的 Zelos 能力 | 为什么单 Agent 做不到 |
-|-------|------------------|---------------------|
-| **并行探索** | Scheduler 1 个 Task → N 个 Agent 并行 | 单 Agent 是串行，试 10 次要 10 倍时间 |
-| **预评测** | VerifierChain + Docker 集成 | 单 Agent 没有评测反馈，patch 是对是错靠蒙 |
-| **修复循环** | Goal 状态机 + Event Sourcing + 重试 | 单 Agent 没有状态记忆，每次重试从零开始 |
-| **提交** | 内部通过才提交 | 单 Agent 只能全部提交，不知道哪些会挂 |
+那剩下的 23.2%——不是模型完全不会，是一些题"差一点就对了"。这些题被白白放弃了。
 
 ---
 
-## 四、预期效果
+## 三、Fixer Loop：把"差一点"变成"过了"
 
-| 方案 | 提交数 | 通过数 | 解决率 |
-|------|--------|--------|--------|
-| 单 Agent（Claude 一次调用） | 7 | 2 | 28.6% |
-| 多模型 Ensemble（生成 10 个挑 1 个） | 7 | 3-4 | ~50% |
-| **Zelos 四阶段** | **7** | **5-6** | **~75%** |
+**当 patch 没通过测试时，Zelos 不放弃。它把失败变成了新的输入。**
 
-75% 不是靠更好的模型。是同一个模型，被 Zelos 喂了更好的 prompt（复现脚本+文件位置）、跑了更多尝试（10 路并行）、做了自我评测（Docker 预跑测试）、做了迭代修复（Fixer Loop）。
+```
+生成 patch → 跑测试 → 没过
+                         │
+                         ▼
+              Zelos 提取失败报告：
+                test_foo: FAIL, expected [1,2,3] got [1,2]
+                Location: astropy/rst.py:147
+                test_bar: FAIL, TypeError at astropy/core.py:24
+                test_baz: FAIL, IndexError at django/models.py:89
+                         │
+                         ▼
+              Fixer Agent 拿到精确坐标，定向修复
+                         │
+                         ▼
+              重新评测 → 全过了 → 提交
+```
 
-**SWE-bench 的竞争本质不是"模型有多强"，是"你多快能从失败中学习"。Zelos 把这个循环自动化了。**
-
----
-
-## 五、这个策略对 SWE-bench 以外的意义
-
-这套 Pipeline 不只是为了刷榜。
-
-任何一个"AI 写代码 → 需要知道对不对"的场景，都需要同样的能力：
-
-- **并行探索**：不要赌一个模型一次调用，多条路径同时跑
-- **自动预评测**：跑真实测试，不用猜
-- **修复循环**：测试没过不是终点，把失败信息喂回去再试
-- **只有验证过的才提交**：Internal CI 先过，过了才合进主分支
-
-这就是 Zelos 的定位：**不是"更好的 Agent"，是"让 Agent 能从失败中学习的 Runtime"。**
+Fixer Agent 和一个人类 debugger 知道的信息一样多——哪一行错了、期望什么、实际是什么。
 
 ---
 
-## 六、实施优先级
+## 四、为什么这个 win
 
-| 优先级 | 要做什么 | 成本 |
-|--------|---------|------|
-| P0 | Scheduler 支持"同一 Task 并行派给多个 Agent" | ~50 行代码 |
-| P0 | Arbiter——所有 Agent 返回后挑第一个通过全部验证的 | ~80 行代码 |
-| P1 | SWE-bench Docker 集成 Verifier——Zelos 内部跑项目测试 | ~100 行代码 + Docker |
-| P1 | Fixer Loop——测试失败信息喂给 Fixer Agent | ~100 行代码 |
-| P2 | 并行探索——10 路 Agent 同时跑 | P0 完成后自然支持 |
+| | mini-SWE-agent | Zelos Fixer Loop |
+|---|---|---|
+| patch 没过怎么办 | 放弃 | 分析失败 → 定向修复 → 再试 |
+| 多轮对话 | 有 | 有 |
+| 文件导航 | 有 | 有 |
+| 失败信息给 Agent | 不给 | 精确到行号 |
+
+**差距不在生成环节。在失败处理环节。** 所有人都优化"怎么写对"，没人优化"写错了怎么救"。
 
 ---
 
-> **核心命题：SWE-bench 不是模型能力测试，是迭代优化效率测试。谁从失败中学得快，谁赢。Zelos 要做的就是让学习自动发生。**
+## 五、预期效果
+
+```
+基线（裸模型）:        ~45%
++ mini-SWE-agent:      ~76.8%（多轮对话+文件导航）
++ Zelos Fixer Loop:    ~83-86%（救回"差一点"的题）
+```
+
+如果在 23.2% 的失败中，有 30-40% 是"逻辑基本对、个别 case 没过"的题，Fixer Loop 能救回来：
+
+```
+保守：76.8% + (23.2% × 30%) = 83.8%
+乐观：76.8% + (23.2% × 40%) = 86.1%
+```
+
+**领先第二名 7-9 个百分点。当前 Top 10 只差 0.4pp。7pp 是代际差距。**
+
+---
+
+## 六、实现复杂度
+
+Fixer Loop 的核心组件：
+
+| 组件 | 难度 | 说明 |
+|------|------|------|
+| 测试输出解析 | 低 | pytest 输出是结构化的，正则提取即可 |
+| 失败报告生成 | 低 | 拼接解析结果 |
+| Fixer prompt 模板 | 中 | 需要实验最优的 prompt 格式 |
+| Docker 重跑 | 中 | SWE-bench 已有 Docker 环境，复用 |
+| Zelos Orchestrator 编排 | 低 | Goal → Task → 重试，Runtime 已有 |
+
+**全部加起来 ~300 行 Python。**
+
+---
+
+## 七、为什么别人没做
+
+1. **mini-SWE-agent 是 benchmark 工具，不是 Runtime。** 它的设计目标是把模型接上 Docker 评测——不是为了最大化分数。它的"重试"是简单的 re-run。
+
+2. **SWE-bench 的评测逻辑不鼓励修 retry。** 提交一次就出分，没人在乎你内部重试了多少次。但 Zelos 在乎——因为 Zelos 要证明 Runtime 的价值。
+
+3. **失败修复听起来简单，做起来需要状态管理。** 每次 Fixer 迭代需要记住"上次改了啥""哪些测试还挂着""这是第几轮"——这正是 Zelos Event Sourcing 和 Task 状态机天然擅长的。
+
+---
+
+> **Zelos 不是更好的 Agent。Zelos 是让 Agent 能从失败中学习的 Runtime。**
