@@ -235,6 +235,32 @@ class Scheduler:
         self._task_graph.transition(task_id, TaskStatus.ASSIGNED, agent_id=agent_id)
         return {"task_id": task_id, "agent_id": agent_id}
 
+    # ── v1.2.0: Parallel Dispatch (Contest Mode) ──
+
+    def schedule_contest(self, top_n: int = 3) -> list[dict[str, str]]:
+        """Schedule a contest: same task → top N agents in parallel.
+
+        Uses the existing scoring pipeline but selects top N candidates
+        instead of just the best one. Arbiter picks the winner.
+        """
+        ready_tasks = self._phase1_order()
+        assignments = []
+        for task in ready_tasks:
+            candidates = self._phase2_filter(task)
+            if not candidates:
+                continue
+            scored = self._phase3_score(task, candidates)
+            if not scored:
+                continue
+            # Select top N (not just top 1)
+            top_candidates = scored[:top_n]
+            for i, sc in enumerate(top_candidates):
+                agent_id = sc.candidate.agent_id
+                if i == 0:
+                    self._task_graph.transition(task.task_id, TaskStatus.ASSIGNED, agent_id=agent_id)
+                assignments.append({"task_id": task.task_id, "agent_id": agent_id, "score": sc.score})
+        return assignments
+
     # ── Retry ──
 
     def evaluate_retry(self, task: Task, previous_error: dict | None = None) -> str | None:
