@@ -1,126 +1,161 @@
-# Zelos SWE-bench Strategy — Fixer Loop
+# Zelos SWE-bench Strategy — Runtime-First
 
-> **核心洞察：SWE-bench 的竞争不是"谁生成得更好"，是"谁从失败中救得回来"。** 目前没有人做第二件事。
-
----
-
-## 一、当前格局
-
-SWE-bench Verified（Standardized Harness），2026-07：
-
-| 排名 | 方案 | 分数 |
-|------|------|------|
-| 1 | Claude 4.5 Opus + mini-SWE-agent | 76.8% |
-| 2 | Gemini 3 Flash + mini-SWE-agent | 75.8% |
-| 3 | MiniMax M2.5 + mini-SWE-agent | 75.8% |
-
-所有人都用同一个 harss。所有人都用同一个模型。**差距在 agent 框架，不在模型。**
+> **榜单第一名没有做到的地方，就是我们的机会。**
+>
+> Top 10 停在了 76% 左右，不是模型不够好。是所有人都在优化同一个方向——Prompt、多轮对话、工具调用。真正还没人做的是：**让 Runtime 消费执行反馈信息，替代 LLM 做工程决策。**
 
 ---
 
-## 二、76.8% 的天花板怎么来的
+## 一、Top 10 的五类失败模式
 
-mini-SWE-agent 做了三件事：
-1. 多轮交互——不是一次生成，是多次对话（"看看这个文件""再看看那个"）
-2. 文件导航——能读 repo 里的文件来理解上下文
-3. 测试反馈——跑测试，知道 patch 过没过
+几乎所有 Agent 的失败，本质只有五类：
 
-但这三件事都是**"帮你写对"**——优化的是第一次生成的质量。
+| # | 失败模式 | 现象 | 根因 |
+|---|---------|------|------|
+| 1 | **一次性生成** | 测试挂了 → 从头重新生成，没有 debug | Agent 没有"定位-修复"循环，只有"重猜"循环 |
+| 2 | **浪费 Runtime 信息** | 把 200KB 原始 log 整份塞给 Claude | Runtime 产生的精确错误信息（断言值、文件行号）没有被提取 |
+| 3 | **搜索能力不足** | grep 找到 `serializer.py`，但 bug 在 `validation.py` | Agent 没有代码图（call graph/import graph）辅助定位 |
+| 4 | **不会止损** | Fail → Fix → Fail → Fix → 死循环 | 没有 Failure Classifier 判断"这题还值不值得修" |
+| 5 | **无跨实例学习** | 每道题从零开始，重复犯相同模式的错误 | 没有历史失败数据库 |
 
-**没有人做"写错了以后怎么办"。**
-
-当前第一名的流程：
-
-```
-生成 patch → 跑测试 → 过了 → 提交
-                     → 没过 → 算了，这题放弃
-```
-
-那剩下的 23.2%——不是模型完全不会，是一些题"差一点就对了"。这些题被白白放弃了。
+**其中 1-4 是 Runtime 可以解决的。5 是长期方向，暂不投入。**
 
 ---
 
-## 三、Fixer Loop：把"差一点"变成"过了"
+## 二、还值得投入的三个方向（按优先级）
 
-**当 patch 没通过测试时，Zelos 不放弃。它把失败变成了新的输入。**
+### ⭐⭐⭐⭐⭐ Evidence Compression（结构化测试证据）
+
+**当前做法**：Agent 跑完 pytest，把整个输出（含安装日志、构建输出、200KB+）原样塞给 Claude。
+
+**Zelos 做法**：Runtime 消费测试输出 → 提取结构化 Evidence：
 
 ```
-生成 patch → 跑测试 → 没过
-                         │
-                         ▼
-              Zelos 提取失败报告：
-                test_foo: FAIL, expected [1,2,3] got [1,2]
-                Location: astropy/rst.py:147
-                test_bar: FAIL, TypeError at astropy/core.py:24
-                test_baz: FAIL, IndexError at django/models.py:89
-                         │
-                         ▼
-              Fixer Agent 拿到精确坐标，定向修复
-                         │
-                         ▼
-              重新评测 → 全过了 → 提交
+原始 pytest 输出（80KB）
+    │
+    ▼
+Zelos Evidence Extractor
+    │
+    ▼
+结构化证据（~300 tokens）：
+  FAILED tests/test_rst.py::test_header_rows - AssertionError
+    Expected: [1, 2, 3]
+    Actual:   [1, 2]
+    Location: astropy/io/ascii/rst.py:147
+
+  FAILED tests/test_core.py::test_init - TypeError
+    RST.__init__() missing 1 required positional argument: 'header_rows'
+    Location: astropy/io/ascii/core.py:24
 ```
 
-Fixer Agent 和一个人类 debugger 知道的信息一样多——哪一行错了、期望什么、实际是什么。
+**为什么这是最大杠杆**：
+- 减少了 99% 的无效 token（200KB → 300 tokens）
+- LLM 不再需要从噪音里找信号
+- 多轮 Fixer 迭代的上下文膨胀问题从根本上解决
+
+### ⭐⭐⭐⭐⭐ Failure Classification（失败分类器）
+
+**当前做法**：任何测试失败都触发重试，不管失败原因是什么。
+
+**Zelos 做法**：Runtime 对失败分类，决定不同策略：
+
+| 失败类型 | 信号 | 策略 |
+|---------|------|------|
+| `TypeError` / `AttributeError` | 语法/接口级错误 | ✅ 值得修 |
+| `AssertionError` | 逻辑偏差 | ✅ 值得修（最多 3 轮） |
+| `ImportError` / `ModuleNotFoundError` | 环境/依赖问题 | ⚠️ 尝试修复 import/install |
+| 全量测试爆炸（>50% FAIL） | 方向根本错误 | ❌ 立即放弃，切换候选 |
+| 同一测试连续失败 3 轮 | 死循环 | ❌ 止损 |
+
+**为什么重要**：B 类失败（方向根本错误）的持续修复不仅浪费 token，还会产生越改越错的负收益。Runtime 识别 B 类并止损，等于消除了无效消耗。
+
+### ⭐⭐⭐⭐☆ Patch Ranking（多候选预筛选）
+
+**当前做法**：Arbiter 取第一个通过全部验证的 patch。
+
+**Zelos 做法**：并行池内的所有候选先经过**低成本预筛选**，排名后只送 top-2 进 Docker 完整测试：
+
+```
+并行池 5 个候选
+    │
+    ▼
+预筛选（0 成本，秒级）：
+  ├── 格式检查（正则）
+  ├── dry-run（patch 命令）
+  ├── py_compile（语法）
+  └── 影响范围合理性（改动的文件是否在 issue 提到的模块里）
+    │
+    ▼
+排名 → 选 top-2 → 送 Docker 完整测试
+```
 
 ---
 
-## 四、为什么这个 win
+## 三、明确不投入的方向
 
-| | mini-SWE-agent | Zelos Fixer Loop |
-|---|---|---|
-| patch 没过怎么办 | 放弃 | 分析失败 → 定向修复 → 再试 |
-| 多轮对话 | 有 | 有 |
-| 文件导航 | 有 | 有 |
-| 失败信息给 Agent | 不给 | 精确到行号 |
+这些方向 Top 10 已经卷烂了，继续投入边际收益接近零：
 
-**差距不在生成环节。在失败处理环节。** 所有人都优化"怎么写对"，没人优化"写错了怎么救"。
+| 方向 | 为什么不投 |
+|------|-----------|
+| Reflection | 已有大量工作，收益递减 |
+| Debate（两个 LLM 互相讨论） | 成本翻倍，收益微弱 |
+| Tree Search | 越来越贵，递减 |
+| 更多 Prompt 工程 | 已经被榨干 |
+| Planner 优化 | 不是瓶颈 |
 
----
-
-## 五、预期效果
-
-```
-基线（裸模型）:        ~45%
-+ mini-SWE-agent:      ~76.8%（多轮对话+文件导航）
-+ Zelos Fixer Loop:    ~83-86%（救回"差一点"的题）
-```
-
-如果在 23.2% 的失败中，有 30-40% 是"逻辑基本对、个别 case 没过"的题，Fixer Loop 能救回来：
-
-```
-保守：76.8% + (23.2% × 30%) = 83.8%
-乐观：76.8% + (23.2% × 40%) = 86.1%
-```
-
-**领先第二名 7-9 个百分点。当前 Top 10 只差 0.4pp。7pp 是代际差距。**
+**Zelos 的差异化不在这些领域。差异化在于 Runtime 替 LLM 做工程决策。**
 
 ---
 
-## 六、实现复杂度
+## 四、实现优先级重新排序
 
-Fixer Loop 的核心组件：
+基于上面的分析，P0/P1 重新排：
 
-| 组件 | 难度 | 说明 |
-|------|------|------|
-| 测试输出解析 | 低 | pytest 输出是结构化的，正则提取即可 |
-| 失败报告生成 | 低 | 拼接解析结果 |
-| Fixer prompt 模板 | 中 | 需要实验最优的 prompt 格式 |
-| Docker 重跑 | 中 | SWE-bench 已有 Docker 环境，复用 |
-| Zelos Orchestrator 编排 | 低 | Goal → Task → 重试，Runtime 已有 |
-
-**全部加起来 ~300 行 Python。**
-
----
-
-## 七、为什么别人没做
-
-1. **mini-SWE-agent 是 benchmark 工具，不是 Runtime。** 它的设计目标是把模型接上 Docker 评测——不是为了最大化分数。它的"重试"是简单的 re-run。
-
-2. **SWE-bench 的评测逻辑不鼓励修 retry。** 提交一次就出分，没人在乎你内部重试了多少次。但 Zelos 在乎——因为 Zelos 要证明 Runtime 的价值。
-
-3. **失败修复听起来简单，做起来需要状态管理。** 每次 Fixer 迭代需要记住"上次改了啥""哪些测试还挂着""这是第几轮"——这正是 Zelos Event Sourcing 和 Task 状态机天然擅长的。
+| 优先级 | 模块 | 为什么 |
+|--------|------|--------|
+| P0 ✅ | 格式 Verifier + Arbiter + 并行 dispatch | 已完成 |
+| **P0** | **Evidence Compressor（日志解析器）** | **最大杠杆，当前无人做** |
+| **P0** | **Failure Classifier（失败分类器）** | **消除 B 类无效消耗** |
+| P1 | Patch Ranking（预筛选排名） | 提升候选质量 |
+| P1 | Fixer Loop（定向修复） | 依赖 P0 的 Evidence Compressor |
+| P2 | 消融实验 + 多 Prompt 策略 | 学术输出 + 调优 |
 
 ---
 
-> **Zelos 不是更好的 Agent。Zelos 是让 Agent 能从失败中学习的 Runtime。**
+## 五、Zelos Runtime 架构（更新后）
+
+```
+Issue
+    │
+    ▼
+Planner Agent（LLM）
+    │
+    ▼
+Candidate Patches（并行池）
+    │
+    ▼
+Zelos Runtime ──────────────────────────┐
+  ├── Format Checker                     │
+  ├── Apply Checker（dry-run）           │
+  ├── Build Checker（py_compile）        │
+  ├── Test Runner（Docker）              │  ← LLM 不管这些
+  ├── Evidence Extractor ★               │
+  ├── Failure Classifier ★               │
+  ├── Patch Ranker                       │
+  └── Scheduler（Repair / Retry / Stop） │
+    │                                    │
+    ▼                                    │
+Fixer Agent（LLM）← 只拿结构化证据 ─────┘
+    │
+    ▼
+Runtime（再次全量验证）
+    │
+    ▼
+Submit（仅通过全部检查的 patch）
+```
+
+**核心思想：LLM 负责产生候选方案。Runtime 负责所有可以程序化完成的工程决策。**
+
+---
+
+> **SWE-bench 前几名的差距，不会来自更强的大模型，而会来自 Runtime 如何利用执行过程中的反馈信息。这和我们把 Zelos 做成 Runtime 而非 Agent Framework 的定位完全一致。**
