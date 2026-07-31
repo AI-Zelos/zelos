@@ -113,7 +113,7 @@ class ZelosRuntime:
         self._merge_executor = MergeExecutor()
         self._active_cps: dict[str, ChangeProposal] = {}  # goal_id → ChangeProposal
 
-        # ── v1.1.0: Credential Management ──
+        # ── v1.2.0: Credential Management ──
         self._credential_store: CredentialStore = EnvCredentialStore()
         self._credential_injector = CredentialInjector(self._credential_store)
         self._execution_engine._credential_injector = self._credential_injector
@@ -763,7 +763,7 @@ class ZelosRuntime:
                             # v0.8.0: Persist terminal state
                             self._persist_goal_state(goal_id)
 
-                            # v1.1.0: Auto-trigger governance only for governed goals
+                            # v1.2.0: Auto-trigger governance only for governed goals
                             # A goal is governed only if it has an IntentSpec (software change).
                             # Plain agent tasks (research, email, data query) skip governance.
                             if (goal["status"] in ("completed", "failed")
@@ -817,7 +817,7 @@ class ZelosRuntime:
             time.sleep(poll_interval)
 
     def _verify_and_escalate(self) -> None:
-        """v1.1.0: Check confidence for active goals.
+        """v1.2.0: Check confidence for active goals.
 
         When confidence is low despite passing verifiers, escalate:
         1. Run additional verifiers on collected evidence
@@ -1073,7 +1073,7 @@ class ZelosRuntime:
                             else str(artifact)
                         )
 
-                        # ── v1.1.0: Verify artifact before accepting ──
+                        # ── v1.2.0: Verify artifact before accepting ──
                         verification_passed = True
                         has_criteria = (
                             task.expected_output_schema
@@ -2094,7 +2094,7 @@ class ZelosRuntime:
                 "hitl": {"pending_approvals": pending_approvals},
                 "cluster": {"enabled": self._cluster_enabled, "is_leader": self._leader_election.is_leader()},
             },
-            "version": "1.1.0",
+            "version": "1.2.0",
         }
 
     def get_metrics(self) -> dict[str, Any]:
