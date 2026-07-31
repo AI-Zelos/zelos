@@ -130,24 +130,32 @@ Zelos Meta-Agent
 
 ## 五、现状 vs 目标
 
-| 组件 | 代码现状 | Plan 目标 |
-|------|---------|----------|
-| Runtime Kernel（调度/重试/心跳/事件溯源） | ✅ 完整 | — |
-| VerifierChain 接口 | ✅ `VerifierChain` 类存在 | — |
-| 格式检查（正则/dry-run/lint/语法） | ❌ 未挂在 VerifierChain 上 | P0 |
-| 单 Agent dispatch | ✅ 1 Task → 1 Agent | — |
-| 并行 dispatch（1 Task → N Agent） | ❌ Scheduler 不支持 | P0 |
-| Arbiter（多结果选优） | ❌ 没有 | P0 |
-| Docker 预评测集成 | ❌ 没有 | P1 |
-| Fixer Loop（失败解析+定向修复） | ❌ 没有 | P1 |
-| 多 prompt 策略模板 | ❌ 没有 | P2 |
-| SWE-bench 全量 500 题 | ❌ 只跑了 Pilot 10 题 | P3 |
+### 已有基础
+
+| 组件 | 位置 | 用途 |
+|------|------|------|
+| Scheduler（5 阶段匹配） | `zelos/scheduler.py` | 按 Capability 匹配 Agent，已经有了 |
+| VerifierChain（链式验证） | `zelos/verifier_chain.py` | `build_chain()` + `execute()`，已经有了 |
+| Event Sourcing（状态回放） | `zelos/event_sourcing.py` | Fixer 迭代的状态记忆基础，已经有了 |
+| Task 状态机 + 重试 | `zelos/task_graph.py` | FAILED → READY 转换，Fixer 迭代的骨架，已经有了 |
+| EvidenceBag | `zelos/evidence.py` | 收集每轮 Fixer 的证据，已经有了 |
+| Docker（系统级别） | 系统已安装 | 可被 subprocess 调用，不需要写进 Zelos |
+
+### 需要补的（全部是组合已有模块，不是从零造轮子）
+
+| 组件 | 要改什么 | 为什么不是重写 |
+|------|---------|---------------|
+| 并行 dispatch | Scheduler 加 `dispatch_contest(task, top_n)` | 已有 `_phase2_filter` 返回 N 个候选，只是 `_phase5_select` 只选 1 个。改成选 top N 即可 |
+| Arbiter | 新文件 `zelos/arbiter.py` ~60 行 | 调用 VerifierChain 验证 → 挑第一个全过的。逻辑简单，组件全在 |
+| 格式 Verifier | 3 个新 Verifier 注册到链上 | 正则/dry-run/lint，每个 ~30 行，实现 `Verifier.verify()` 即可 |
+| Fixer Loop | Runtime 加 ~50 行编排 | Task FAILED → 提取测试输出 → 生成 FixerTask → 重新 dispatch。Event Sourcing + Task 状态机已经提供了全部状态管理 |
+| Docker 预评测 | subprocess 调 Docker | 不是"集成到 Zelos"，是"从 Zelos Verifier 里调 shell 命令"。已有 `SchemaVerifier` 就是这么做验证的 |
 
 ### 实施路径
 
-| 阶段 | 内容 | 工作量 |
+| 阶段 | 内容 | 工作量 | 
 |------|------|--------|
-| P0 | Scheduler 并行 dispatch + Arbiter + 格式 Verifier | ~200 行 |
+| P0 | 并行 dispatch + Arbiter + 3 个格式 Verifier | ~200 行 |
 | P1 | Docker 预评测 + Fixer Loop | ~300 行 |
 | P2 | 多 prompt 模板 + 调优 | ~3 天 |
 | P3 | 全量 500 题 + 提交 | ~5 天 + API 费用 |
