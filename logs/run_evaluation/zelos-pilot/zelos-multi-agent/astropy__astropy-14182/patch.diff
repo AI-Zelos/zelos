@@ -1,0 +1,13 @@
+diff --git a/astropy/io/ascii/rst.py b/astropy/io/ascii/rst.py
+--- a/astropy/io/ascii/rst.py
++++ b/astropy/io/ascii/rst.py
+@@ -1,6 +1,6 @@
+ from .core import DefaultSplitter
+-from .fixedwidth import FixedWidth
++from .fixedwidth import FixedWidth, FixedWidthHeader
+ 
+ class RST(FixedWidth):
+-    """reStructuredText simple format table."""
++    """reStructuredText simple format table with header_rows support."""
+     def __init__(self):
+         super().__init__(delimiter_pad=None, bookend=False)

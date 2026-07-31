@@ -19,7 +19,10 @@ class FormatVerifier(Verifier):
         super().__init__(verifier_id="format-check")
 
     def verify(self, artifact_content: Any, criteria: VerificationCriteria) -> Verdict:
-        patch = str(artifact_content) if artifact_content else ""
+        if isinstance(artifact_content, dict):
+            patch = artifact_content.get("patch", "") or str(artifact_content)
+        else:
+            patch = str(artifact_content) if artifact_content else ""
         issues = []
 
         # No markdown fences
@@ -50,7 +53,10 @@ class DryRunVerifier(Verifier):
         super().__init__(verifier_id="dryrun")
 
     def verify(self, artifact_content: Any, criteria: VerificationCriteria) -> Verdict:
-        patch = str(artifact_content) if artifact_content else ""
+        if isinstance(artifact_content, dict):
+            patch = artifact_content.get("patch", "") or str(artifact_content)
+        else:
+            patch = str(artifact_content) if artifact_content else ""
         if not patch.strip():
             return Verdict(verdict="failed", score=0.0, verifier_id=self.verifier_id, summary="Empty patch")
 
@@ -77,7 +83,10 @@ class SyntaxVerifier(Verifier):
         super().__init__(verifier_id="syntax")
 
     def verify(self, artifact_content: Any, criteria: VerificationCriteria) -> Verdict:
-        patch = str(artifact_content) if artifact_content else ""
+        if isinstance(artifact_content, dict):
+            patch = artifact_content.get("patch", "") or str(artifact_content)
+        else:
+            patch = str(artifact_content) if artifact_content else ""
         # Extract +++ filenames from patch
         files = re.findall(r'^\+\+\+ b/(.+\.py)', patch, re.MULTILINE)
         if not files:

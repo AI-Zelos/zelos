@@ -43,40 +43,48 @@ class Arbiter:
     def judge(self, outputs: dict[str, dict], cp_criteria=None) -> ArbiterResult:
         """Judge multiple agent outputs. Returns ArbiterResult with winner.
 
-        Args:
-            outputs: {agent_id: output_dict} — results from parallel agents.
-            cp_criteria: Optional CP verification criteria for the chain.
-
-        Returns:
-            ArbiterResult with winner_agent_id set if a winner was found.
+        Runs ALL registered verifiers in the chain against each output.
+        First agent whose output passes ALL verifiers wins.
         """
         result = ArbiterResult(total_checked=len(outputs))
 
         if not self._chain:
-            # No chain configured → first responder wins
             for agent_id in outputs:
                 result.winner_agent_id = agent_id
                 result.winner_output = outputs[agent_id]
                 result.passed = 1
                 return result
 
+        # Build the full chain: all registered verifiers, not just cp_criteria ones
+        all_verifier_names = list(self._chain._available_verifiers.keys())
+
         for agent_id, output in outputs.items():
             if not output:
                 continue
-            try:
-                if cp_criteria:
-                    chain_result = self._chain.execute(output, cp_criteria)
-                else:
-                    from .change_proposal import VerificationCriteria
-                    chain_result = self._chain.execute(output, VerificationCriteria())
+            all_passed = True
+            verdicts = []
+            for vname in all_verifier_names:
+                verifier = self._chain._available_verifiers.get(vname)
+                if not verifier:
+                    continue
+                try:
+                    from .verifier import VerificationCriteria
+                    # Wrap plain text in a dict for SchemaVerifier compatibility
+                    artifact = output if isinstance(output, dict) else {"patch": str(output)}
+                    verdict = verifier.verify(artifact, VerificationCriteria())
+                    verdicts.append(verdict)
+                    if verdict.verdict == "failed":
+                        all_passed = False
+                        break
+                except Exception:
+                    all_passed = False
+                    break
 
-                result.all_verdicts[agent_id] = chain_result.verdicts
-                if chain_result.all_passed:
-                    result.winner_agent_id = agent_id
-                    result.winner_output = output
-                    result.passed = 1
-                    return result  # First to pass all = winner
-            except Exception:
-                result.all_verdicts[agent_id] = []
+            result.all_verdicts[agent_id] = verdicts
+            if all_passed:
+                result.winner_agent_id = agent_id
+                result.winner_output = output
+                result.passed = 1
+                return result
 
         return result

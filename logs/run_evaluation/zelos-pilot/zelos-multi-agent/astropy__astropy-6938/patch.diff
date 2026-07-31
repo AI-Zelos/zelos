@@ -1,0 +1,7 @@
+diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
+--- a/astropy/modeling/separable.py
++++ b/astropy/modeling/separable.py
+@@ -242,4 +242,4 @@ def _cstack(left, right):
+     cright = _coord_matrix(right, 'right')
+-    return np.block([[cleft, cright]])
++    return np.hstack([cleft, cright])

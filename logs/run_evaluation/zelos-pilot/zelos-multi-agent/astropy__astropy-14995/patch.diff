@@ -1,0 +1,11 @@
+diff --git a/astropy/nddata/mixins/ndarithmetic.py b/astropy/nddata/mixins/ndarithmetic.py
+--- a/astropy/nddata/mixins/ndarithmetic.py
++++ b/astropy/nddata/mixins/ndarithmetic.py
+@@ -1,3 +1,7 @@
++import warnings
++from astropy.utils.exceptions import AstropyUserWarning
++
+ class NDArithmeticMixin:
++    """Mixin class to add arithmetic operations to NDData objects."""
+     def add(self, operand, propagate_uncertainties=True, handle_mask=None, **kwargs):
+         return self._arithmetic(operand, 'add', propagate_uncertainties, handle_mask, **kwargs)
