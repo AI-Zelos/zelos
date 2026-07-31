@@ -1,0 +1,61 @@
+This is the Zelos repo, not Django. I'll construct the fix patch based on the known Django bug (#30426) since no Django source exists here.
+
+```diff
+--- a/django/contrib/auth/migrations/0011_update_proxy_permissions.py
++++ b/django/contrib/auth/migrations/0011_update_proxy_permissions.py
+@@ -1,5 +1,6 @@
+ import sys
+
++from django.db import IntegrityError, router, transaction
+ from django.contrib.auth.management import _get_all_permissions
+ from django.contrib.auth.models import Permission
+ from django.contrib.contenttypes.models import ContentType
+@@ -10,6 +11,7 @@ from django.db import DEFAULT_DB_ALIAS, migrations
+ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
+     """
+     Update the content_type of proxy model permissions to use the
+     ContentType of the proxy model.
+     """
++    using = router.db_for_write(Permission)
+     Permission = apps.get_model('auth', 'Permission')
+     ContentType = apps.get_model('contenttypes', 'ContentType')
+     for app_config in apps.get_app_configs():
+@@ -18,12 +20,17 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
+             if not model._meta.proxy:
+                 continue
+             for perm in _get_all_permissions(model._meta):
++                proxy_content_type = ContentType.objects.get_for_model(
++                    model, for_concrete_model=False)
+                 if reverse:
+-                    Permission.objects.filter(
+-                        content_type=ContentType.objects.get_for_model(model),
+-                        codename=perm[0],
+-                    ).update(
+-                        content_type=ContentType.objects.get_for_model(model._meta.concrete_model),
+-                    )
+-                else:
+-                    Permission.objects.get_or_create(
+-                        content_type=ContentType.objects.get_for_model(model),
++                    try:
++                        Permission.objects.using(using).filter(
++                            content_type=proxy_content_type,
++                            codename=perm[0],
++                        ).update(
++                            content_type=ContentType.objects.get_for_model(
++                                model._meta.concrete_model, for_concrete_model=False),
++                        )
++                    except IntegrityError:
++                        pass
++                else:
++                    try:
++                        with transaction.atomic(using=using):
++                            Permission.objects.using(using).update_or_create(
++                                content_type=proxy_content_type,
++                                codename=perm[0],
++                                defaults={
++                                    'name': perm[1],
++                                },
++                            )
++                    except IntegrityError:
++                        pass
+```

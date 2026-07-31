@@ -1,0 +1,108 @@
+```
+ acc041984fac1e79d9a1258c94479dd3ffc7f186 Mon Sep 17 00:00:00 2001
+From: Parth Patil <Parthvin@gmail.com>
+Date: Fri, 8 Mar 2019 04:58:22 +0530
+Subject: [PATCH] Fixed #30189 -- Removed transaction from sqlmigrate output if
+ database doesn't use one.
+
+---
+ django/core/management/commands/sqlmigrate.py |  5 ++-
+ tests/migrations/test_commands.py             | 39 ++++++++++++++-----
+ 2 files changed, 32 insertions(+), 12 deletions(-)
+
+diff --git a/django/core/management/commands/sqlmigrate.py b/django/core/management/commands/sqlmigrate.py
+index f0b663222ad5..ba3bd708cc29 100644
+--- a/django/core/management/commands/sqlmigrate.py
++++ b/django/core/management/commands/sqlmigrate.py
+@@ -55,8 +55,9 @@ def handle(self, *args, **options):
+                 migration_name, app_label))
+         targets = [(app_label, migration.name)]
+ 
+-        # Show begin/end around output only for atomic migrations
+-        self.output_transaction = migration.atomic
++        # Show begin/end around output for atomic migrations, if the database
++        # supports transactional DDL.
++        self.output_transaction = migration.atomic and connection.features.can_rollback_ddl
+ 
+         # Make a plan that represents just the requested migrations and show SQL
+         # for it
+diff --git a/tests/migrations/test_commands.py b/tests/migrations/test_commands.py
+index 0e8fa9fdd165..57e71f4643fa 100644
+--- a/tests/migrations/test_commands.py
++++ b/tests/migrations/test_commands.py
+@@ -536,7 +536,13 @@ def test_sqlmigrate_forwards(self):
+         index_op_desc_unique_together = output.find('-- alter unique_together')
+         index_tx_end = output.find(connection.ops.end_transaction_sql().lower())
+ 
+-        self.assertGreater(index_tx_start, -1, "Transaction start not found")
++        if connection.features.can_rollback_ddl:
++            self.assertGreater(index_tx_start, -1, "Transaction start not found")
++            self.assertGreater(
++                index_tx_end, index_op_desc_unique_together,
++                "Transaction end not found or found before operation description (unique_together)"
++            )
++
+         self.assertGreater(
+             index_op_desc_author, index_tx_start,
+             "Operation description (author) not found or found before transaction start"
+@@ -553,10 +559,6 @@ def test_sqlmigrate_forwards(self):
+             index_op_desc_unique_together, index_op_desc_tribble,
+             "Operation description (unique_together) not found or found before operation description (tribble)"
+         )
+-        self.assertGreater(
+-            index_tx_end, index_op_desc_unique_together,
+-            "Transaction end not found or found before operation description (unique_together)"
+-        )
+ 
+     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
+     def test_sqlmigrate_backwards(self):
+@@ -577,7 +579,12 @@ def test_sqlmigrate_backwards(self):
+         index_drop_table = output.rfind('drop table')
+         index_tx_end = output.find(connection.ops.end_transaction_sql().lower())
+ 
+-        self.assertGreater(index_tx_start, -1, "Transaction start not found")
++        if connection.features.can_rollback_ddl:
++            self.assertGreater(index_tx_start, -1, "Transaction start not found")
++            self.assertGreater(
++                index_tx_end, index_op_desc_unique_together,
++                "Transaction end not found or found before DROP TABLE"
++            )
+         self.assertGreater(
+             index_op_desc_unique_together, index_tx_start,
+             "Operation description (unique_together) not found or found before transaction start"
+@@ -595,10 +602,6 @@ def test_sqlmigrate_backwards(self):
+             index_drop_table, index_op_desc_author,
+             "DROP TABLE not found or found before operation description (author)"
+         )
+-        self.assertGreater(
+-            index_tx_end, index_op_desc_unique_together,
+-            "Transaction end not found or found before DROP TABLE"
+-        )
+ 
+         # Cleanup by unmigrating everything
+         call_command("migrate", "migrations", "zero", verbosity=0)
+@@ -616,6 +619,22 @@ def test_sqlmigrate_for_non_atomic_migration(self):
+             self.assertNotIn(connection.ops.start_transaction_sql().lower(), queries)
+         self.assertNotIn(connection.ops.end_transaction_sql().lower(), queries)
+ 
++    @override_settings(MIGRATION_MODULES={'migrations': 'migrations.test_migrations'})
++    def test_sqlmigrate_for_non_transactional_databases(self):
++        """
++        Transaction wrappers aren't shown for databases that don't support
++        transactional DDL.
++        """
++        out = io.StringIO()
++        with mock.patch.object(connection.features, 'can_rollback_ddl', False):
++            call_command('sqlmigrate', 'migrations', '0001', stdout=out)
++        output = out.getvalue().lower()
++        queries = [q.strip() for q in output.splitlines()]
++        start_transaction_sql = connection.ops.start_transaction_sql()
++        if start_transaction_sql:
++            self.assertNotIn(start_transaction_sql.lower(), queries)
++        self.assertNotIn(connection.ops.end_transaction_sql().lower(), queries)
++
+     @override_settings(
+         INSTALLED_APPS=[
+             "migrations.migrations_test_apps.migrated_app",
+-- 
+```

@@ -1,0 +1,21 @@
+```diff
+--- a/django/urls/resolvers.py
++++ b/django/urls/resolvers.py
+@@ -28,6 +28,7 @@
+ 
+ from .converters import get_converters
+ from .exceptions import NoReverseMatch, Resolver404
++from django.http import Http404
+ from .utils import get_callable
+ 
+ 
+@@ -332,7 +333,7 @@ class RoutePattern(CheckURLMixin):
+                     converter = self.converters[key]
+                     try:
+                         kwargs[key] = converter.to_python(value)
+-                    except ValueError:
++                    except (ValueError, Http404):
+                         return None
+                 return path[match.end() :], (), kwargs
+         # If this is an endpoint, the path should be exactly the same as the
+```

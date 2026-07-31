@@ -1,0 +1,21 @@
+```diff
+--- a/django/utils/autoreload.py
++++ b/django/utils/autoreload.py
+@@ -201,7 +201,15 @@ def iter_modules_and_files(modules, extra_files):
+     sys_file_paths = []
+     for module in modules:
+         # During this import, sys.modules changes. Filter out non-Python
+-        # modules and modules that don't have a __spec__ to avoid errors.
++        # modules.
++        if not isinstance(module, ModuleType):
++            continue
++        if module.__name__ == '__main__':
++            # __main__ (usually manage.py) doesn't always have a __spec__
++            # set, so handle this case by falling back to using __file__,
++            # resolved below.
++            sys_file_paths.append(module.__file__)
++            continue
+         if not isinstance(module, ModuleType) or getattr(module, '__spec__', None) is None:
+             continue
+         if getattr(module, '__spec__', None) is None:
+```

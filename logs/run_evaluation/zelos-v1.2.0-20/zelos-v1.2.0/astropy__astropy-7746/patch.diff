@@ -1,0 +1,14 @@
+Now I have the installed fixed version to compare against. The issue is clear: `_return_list_of_arrays` needs an early return when any input axes are empty. Here's the fix:
+
+```diff
+--- a/astropy/wcs/wcs.py
++++ b/astropy/wcs/wcs.py
+@@ -1219,6 +1219,9 @@ class WCS(BaseWCS):
+         def _return_list_of_arrays(axes, origin):
++            if any(x.size == 0 for x in axes):
++                return axes
++
+             try:
+                 axes = np.broadcast_arrays(*axes)
+             except ValueError:
+```

@@ -1,0 +1,19 @@
+```diff
+--- a/django/utils/autoreload.py
++++ b/django/utils/autoreload.py
+@@ -223,8 +223,12 @@ def iter_all_python_module_files():
+         except AttributeError:
+             continue
+         if filename is not None:
+-            if pathlib.Path(filename).exists():
+-                yield pathlib.Path(filename).resolve().absolute()
++            try:
++                path = pathlib.Path(filename)
++            except ValueError:
++                continue
++            if path.exists():
++                yield path.resolve().absolute()
+
+ 
+ class StatReloader(BaseReloader):
+```

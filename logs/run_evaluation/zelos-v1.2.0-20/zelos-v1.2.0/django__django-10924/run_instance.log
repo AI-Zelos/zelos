@@ -1,0 +1,50 @@
+2026-07-31 12:31:31,195 - INFO - Creating container for django__django-10924...
+2026-07-31 12:31:31,444 - INFO - Container for django__django-10924 created: 21825505c7859afea4454896a072f5f7e41f6c0e5c4259a0dd43fcce6c01c09e
+2026-07-31 12:31:31,529 - INFO - Container for django__django-10924 started: 21825505c7859afea4454896a072f5f7e41f6c0e5c4259a0dd43fcce6c01c09e
+2026-07-31 12:31:31,530 - INFO - Intermediate patch for django__django-10924 written to logs/run_evaluation/zelos-v1.2.0-20/zelos-v1.2.0/django__django-10924/patch.diff, now applying to container...
+2026-07-31 12:31:31,687 - INFO - >>>>> Applied Patch:
+Checking patch django/db/models/fields/__init__.py...
+Hunk #1 succeeded at 1709 (offset -8 lines).
+Checking patch tests/model_fields/test_filepathfield.py...
+Applied patch django/db/models/fields/__init__.py cleanly.
+Applied patch tests/model_fields/test_filepathfield.py cleanly.
+
+2026-07-31 12:31:32,406 - INFO - Git diff before:
+diff --git a/django/db/models/fields/__init__.py b/django/db/models/fields/__init__.py
+index 0c64748ccd..4d7eb11151 100644
+--- a/django/db/models/fields/__init__.py
++++ b/django/db/models/fields/__init__.py
+@@ -1709,7 +1709,7 @@ class FilePathField(Field):
+ 
+     def formfield(self, **kwargs):
+         return super().formfield(**{
+-            'path': self.path,
++            'path': self.path() if callable(self.path) else self.path,
+             'match': self.match,
+             'recursive': self.recursive,
+             'form_class': forms.FilePathField,
+2026-07-31 12:31:32,408 - INFO - Eval script for django__django-10924 written to logs/run_evaluation/zelos-v1.2.0-20/zelos-v1.2.0/django__django-10924/eval.sh; copying to container...
+2026-07-31 12:31:45,470 - INFO - Test runtime: 13.01 seconds
+2026-07-31 12:31:45,472 - INFO - Test output for django__django-10924 written to logs/run_evaluation/zelos-v1.2.0-20/zelos-v1.2.0/django__django-10924/test_output.txt
+2026-07-31 12:31:45,576 - INFO - Git diff after:
+diff --git a/django/db/models/fields/__init__.py b/django/db/models/fields/__init__.py
+index 0c64748ccd..4d7eb11151 100644
+--- a/django/db/models/fields/__init__.py
++++ b/django/db/models/fields/__init__.py
+@@ -1709,7 +1709,7 @@ class FilePathField(Field):
+ 
+     def formfield(self, **kwargs):
+         return super().formfield(**{
+-            'path': self.path,
++            'path': self.path() if callable(self.path) else self.path,
+             'match': self.match,
+             'recursive': self.recursive,
+             'form_class': forms.FilePathField,
+2026-07-31 12:31:45,576 - INFO - Grading answer for django__django-10924...
+2026-07-31 12:31:45,586 - INFO - report: {'django__django-10924': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': True, 'tests_status': {'FAIL_TO_PASS': {'success': ['test_callable_path (model_fields.test_filepathfield.FilePathFieldTests)'], 'failure': []}, 'PASS_TO_PASS': {'success': ['test_path (model_fields.test_filepathfield.FilePathFieldTests)'], 'failure': []}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for django__django-10924: resolved: True
+2026-07-31 12:31:45,587 - INFO - Attempting to stop container sweb.eval.django__django-10924.zelos-v1.2.0-20...
+2026-07-31 12:32:00,859 - INFO - Attempting to remove container sweb.eval.django__django-10924.zelos-v1.2.0-20...
+2026-07-31 12:32:00,877 - INFO - Container sweb.eval.django__django-10924.zelos-v1.2.0-20 removed.
+2026-07-31 12:32:00,878 - INFO - Attempting to remove image swebench/sweb.eval.x86_64.django_1776_django-10924:latest...
+2026-07-31 12:32:01,689 - INFO - Image swebench/sweb.eval.x86_64.django_1776_django-10924:latest removed.

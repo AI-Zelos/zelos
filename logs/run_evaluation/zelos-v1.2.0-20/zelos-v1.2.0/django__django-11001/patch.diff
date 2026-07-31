@@ -1,0 +1,19 @@
+This repo doesn't contain Django source, so I'll generate the patch from my knowledge of the Django codebase.
+
+The fix is in `django/db/models/sql/compiler.py`, in `SQLCompiler.get_order_by()`. The `sql` string can contain newlines (from multiline `RawSQL`), causing the `ordering_parts` regex to only capture the last line for deduplication. Normalizing whitespace before regex matching fixes this.
+
+```diff
+--- a/django/db/models/sql/compiler.py
++++ b/django/db/models/sql/compiler.py
+@@ -378,7 +378,8 @@ class SQLCompiler:
+                 # the same column multiple times.
+                 if not contains_aggregate_reference:
+                     without_ordering = self.ordering_parts.search(
+-                        sql
++                        # Normalize whitespace so multiline RawSQL expressions
++                        # are compared as a single line (refs #30171).
++                        ' '.join(sql.split()),
+                     ).group(1)
+                     params_hash = make_hashable(params)
+                     if (without_ordering, params_hash) in seen:
+```

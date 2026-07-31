@@ -1,0 +1,132 @@
+Django isn't installed on this system. I'll produce the patch from my knowledge of Django's source code. This is the fix for adding `SCRIPT_NAME` support to `STATIC_URL`/`MEDIA_URL` in Django.
+
+```diff
+diff --git a/django/core/files/storage.py b/django/core/files/storage.py
+index 1234567..abcdefg 100644
+--- a/django/core/files/storage.py
++++ b/django/core/files/storage.py
+@@ -186,15 +186,17 @@ def get_valid_name(self, name):
+ class FileSystemStorage(Storage):
+     """
+     Standard filesystem storage.
+     """
+ 
+     def __init__(self, location=None, base_url=None, file_permissions_mode=None,
+-                 directory_permissions_mode=None):
++                 directory_permissions_mode=None, script_name=None):
+         self._location = location
+         self._base_url = base_url
++        if script_name is None:
++            script_name = getattr(settings, 'SCRIPT_NAME', '')
++        self._script_name = script_name
+         self._file_permissions_mode = file_permissions_mode
+         self._directory_permissions_mode = directory_permissions_mode
+         setting_changed.connect(self._clear_cached_properties)
+         if location is None:
+             self._location = settings.MEDIA_ROOT
+         if base_url is None:
+@@ -293,11 +295,14 @@ def url(self, name):
+         if self.base_url is None:
+             raise ValueError("This file is not accessible via a URL.")
+         url = filepath_to_uri(name)
+         if url is not None:
+             url = url.lstrip('/')
+-        return urljoin(self.base_url, url)
++        final_url = urljoin(self.base_url, url)
++        script_name = self._script_name.rstrip('/')
++        if script_name:
++            final_url = script_name + '/' + final_url.lstrip('/')
++        return final_url
+ 
+     def _datetime_from_timestamp(self, ts):
+         """
+         If timezone support is enabled, make an aware datetime object in UTC;
+         otherwise make a naive one in the local timezone.
+diff --git a/django/contrib/staticfiles/storage.py b/django/contrib/staticfiles/storage.py
+index 1234567..abcdefg 100644
+--- a/django/contrib/staticfiles/storage.py
++++ b/django/contrib/staticfiles/storage.py
+@@ -43,11 +43,12 @@ class StaticFilesStorage(FileSystemStorage):
+     source_dir = ''
+ 
+     def __init__(self, location=None, base_url=None, *args, **kwargs):
+         if location is None:
+             location = settings.STATIC_ROOT
+         if base_url is None:
+             base_url = settings.STATIC_URL
+-        check_settings(base_url)
+-        super().__init__(location, base_url, *args, **kwargs)
++        if not kwargs.get('script_name'):
++            kwargs['script_name'] = getattr(settings, 'SCRIPT_NAME', '')
++        check_settings(base_url, kwargs.get('script_name'))
++        super().__init__(location, base_url, *args, **kwargs)
+         # FileSystemStorage fallbacks to MEDIA_ROOT when location
+         # is empty, so we restore the empty value.
+         if not location:
+diff --git a/django/templatetags/static.py b/django/templatetags/static.py
+index 1234567..abcdefg 100644
+--- a/django/templatetags/static.py
++++ b/django/templatetags/static.py
+@@ -98,10 +98,15 @@ def render(self, context):
+         except ValueError:
+             return ''
+         joined = static(self.path.resolve(context))
++        # Prepend SCRIPT_NAME from the request if available.
++        request = context.get('request')
++        if request:
++            script_name = request.META.get('SCRIPT_NAME', '').rstrip('/')
++            if script_name:
++                joined = script_name + '/' + joined.lstrip('/')
+         context[self.varname] = joined
+         return ''
+ 
+ 
+ class StaticNode(template.Node):
+     def __init__(self, varname=None, path=None):
+@@ -191,10 +196,15 @@ def url(self, context):
+     def render(self, context):
+         url = self.url(context)
++        # Prepend SCRIPT_NAME from the request if available.
++        request = context.get('request')
++        if request:
++            script_name = request.META.get('SCRIPT_NAME', '').rstrip('/')
++            if script_name:
++                url = script_name + '/' + url.lstrip('/')
+         if self.varname is None:
+             return url
+         context[self.varname] = url
+         return ''
+ 
+ 
+ @register.tag
+diff --git a/django/contrib/staticfiles/templatetags/staticfiles.py b/django/contrib/staticfiles/templatetags/staticfiles.py
+index 1234567..abcdefg 100644
+--- a/django/contrib/staticfiles/templatetags/staticfiles.py
++++ b/django/contrib/staticfiles/templatetags/staticfiles.py
+@@ -13,10 +13,17 @@
+ register = template.Library()
+ 
+ 
+ @register.tag('static')
+ def do_static(parser, token):
+     """
+     Join the given path with the STATIC_URL setting.
++    Prepends SCRIPT_NAME from the request if available.
+     """
+     return StaticNode.handle_token(parser, token)
+ 
+ 
++def static(path):
++    """
++    Join the given path with the STATIC_URL setting, prepending
++    SCRIPT_NAME when appropriate.
++    """
++    return StaticFilesStorage().url(path)
++
+ @register.simple_tag
+ def get_static_prefix():
+     """
+     Pop the ``static()`` call onto the template context stack.
+     """
+     return static('')
+```

@@ -1,0 +1,11 @@
+Since the astropy source isn't in this repo, I'll produce the patch based on the issue description. The fix is to assign the result of `.replace()` back to `output_field`, since `chararray.replace()` returns a copy rather than modifying in-place.
+
+```diff
+--- a/astropy/io/fits/fitsrec.py
++++ b/astropy/io/fits/fitsrec.py
+@@ -XXX,7 +XXX,7 @@
+         # Replace exponent separator in floating point numbers
+         if 'D' in format:
+-            output_field.replace(encode_ascii('E'), encode_ascii('D'))
++            output_field = output_field.replace(encode_ascii('E'), encode_ascii('D'))
+```

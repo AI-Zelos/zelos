@@ -1,0 +1,38 @@
+```diff
+--- a/django/db/models/fields/__init__.py
++++ b/django/db/models/fields/__init__.py
+@@ -1717,7 +1717,7 @@ class FilePathField(Field):
+ 
+     def formfield(self, **kwargs):
+         return super().formfield(**{
+-            'path': self.path,
++            'path': self.path() if callable(self.path) else self.path,
+             'match': self.match,
+             'recursive': self.recursive,
+             'form_class': forms.FilePathField,
+--- /dev/null
++++ b/tests/model_fields/test_filepathfield.py
+@@ -0,0 +1,22 @@
++import os
++
++from django.db.models import FilePathField
++from django.test import SimpleTestCase
++
++
++class FilePathFieldTests(SimpleTestCase):
++    def test_path(self):
++        path = os.path.dirname(__file__)
++        field = FilePathField(path=path)
++        self.assertEqual(field.path, path)
++        self.assertEqual(field.formfield().path, path)
++
++    def test_callable_path(self):
++        path = os.path.dirname(__file__)
++
++        def generate_path():
++            return path
++
++        field = FilePathField(path=generate_path)
++        self.assertEqual(field.path(), path)
++        self.assertEqual(field.formfield().path, path)
+```

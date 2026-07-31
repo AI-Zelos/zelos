@@ -1,0 +1,20 @@
+这个仓库中没有 Django 源代码。根据 issue 描述，我直接生成修复 patch：
+
+```diff
+--- a/django/contrib/auth/validators.py
++++ b/django/contrib/auth/validators.py
+@@ -14,7 +14,7 @@ class ASCIIUsernameValidator(validators.RegexValidator):
+     regex = (
+-        r'^[\w.@+-]+$'
++        r'\A[\w.@+-]+\Z'
+     )
+     message = _(
+         'Enter a valid username. This value may contain only English letters, '
+@@ -34,7 +34,7 @@ class UnicodeUsernameValidator(validators.RegexValidator):
+     regex = (
+-        r'^[\w.@+-]+$'
++        r'\A[\w.@+-]+\Z'
+     )
+     message = _(
+         'Enter a valid username. This value may contain only letters, '
+```

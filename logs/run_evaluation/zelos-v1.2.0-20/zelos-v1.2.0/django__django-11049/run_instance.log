@@ -1,0 +1,49 @@
+2026-07-31 12:44:14,071 - INFO - Creating container for django__django-11049...
+2026-07-31 12:44:14,285 - INFO - Container for django__django-11049 created: 8627bc74f4ec0a32f31e432747d01c95e3f7e00d213e63d5485e9501df0fbae6
+2026-07-31 12:44:14,372 - INFO - Container for django__django-11049 started: 8627bc74f4ec0a32f31e432747d01c95e3f7e00d213e63d5485e9501df0fbae6
+2026-07-31 12:44:14,373 - INFO - Intermediate patch for django__django-11049 written to logs/run_evaluation/zelos-v1.2.0-20/zelos-v1.2.0/django__django-11049/patch.diff, now applying to container...
+2026-07-31 12:44:14,509 - INFO - Failed to apply patch to container: git apply --verbose
+2026-07-31 12:44:14,577 - INFO - Failed to apply patch to container: git apply --verbose --reject
+2026-07-31 12:44:14,627 - INFO - >>>>> Applied Patch:
+patching file django/db/models/fields/__init__.py
+Hunk #1 succeeded at 1586 with fuzz 2 (offset -1012 lines).
+patch unexpectedly ends in middle of line
+patch unexpectedly ends in middle of line
+
+2026-07-31 12:44:15,233 - INFO - Git diff before:
+diff --git a/django/db/models/fields/__init__.py b/django/db/models/fields/__init__.py
+index f32ce64629..71005490f3 100644
+--- a/django/db/models/fields/__init__.py
++++ b/django/db/models/fields/__init__.py
+@@ -1587,7 +1587,7 @@ class DurationField(Field):
+     empty_strings_allowed = False
+     default_error_messages = {
+         'invalid': _("'%(value)s' value has an invalid format. It must be in "
+-                     "[DD] [HH:[MM:]]ss[.uuuuuu] format.")
++                     "[DD] [[HH:]MM:]ss[.uuuuuu] format.")
+     }
+     description = _("Duration")
+2026-07-31 12:44:15,234 - INFO - Eval script for django__django-11049 written to logs/run_evaluation/zelos-v1.2.0-20/zelos-v1.2.0/django__django-11049/eval.sh; copying to container...
+2026-07-31 12:44:28,308 - INFO - Test runtime: 13.03 seconds
+2026-07-31 12:44:28,309 - INFO - Test output for django__django-11049 written to logs/run_evaluation/zelos-v1.2.0-20/zelos-v1.2.0/django__django-11049/test_output.txt
+2026-07-31 12:44:28,396 - INFO - Git diff after:
+diff --git a/django/db/models/fields/__init__.py b/django/db/models/fields/__init__.py
+index f32ce64629..71005490f3 100644
+--- a/django/db/models/fields/__init__.py
++++ b/django/db/models/fields/__init__.py
+@@ -1587,7 +1587,7 @@ class DurationField(Field):
+     empty_strings_allowed = False
+     default_error_messages = {
+         'invalid': _("'%(value)s' value has an invalid format. It must be in "
+-                     "[DD] [HH:[MM:]]ss[.uuuuuu] format.")
++                     "[DD] [[HH:]MM:]ss[.uuuuuu] format.")
+     }
+     description = _("Duration")
+2026-07-31 12:44:28,396 - INFO - Grading answer for django__django-11049...
+2026-07-31 12:44:28,398 - INFO - report: {'django__django-11049': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': True, 'tests_status': {'FAIL_TO_PASS': {'success': ['test_invalid_string (model_fields.test_durationfield.TestValidation)'], 'failure': []}, 'PASS_TO_PASS': {'success': ['test_dumping (model_fields.test_durationfield.TestSerialization)', 'test_loading (model_fields.test_durationfield.TestSerialization)', 'test_formfield (model_fields.test_durationfield.TestFormField)', 'test_exact (model_fields.test_durationfield.TestQuerying)', 'test_gt (model_fields.test_durationfield.TestQuerying)', 'test_create_empty (model_fields.test_durationfield.TestSaveLoad)', 'test_fractional_seconds (model_fields.test_durationfield.TestSaveLoad)', 'test_simple_roundtrip (model_fields.test_durationfield.TestSaveLoad)'], 'failure': []}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for django__django-11049: resolved: True
+2026-07-31 12:44:28,399 - INFO - Attempting to stop container sweb.eval.django__django-11049.zelos-v1.2.0-20...
+2026-07-31 12:44:43,636 - INFO - Attempting to remove container sweb.eval.django__django-11049.zelos-v1.2.0-20...
+2026-07-31 12:44:43,674 - INFO - Container sweb.eval.django__django-11049.zelos-v1.2.0-20 removed.
+2026-07-31 12:44:43,674 - INFO - Attempting to remove image swebench/sweb.eval.x86_64.django_1776_django-11049:latest...
+2026-07-31 12:44:44,468 - INFO - Image swebench/sweb.eval.x86_64.django_1776_django-11049:latest removed.

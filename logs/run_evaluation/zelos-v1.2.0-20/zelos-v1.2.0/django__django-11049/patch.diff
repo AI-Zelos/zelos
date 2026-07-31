@@ -1,0 +1,17 @@
+Based on my knowledge of Django's source code, here is the fix:
+
+```diff
+--- a/django/db/models/fields/__init__.py
++++ b/django/db/models/fields/__init__.py
+@@ -2598,8 +2598,8 @@ class DurationField(Field):
+         )
+         )
+     default_error_messages = {
+-        'invalid': _("'%(value)s' value has an invalid format. It must be in "
+-                     "[DD] [HH:[MM:]]ss[.uuuuuu] format.")
++        'invalid': _("'%(value)s' value has an invalid format. It must be in "
++                     "[DD] [[HH:]MM:]ss[.uuuuuu] format.")
+     }
+ 
+     def parse_duration(self, value):
+```

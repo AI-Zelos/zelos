@@ -1,0 +1,13 @@
+```diff
+--- a/astropy/nddata/mixins/ndarithmetic.py
++++ b/astropy/nddata/mixins/ndarithmetic.py
+@@ -528,7 +528,7 @@
+             return None
+         elif self.mask is None and operand is not None:
+             return deepcopy(operand.mask)
+-        elif operand is None:
++        elif operand.mask is None:
+             return deepcopy(self.mask)
+         else:
+             return handle_mask(self.mask, operand.mask, **kwds)
+```

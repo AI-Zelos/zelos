@@ -1,0 +1,20 @@
+This is not a Django repository — it's the Zelos project. There's no `django/db/models/deletion.py` here. I'll construct the patch from my knowledge of Django's source.
+
+Based on the issue description, the fix is in `django/db/models/deletion.py` around line 280 in the `Collector.delete()` method — after deleting instances of models without dependencies, their PKs must be set to `None`.
+
+```diff
+--- a/django/db/models/deletion.py
++++ b/django/db/models/deletion.py
+@@ -274,10 +274,11 @@ class Collector:
+                         # models that don't have relationships) with a single
+                         # query is much faster.
+                         query.delete_batch(
+                             [obj.pk for obj in instances], self.using
+                         )
++                        for obj in instances:
++                            setattr(obj, obj._meta.pk.attname, None)
+                 else:
+                     with transaction.atomic(using=self.using, savepoint=False):
+                         if not model._meta.can_delete:
+                             raise ValueError(
+```

@@ -1,0 +1,20 @@
+Now I have the exact buggy source from the base commit. The bug is at line 245 of `_cstack`:
+
+```python
+cright[-right.shape[0]:, -right.shape[1]:] = 1
+```
+
+It should copy the actual `right` matrix, not overwrite it with all-1s.
+
+```diff
+--- a/astropy/modeling/separable.py
++++ b/astropy/modeling/separable.py
+@@ -242,7 +242,7 @@ def _cstack(left, right):
+         cright = _coord_matrix(right, 'right', noutp)
+     else:
+         cright = np.zeros((noutp, right.shape[1]))
+-        cright[-right.shape[0]:, -right.shape[1]:] = 1
++        cright[-right.shape[0]:, -right.shape[1]:] = right
+ 
+     return np.hstack([cleft, cright])
+```
