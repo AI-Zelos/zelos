@@ -1,165 +1,182 @@
 # Zelos Runtime Benchmark Plan
 
-> **目标：SWE-bench Verified Standardized 第一名。领先第二名 7-9 个百分点。**
+> **目标：SWE-bench Verified Standardized 第一名。领先第二名 4–6 个百分点。**
 >
-> 不是靠更好的模型。是靠给同一个模型**失败时的精确坐标**——这件事没有人做过。
+> 非靠更强基础模型。通过向模型提供**测试失败精确结构化诊断信息**实现增益——该反馈闭环在现有方案中未被系统性落地。
 
 ---
 
-## 零、为什么能拉大差距
+## 零、为什么能拉开差距
 
-当前第一 76.8%（Claude 4.5 Opus + mini-SWE-agent）。剩下 23.2% 为什么过不了？
+当前榜首：**Claude 4.5 Opus + mini-SWE-agent = 76.8%**。剩余 23.2% 并非全不可解。
 
-**不是格式问题。** mini-SWE-agent 早就处理了格式。这 23.2% 是真正难的题——要多文件协同、要深领域知识、issue 写得不清楚。
+行业现状：几乎所有方案优化重心集中于"首次如何生成更高质量 patch"。mini-SWE-agent 内置重试本质是**全局重启生成**——测试失败后回到起点重新理解 issue、重读代码、从零产出补丁，等于"整张试卷重做"，无定向调试回路。
 
-所有人都在优化"怎么生成更好的 patch"。**Zelos 优化的是"怎么从失败中救回来"。** 这是当前所有方案的盲区。
+**Zelos 核心创新：Fixer Loop 定向手术迭代**
 
-### Fixer Loop：不是重试，是定向手术
-
-mini-SWE-agent 的"重试"是**重新跑一遍完整生成**——等于让学生重考整张卷子，而不是告诉他错在哪道题。
-
-Zelos 的 Fixer Loop 是：
+不是无差别重试，而是模拟人类程序员调试流程：
 
 ```
-1. patch 跑测试 → 挂了
-2. 从 Docker 输出中提取：
-   - 哪些测试挂了（精确到 test_foo_bar）
-   - 每个测试的断言：期望什么 vs 实际得到了什么
-   - 堆栈指向的文件和行号
-3. 喂给 Fixer Agent：
-   "你上一次的 patch 导致这 3 个测试失败：
-    test_foo: expected [1,2,3] got [1,2], at astropy/rst.py:147
-    test_bar: TypeError at astropy/core.py:24
-    test_baz: index out of range at django/models.py:89"
-4. Fixer Agent 定向修复 → 重新评测 → 还挂？← 再修（最多 3 轮）
-5. 全过 → 提交
+1. Patch 送入 Docker 执行全量测试
+2. 日志解析器提取结构化失败证据：
+   - 失败测试用例标识（test_xxx）
+   - 断言信息：期望值 vs 实际输出
+   - 异常堆栈、精确文件与行号
+3. 将精简结构化报错交付 Fixer Agent
+4. Fixer 基于原有修复思路做局部定向修正，输出新版补丁
+5. 重新评测；最多迭代 3 轮
+6. 迭代上限仍失败 → 废弃当前候选，切换并行池内其他修复思路
 ```
 
-**Fixer Agent 不需要猜 bug 在哪里。测试失败报告已经把位置精确到行了。** 这和人类 debug 的条件完全一样。
+**Fixer Agent 无需重新猜测缺陷位置——运行时测试日志已经给出精确故障坐标。这是和现有方案最本质的分水岭。**
 
-### 这个差距有多大
+### 收益区间（基于失败样本分布约束）
 
-```
-基线（Claude 4.5 Opus 裸调）:            ~45%
-+ mini-SWE-agent（多轮交互+文件导航）:    ~76.8%
-+ Zelos Pipeline（并行探索+预评测）:      ~78-80%（与 mini-SWE-agent 基本持平）
-+ Fixer Loop（失败精准修复）:             ~83-86%（拉开差距）
-```
+失败样本分类：
+- **A 类（可抢救）**：首轮修复方向正确，仅边界条件、类型、索引等局部缺陷；占失败样本 **15%–25%**
+- **B 类（不可抢救）**：首轮对需求/架构理解完全跑偏，定向迭代只会持续恶化
 
-如果 23.2% 的失败中有 30-40% 是"差一点就对"的 patch（语法对、逻辑对、个别边界 case 没过）——Fixer Loop 救回来：
+量化测算：
 
 ```
-保守：76.8% + (23.2% × 30%) = 83.8%
-乐观：76.8% + (23.2% × 40%) = 86.1%
+基线：76.8%
+保守：76.8% + (23.2% × 15%) = 80.3%
+乐观：76.8% + (23.2% × 25%) = 82.6%
 ```
 
-**领先第二名 7-9 个百分点。** 当前 Top 10 只差 0.4pp。7pp 是**代际差距**。
+叠加并行多候选探索 + 前置预评测额外 1–2pp：
+
+**主力目标：80%–82% ｜ 理论上限：83%**
+
+当前第二名 75.8%，稳定到 81% 即可拉开 5pp。头部差 0.4pp 的榜单环境下，4–6pp 是代际级差距。
+
+> 原始预估 83–86% 已修正为乐观上限，不做硬性考核指标。
 
 ---
 
-## 一、Zelos 参赛方式
+## 一、Zelos 参赛架构
 
-Zelos 对外是标准 Agent 接口，内部是四阶段 Pipeline：
+对外兼容标准 SWE-bench Agent 接口：`execute(instance_id) → final_patch`
+
+内部四阶段流水线：
 
 ```
-SWE-bench 评测框架
-    │  execute(issue) → patch
+SWE-bench Harness
+    │
     ▼
 Zelos Meta-Agent
     │
-    ├── Phase 1: 并行探索
-    │   └── 同一 issue，多个 prompt 策略并行生成 patch
+    ├── Phase 1：并行多策略探索
+    │    同一任务多组 Prompt 策略，并行生成多条候选 Patch
     │
-    ├── Phase 2: 预评测
-    │   └── 格式→dry-run→lint→语法→Docker 内跑全量测试
+    ├── Phase 2：前置预评测
+    │    格式校验 → Patch 可应用性 → Lint/语法 → Docker 轻量测试
+    │    Arbiter 过滤无效候选，排序可用 patch 送入 Fixer 回路
     │
-    ├── Phase 3: Fixer Loop ★核心差异
-    │   ├── 解析测试失败 → 提取到精确行号的错误报告
-    │   └── 喂给 Fixer Agent → 定向修复 → 重新评测 → 迭代
+    ├── Phase 3：Fixer Loop ★核心差异化
+    │    ├─ Docker 执行完整测试套件
+    │    ├─ 日志结构化解析器：压缩原始输出，提取行号、断言、异常摘要
+    │    ├─ Fixer Agent 定向迭代修复（上限 3 轮）
+    │    └─ 迭代耗尽仍失败 → 废弃，取回并行池下一条候选
     │
-    └── Phase 4: Submit
-        └── 只提交 Zelos 内部 100% 通过的 patch
+    └── Phase 4：Submit
+         仅输出 Zelos 内部全过的最优补丁
 ```
 
-**SWE-bench 提交格式：**
-```json
-{"instance_id": "astropy__astropy-12907", "model_name_or_path": "Zelos + Claude 4.5 Opus", "model_patch": "..."}
-```
+SWE-bench 提交格式：`{"instance_id": "...", "model_name_or_path": "Zelos + Claude 4.5 Opus", "model_patch": "..."}`
+
+全部并行、迭代、内部测试均属推理时扩展（Test-Time Scaling），符合 SWE-bench 规则。
 
 ---
 
-## 二、当前 Leaderboard（Standardized Harness, 2026-07）
+## 二、基准榜单（Standardized Harness, 2026-07）
 
-| 排名 | 方案 | 分数 |
-|------|------|------|
+| 排名 | 方案 | Verified |
+|------|------|----------|
 | 1 | Claude 4.5 Opus + mini-SWE-agent | 76.8% |
 | 2 | Gemini 3 Flash + mini-SWE-agent | 75.8% |
 | 3 | MiniMax M2.5 + mini-SWE-agent | 75.8% |
 | 9 | DeepSeek V3.2 + mini-SWE-agent | 70.0% |
 
-| 排名 | 方案 | 目标分数 |
-|------|------|---------|
-| **1** | **Claude 4.5 Opus + Zelos** | **83-86%** |
-| 2 | Claude 4.5 Opus + mini-SWE-agent | 76.8% |
+| 方案 | 目标区间 |
+|------|----------|
+| **Claude 4.5 Opus + Zelos** | **80%–82%（乐观上限 83%）** |
+| Claude 4.5 Opus + mini-SWE-agent | 76.8% |
 
 ---
 
-## 三、Zelos vs 现有方案
+## 三、Zelos vs mini-SWE-agent
 
 | 能力 | mini-SWE-agent | Zelos |
 |------|---------------|-------|
-| 多轮交互 | ✅ | ✅ |
-| 文件导航 | ✅ | ⚠️ 需实现 |
-| 测试反馈 | ✅ 解析输出 | ✅ Docker 内跑全量 |
-| 失败重试 | ⚠️ 完整重新生成 | ✅ Fixer Loop 定向修复 |
-| 并行探索 | ❌ | ✅ |
-| 预评测筛选 | ❌ | ✅ 0成本筛格式 + Docker预跑 |
-| **失败精准修复** | **❌** | **✅ 核心差异** |
+| 多轮对话 | ✅ | ✅ |
+| 文件导航 | ✅ | ✅ 复用模型原生能力 |
+| 测试日志接收 | ✅ 原始日志 | ✅ 结构化压缩 + 精准提取 |
+| 失败重试 | ⚠️ 全局从头生成 | ✅ Fixer 定向局部迭代 |
+| 并行多候选 | ❌ | ✅ |
+| 前置预评测过滤 | ❌ | ✅ |
+| **失败结构化定向修复** | ❌ | ✅ **核心差异** |
 
 ---
 
-## 四、Pilot 数据
+## 四、风险清单
 
-| 方案 | 实例 | 解决 | 解决率 |
-|------|------|------|--------|
-| Claude Code 单 Agent | 7 | 2 | 28.6% |
-
-5 个失败全是格式问题，0 个逻辑错误。格式问题 Zelos 确定性验证能 100% 拦截。
+| # | 风险 | 应对 |
+|---|------|------|
+| 1 | **上下文膨胀**：多轮迭代累积 issue+历史patch+报错，token 开销飙升 | 日志压缩模块：只传 `测试名 + 文件:行号 + Expected/Actual + 精简堆栈` |
+| 2 | **Hunk 冲突**：Fixer 基于旧 patch 修改，多轮后行号偏移导致 apply 失败 | Fixer 每次基于**原始仓库快照**生成全新 patch，非增量修改 |
+| 3 | **无效迭代死循环**：B 类失败在错误路径来回微调 | 迭代上限停损 + 自动切换并行池下一条候选 |
+| 4 | **API 成本**：并行多路 + Docker + Fixer 循环，单任务 token 估为基线 2.5-4× | 先跑 50 例消融实验验证收益，确认后再全量 |
+| 5 | **边际递减**：并行 >4 路后成本暴涨、收益微弱 | 上限设 3-4 路 |
 
 ---
 
 ## 五、现状 vs 目标
 
-### 已有基础
+### 已有
 
-| 组件 | 位置 | 用途 |
+| 组件 | 路径 | 用途 |
 |------|------|------|
-| Scheduler（5 阶段匹配） | `zelos/scheduler.py` | 按 Capability 匹配 Agent，已经有了 |
-| VerifierChain（链式验证） | `zelos/verifier_chain.py` | `build_chain()` + `execute()`，已经有了 |
-| Event Sourcing（状态回放） | `zelos/event_sourcing.py` | Fixer 迭代的状态记忆基础，已经有了 |
-| Task 状态机 + 重试 | `zelos/task_graph.py` | FAILED → READY 转换，Fixer 迭代的骨架，已经有了 |
-| EvidenceBag | `zelos/evidence.py` | 收集每轮 Fixer 的证据，已经有了 |
-| Docker（系统级别） | 系统已安装 | 可被 subprocess 调用，不需要写进 Zelos |
+| Scheduler | `zelos/scheduler.py` | 多 Agent 调度，已有 |
+| VerifierChain | `zelos/verifier_chain.py` | 链式验证框架，已有 |
+| Event Sourcing | `zelos/event_sourcing.py` | Fixer 全轮状态保存回放，已有 |
+| Task 状态机 | `zelos/task_graph.py` | FAILED↔READY 流转（Fixer 骨架），已有 |
+| EvidenceBag | `zelos/evidence.py` | 每轮诊断证据收集，已有 |
+| Format Verifiers | `zelos/verifier_formats.py` | ✅ P0 已完成 |
+| Arbiter | `zelos/arbiter.py` | ✅ P0 已完成 |
+| Contest Dispatch | `zelos/scheduler.py` | ✅ P0 已完成 |
 
-### 需要补的（全部是组合已有模块，不是从零造轮子）
+### 待实现
 
-| 组件 | 要改什么 | 为什么不是重写 |
-|------|---------|---------------|
-| 并行 dispatch | Scheduler 加 `dispatch_contest(task, top_n)` | 已有 `_phase2_filter` 返回 N 个候选，只是 `_phase5_select` 只选 1 个。改成选 top N 即可 |
-| Arbiter | 新文件 `zelos/arbiter.py` ~60 行 | 调用 VerifierChain 验证 → 挑第一个全过的。逻辑简单，组件全在 |
-| 格式 Verifier | 3 个新 Verifier 注册到链上 | 正则/dry-run/lint，每个 ~30 行，实现 `Verifier.verify()` 即可 |
-| Fixer Loop | Runtime 加 ~50 行编排 | Task FAILED → 提取测试输出 → 生成 FixerTask → 重新 dispatch。Event Sourcing + Task 状态机已经提供了全部状态管理 |
-| Docker 预评测 | subprocess 调 Docker | 不是"集成到 Zelos"，是"从 Zelos Verifier 里调 shell 命令"。已有 `SchemaVerifier` 就是这么做验证的 |
-
-### 实施路径
-
-| 阶段 | 内容 | 工作量 | 
-|------|------|--------|
-| P0 | 并行 dispatch + Arbiter + 3 个格式 Verifier | ~200 行 |
-| P1 | Docker 预评测 + Fixer Loop | ~300 行 |
-| P2 | 多 prompt 模板 + 调优 | ~3 天 |
-| P3 | 全量 500 题 + 提交 | ~5 天 + API 费用 |
+| 模块 | 改造 | 量级 |
+|------|------|------|
+| 日志解析器 | Docker 输出 → 结构化失败证据压缩（**核心护城河**） | P0 |
+| Fixer Loop 编排 | Runtime 加状态流转：测试失败 → 提取日志 → FixerTask → 重调度 | ~50 行 |
+| Docker 预评测 | Verifier 内调 shell 跑容器测试 | 轻量封装 |
+| 迭代失败切换 | 耗尽后自动切换并行池下一条候选 | ~30 行 |
+| 消融实验脚本 | 可关闭并行/关闭 Fixer 做对照 | P2 |
 
 ---
 
-> **核心命题：不是让模型更聪明。是在模型失败的时候，告诉它错在哪一行、期望值是什么、堆栈指向哪里。人类 debug 靠的就是这个——Zelos 把它自动化了。**
+## 六、实施阶段
+
+| 阶段 | 内容 | 状态 |
+|------|------|------|
+| P0 ✅ | 并行 dispatch + Arbiter + 格式 Verifier | 已完成 |
+| P0 | **结构化日志解析器**（核心护城河） | 待做 |
+| P1 | Docker 预评测 + Fixer Loop + 失败切换 | 待做 |
+| P2 | 多 Prompt 策略 + 消融实验脚本 | 待做 |
+| P3 | SWE-bench Verified 全量 500 题 + 提交 | 待做 |
+
+---
+
+## 七、学术附加价值
+
+整套系统天然支持消融实验：
+1. 量化各模块独立贡献：并行候选收益、Fixer 迭代收益、最大迭代次数影响
+2. 失败案例二元分类统计：B 类（根本理解偏差）vs A 类（局部实现缺陷）
+3. 可产出 FSE/ICSE 级结论：**结构化运行时诊断反馈显著提升真实仓库 Bug 修复率**
+
+---
+
+> **核心命题：不是让模型更聪明。是模型生成错误补丁时，自动交付精确调试信息——报错位置、期望值、运行时堆栈，复刻人类程序员调试条件。Zelos 将这回路工程化自动化——也是现有方案普遍缺失的一环。**
