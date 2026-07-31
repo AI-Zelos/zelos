@@ -128,15 +128,29 @@ Zelos Meta-Agent
 
 ---
 
-## 五、实施路径
+## 五、现状 vs 目标
 
-| 阶段 | 内容 |
-|------|------|
-| P0 | Scheduler 支持同一 Task 并行多 Agent + Arbiter 选优 |
-| P0 | VerifierChain：格式/dry-run/lint/语法/Docker 预评测 |
-| P1 | **Fixer Loop：测试失败解析 + 定向修复 + 迭代** |
-| P2 | 多 prompt 策略模板 |
-| P3 | 全量 500 题 + 调优 + 提交 |
+| 组件 | 代码现状 | Plan 目标 |
+|------|---------|----------|
+| Runtime Kernel（调度/重试/心跳/事件溯源） | ✅ 完整 | — |
+| VerifierChain 接口 | ✅ `VerifierChain` 类存在 | — |
+| 格式检查（正则/dry-run/lint/语法） | ❌ 未挂在 VerifierChain 上 | P0 |
+| 单 Agent dispatch | ✅ 1 Task → 1 Agent | — |
+| 并行 dispatch（1 Task → N Agent） | ❌ Scheduler 不支持 | P0 |
+| Arbiter（多结果选优） | ❌ 没有 | P0 |
+| Docker 预评测集成 | ❌ 没有 | P1 |
+| Fixer Loop（失败解析+定向修复） | ❌ 没有 | P1 |
+| 多 prompt 策略模板 | ❌ 没有 | P2 |
+| SWE-bench 全量 500 题 | ❌ 只跑了 Pilot 10 题 | P3 |
+
+### 实施路径
+
+| 阶段 | 内容 | 工作量 |
+|------|------|--------|
+| P0 | Scheduler 并行 dispatch + Arbiter + 格式 Verifier | ~200 行 |
+| P1 | Docker 预评测 + Fixer Loop | ~300 行 |
+| P2 | 多 prompt 模板 + 调优 | ~3 天 |
+| P3 | 全量 500 题 + 提交 | ~5 天 + API 费用 |
 
 ---
 
