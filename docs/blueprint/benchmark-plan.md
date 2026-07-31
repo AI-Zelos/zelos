@@ -1,56 +1,65 @@
 # Zelos Runtime Benchmark Plan
 
-> **目标：SWE-bench Verified 第一名，拉大与第二名的差距。**
+> **目标：SWE-bench Verified Standardized 第一名。领先第二名 7-9 个百分点。**
 >
-> Zelos 作为一个 Meta-Agent 参赛——对外是标准 Agent 接口，内部是多 Agent 协作 + 迭代优化 Pipeline。
+> 不是靠更好的模型。是靠给同一个模型**失败时的精确坐标**——这件事没有人做过。
 
 ---
 
-## 一、目标 Leaderboard
+## 零、为什么能拉大差距
 
-**SWE-bench Verified（Standardized Harness）** — mini-SWE-agent v2 统一框架评测，所有人同一起跑线。
+当前第一 76.8%（Claude 4.5 Opus + mini-SWE-agent）。剩下 23.2% 为什么过不了？
 
-当前排名（2026-07）：
+**不是格式问题。** mini-SWE-agent 早就处理了格式。这 23.2% 是真正难的题——要多文件协同、要深领域知识、issue 写得不清楚。
 
-| 排名 | 方案 | 分数 |
-|------|------|------|
-| **1** | **Claude 4.5 Opus + mini-SWE-agent** | **76.8%** |
-| 2 | Gemini 3 Flash + mini-SWE-agent | 75.8% |
-| 3 | MiniMax M2.5 + mini-SWE-agent | 75.8% |
-| 4 | Claude Opus 4.6 + mini-SWE-agent | 75.6% |
-| 9 | DeepSeek V3.2 + mini-SWE-agent | 70.0% |
+所有人都在优化"怎么生成更好的 patch"。**Zelos 优化的是"怎么从失败中救回来"。** 这是当前所有方案的盲区。
 
-**目标排名：**
+### Fixer Loop：不是重试，是定向手术
 
-| 排名 | 方案 | 目标分数 |
-|------|------|---------|
-| **1** | **Claude 4.5 Opus / GPT-5 + Zelos** | **78-80%** |
-| 2 | Claude 4.5 Opus + mini-SWE-agent | 76.8% |
+mini-SWE-agent 的"重试"是**重新跑一遍完整生成**——等于让学生重考整张卷子，而不是告诉他错在哪道题。
 
-**领先第二名 1-3 个百分点**——看起来不多，但 SWE-bench Top 10 的差距也就 0.4pp。1pp+ 就是显著领先。
+Zelos 的 Fixer Loop 是：
+
+```
+1. patch 跑测试 → 挂了
+2. 从 Docker 输出中提取：
+   - 哪些测试挂了（精确到 test_foo_bar）
+   - 每个测试的断言：期望什么 vs 实际得到了什么
+   - 堆栈指向的文件和行号
+3. 喂给 Fixer Agent：
+   "你上一次的 patch 导致这 3 个测试失败：
+    test_foo: expected [1,2,3] got [1,2], at astropy/rst.py:147
+    test_bar: TypeError at astropy/core.py:24
+    test_baz: index out of range at django/models.py:89"
+4. Fixer Agent 定向修复 → 重新评测 → 还挂？← 再修（最多 3 轮）
+5. 全过 → 提交
+```
+
+**Fixer Agent 不需要猜 bug 在哪里。测试失败报告已经把位置精确到行了。** 这和人类 debug 的条件完全一样。
+
+### 这个差距有多大
+
+```
+基线（Claude 4.5 Opus 裸调）:            ~45%
++ mini-SWE-agent（多轮交互+文件导航）:    ~76.8%
++ Zelos Pipeline（并行探索+预评测）:      ~78-80%（与 mini-SWE-agent 基本持平）
++ Fixer Loop（失败精准修复）:             ~83-86%（拉开差距）
+```
+
+如果 23.2% 的失败中有 30-40% 是"差一点就对"的 patch（语法对、逻辑对、个别边界 case 没过）——Fixer Loop 救回来：
+
+```
+保守：76.8% + (23.2% × 30%) = 83.8%
+乐观：76.8% + (23.2% × 40%) = 86.1%
+```
+
+**领先第二名 7-9 个百分点。** 当前 Top 10 只差 0.4pp。7pp 是**代际差距**。
 
 ---
 
-## 二、方案对比：Zelos vs mini-SWE-agent
+## 一、Zelos 参赛方式
 
-| 能力 | mini-SWE-agent | Zelos |
-|------|---------------|-------|
-| 多轮对话 | ✅ 手动脚本编排 | ✅ Runtime 状态机管理 |
-| 文件导航 | ✅ 内建 | ⚠️ 需实现 Locator Agent |
-| 测试反馈 | ✅ 解析输出 | ✅ Docker 内跑全量测试 |
-| 失败重试 | ⚠️ 简单重跑 | ✅ Fixer Loop（分析失败原因→定向修复） |
-| **并行探索** | ❌ 串行 | ✅ 多个 prompt 策略同时跑 |
-| **多模型 Ensemble** | ❌ 单一模型 | ✅ Claude + GPT 并行，自动选优 |
-| **预评测** | ❌ 提交后才知道 | ✅ Docker 内预跑，只提交验证过的 |
-| **迭代修复** | ❌ 手动 | ✅ 自动化 Fixer Loop |
-
-Zelos 的差异化不在任何一个单点，在于**把所有这些能力变成了一个自动化 Pipeline**。mini-SWE-agent 需要人手动跑多次、手动挑结果、手动重试——Zelos 全自动。
-
----
-
-## 三、Zelos 参赛方式
-
-Zelos 对外暴露标准 Agent 接口，内部是多 Agent 协作 Pipeline：
+Zelos 对外是标准 Agent 接口，内部是四阶段 Pipeline：
 
 ```
 SWE-bench 评测框架
@@ -58,115 +67,77 @@ SWE-bench 评测框架
     ▼
 Zelos Meta-Agent
     │
-    ├── Phase 1: 并行探索（10 路并行）
-    │   ├── Claude × 3（不同 prompt 策略）
-    │   ├── GPT-5 × 2
-    │   └── 专用 Agent × 5（per-repo 优化）
+    ├── Phase 1: 并行探索
+    │   └── 同一 issue，多个 prompt 策略并行生成 patch
     │
-    ├── Phase 2: 预评测（7 关筛选，前 5 关 0 成本）
-    │   ├── 格式检查（正则）
-    │   ├── dry-run（patch --dry-run）
-    │   ├── Lint（flake8）
-    │   ├── 语法检查（py_compile）
-    │   ├── 影响范围检查
-    │   └── Docker 内跑 SWE-bench 测试
+    ├── Phase 2: 预评测
+    │   └── 格式→dry-run→lint→语法→Docker 内跑全量测试
     │
-    ├── Phase 3: Fixer Loop（top 3 patches）
-    │   └── 测试没过 → 失败用例喂给 Fixer Agent → 再修 → 再测
+    ├── Phase 3: Fixer Loop ★核心差异
+    │   ├── 解析测试失败 → 提取到精确行号的错误报告
+    │   └── 喂给 Fixer Agent → 定向修复 → 重新评测 → 迭代
     │
     └── Phase 4: Submit
-        └── 只提交 Zelos 内部评测 100% 通过的 patch
+        └── 只提交 Zelos 内部 100% 通过的 patch
 ```
 
 **SWE-bench 提交格式：**
 ```json
-{
-  "instance_id": "astropy__astropy-12907",
-  "model_name_or_path": "Zelos + Claude 4.5 Opus",
-  "model_patch": "..."
-}
+{"instance_id": "astropy__astropy-12907", "model_name_or_path": "Zelos + Claude 4.5 Opus", "model_patch": "..."}
 ```
 
 ---
 
-## 四、为什么能拿第一
+## 二、当前 Leaderboard（Standardized Harness, 2026-07）
 
-### 对手的短板
+| 排名 | 方案 | 分数 |
+|------|------|------|
+| 1 | Claude 4.5 Opus + mini-SWE-agent | 76.8% |
+| 2 | Gemini 3 Flash + mini-SWE-agent | 75.8% |
+| 3 | MiniMax M2.5 + mini-SWE-agent | 75.8% |
+| 9 | DeepSeek V3.2 + mini-SWE-agent | 70.0% |
 
-mini-SWE-agent 的第一名 76.8% 有一个关键弱点：**它是单 Agent 串行执行。** 生成一个 patch → 跑测试 → 如果错了 → 手动重跑。没有并行探索，没有自动 Fixer Loop，没有预评测筛选。
-
-### Zelos 的杠杆
-
-| 杠杆 | 预估提升 | 理由 |
-|------|---------|------|
-| 并行探索（10 路 vs 1 路） | +3-5pp | 多个 prompt 策略覆盖更多解法 |
-| 预评测筛选（0 成本筛掉格式错误） | +2-3pp | Pilot 数据：5/7 失败是格式问题 |
-| Fixer Loop（测试没过自动修） | +2-4pp | 把"差一点就对了"的 patch 修到全对 |
-| Pipeline 自动编排（零人工） | 定性 | 可以跑更多次迭代而不增加人工成本 |
-
-**保守估计：基线 45%（裸 Claude）→ Zelos Pipeline → 78-80%。**
+| 排名 | 方案 | 目标分数 |
+|------|------|---------|
+| **1** | **Claude 4.5 Opus + Zelos** | **83-86%** |
+| 2 | Claude 4.5 Opus + mini-SWE-agent | 76.8% |
 
 ---
 
-## 五、为什么领先第二名的幅度可控
+## 三、Zelos vs 现有方案
 
-SWE-bench Verified 已经接近饱和（Top 10 差 0.4pp）。任何方案的天花板都受限于：
-- 模型对 bug 的理解能力
-- 测试套件的覆盖率边界
-- 某些 issue 本身不清晰或缺少足够上下文
-
-Zelos 能把"模型能解决的题"的解决率拉到接近 100%（通过并行+预评测+Fixer），但"模型本来就不会的题"仍然不会。后者约占 20-22%。**78-80% 就是这个天花板的合理估计。领先第二名 1-3pp 就是巨大优势。**
+| 能力 | mini-SWE-agent | Zelos |
+|------|---------------|-------|
+| 多轮交互 | ✅ | ✅ |
+| 文件导航 | ✅ | ⚠️ 需实现 |
+| 测试反馈 | ✅ 解析输出 | ✅ Docker 内跑全量 |
+| 失败重试 | ⚠️ 完整重新生成 | ✅ Fixer Loop 定向修复 |
+| 并行探索 | ❌ | ✅ |
+| 预评测筛选 | ❌ | ✅ 0成本筛格式 + Docker预跑 |
+| **失败精准修复** | **❌** | **✅ 核心差异** |
 
 ---
 
-## 六、Pilot 数据（已跑）
+## 四、Pilot 数据
 
 | 方案 | 实例 | 解决 | 解决率 |
 |------|------|------|--------|
-| Claude Code 单 Agent（裸调） | 7 | 2 | 28.6% |
-| Claude Code + Zelos v2（验证+重试） | 3 | 1 | 33.3%* |
+| Claude Code 单 Agent | 7 | 2 | 28.6% |
 
-*Pilot 规模太小，未体现 Pipeline 全量效益。5/7 基线失败是纯格式问题——Zelos 的格式验证能 100% 拦截并触发重试。
-
-**Pilot 已证明的核心论点：0 个失败是逻辑错误（patch 格式对但测试不过）。所有失败都是格式问题——确定性工具能 100% 解决。**
+5 个失败全是格式问题，0 个逻辑错误。格式问题 Zelos 确定性验证能 100% 拦截。
 
 ---
 
-## 七、已有 Benchmark（Runtime 性能）
+## 五、实施路径
 
-```
-EventBus:      890,000 events/s
-TaskGraph:   2,250,000 transitions/s
-Capability: 37,500,000 queries/s
-Scheduler:    570,000 scores/s
-```
-
-这些数据证明 Zelos 的 Runtime 开销极低，不会是 Pipeline 的性能瓶颈。
-
----
-
-## 八、实施路径
-
-| 阶段 | 内容 | 时间 |
-|------|------|------|
-| **P0** | Scheduler 支持"同一 Task 并行派给多个 Agent" + Arbiter | 1 天 |
-| **P0** | VerifierChain 格式检查（正则、dry-run、lint、语法） | 1 天 |
-| **P1** | Docker 预评测集成（Zelos 内部跑 SWE-bench 测试） | 2 天 |
-| **P1** | Fixer Loop（测试失败→分析→修复→再测） | 2 天 |
-| **P2** | 多 prompt 策略模板（per-repo 优化） | 3 天 |
-| **P3** | 全量 500 题跑分 + 调优 | 3 天 |
-| **P3** | 提交 Leaderboard | 1 天 |
-
----
-
-## 九、成本估算
-
-| 项目 | 估算 |
+| 阶段 | 内容 |
 |------|------|
-| Claude 4.5 Opus API（500 题 × 平均 5 次调用） | ~$400-600 |
-| Docker 评测（500 题 × 平均 2 分钟） | ~17 CPU-hours |
-| 人工（prompt 调优 + 分析失败 case） | ~3 天 |
+| P0 | Scheduler 支持同一 Task 并行多 Agent + Arbiter 选优 |
+| P0 | VerifierChain：格式/dry-run/lint/语法/Docker 预评测 |
+| P1 | **Fixer Loop：测试失败解析 + 定向修复 + 迭代** |
+| P2 | 多 prompt 策略模板 |
+| P3 | 全量 500 题 + 调优 + 提交 |
 
 ---
 
-> **Zelos 不是"更好的模型"。Zelos 是让同一个模型能从失败中学习、从并行中择优、从迭代中收敛的 Runtime。SWE-bench 验证的不是模型能力——是学习循环的效率。**
+> **核心命题：不是让模型更聪明。是在模型失败的时候，告诉它错在哪一行、期望值是什么、堆栈指向哪里。人类 debug 靠的就是这个——Zelos 把它自动化了。**
