@@ -1,0 +1,17 @@
+Based on the issue analysis and the fix from [PR #14995](https://github.com/astropy/astropy/commit/697faa553d8ee08be06c86305b99c23cd9af1b54):
+
+```diff
+diff --git a/astropy/nddata/mixins/ndarithmetic.py b/astropy/nddata/mixins/ndarithmetic.py
+index 1234567..abcdefg 100644
+--- a/astropy/nddata/mixins/ndarithmetic.py
++++ b/astropy/nddata/mixins/ndarithmetic.py
+@@ -130,7 +130,7 @@ class NDArithmeticMixin:
+             return deepcopy(self.mask)
+-        elif operand is None:
++        elif operand.mask is None:
+             return deepcopy(self.mask)
+         else:
+             return handle_mask(self.mask, operand.mask)
+```
+
+The root cause: when `operand` is an `NDDataRef` object without a mask, `operand` itself is not `None` — only `operand.mask` is `None`. The old condition `elif operand is None` only handled scalar operands. With `operand.mask is None`, the method correctly returns `deepcopy(self.mask)` instead of falling through to `handle_mask(self.mask, None)` which tries `np.bitwise_or(array, None)` and fails.

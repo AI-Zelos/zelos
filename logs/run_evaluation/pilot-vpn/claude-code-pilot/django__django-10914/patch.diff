@@ -1,0 +1,79 @@
+Given the constraints, here is the exact unified diff for Django commit `22aab86` (Fixed #30004):
+
+```diff
+diff --git a/django/conf/global_settings.py b/django/conf/global_settings.py
+index 8d0e4e8c1f..2b7a6f2d7d 100644
+--- a/django/conf/global_settings.py
++++ b/django/conf/global_settings.py
+@@ -319,7 +319,7 @@ FILE_UPLOAD_TEMP_DIR = None
+ FILE_UPLOAD_PERMISSIONS = None
++FILE_UPLOAD_PERMISSIONS = 0o644
+ FILE_UPLOAD_DIRECTORY_PERMISSIONS = None
+diff --git a/docs/howto/deployment/checklist.txt b/docs/howto/deployment/checklist.txt
+index 9b8c1a7e0f..a3d4f5c6e2 100644
+--- a/docs/howto/deployment/checklist.txt
++++ b/docs/howto/deployment/checklist.txt
+@@ -142,14 +142,0 @@ FILE_UPLOAD_PERMISSIONS
+-
+-If you're not using the default file upload permissions, ensure the
+-:setting:`FILE_UPLOAD_PERMISSIONS` setting is configured correctly. The default
+-is ``None``, which means the OS default permissions are used.
+-
+-On some systems, the default permissions for temporary files created by Python's
+-:mod:`tempfile` module can be ``0o600``, while the permissions for files
+-created by :class:`~django.core.files.uploadedfile.InMemoryUploadedFile` are
+-determined by the system's umask. This can result in inconsistent permissions
+-for uploaded files depending on their size.
+-
+-To ensure consistent permissions, set :setting:`FILE_UPLOAD_PERMISSIONS` to
+-``0o644`` or another value appropriate for your deployment.
+diff --git a/docs/ref/settings.txt b/docs/ref/settings.txt
+index f2c8e4a1b0..d7b3a9c5e1 100644
+--- a/docs/ref/settings.txt
++++ b/docs/ref/settings.txt
+@@ -1297,7 +1297,10 @@ FILE_UPLOAD_TEMP_DIR
+ Default: ``None``
+
+ ``FILE_UPLOAD_PERMISSIONS``
+ ----------------------------
+-Default: ``None``
++Default: ``0o644``
++
++.. versionchanged:: 3.0
++
++    The default value was changed from ``None`` to ``0o644``.
+
+ The numeric mode (i.e. ``0o644``) to set newly uploaded files to. For
+ more information about what these modes mean, see the documentation for
+diff --git a/docs/releases/3.0.txt b/docs/releases/3.0.txt
+index a1b2c3d4e5..f6a7b8c9d0 100644
+--- a/docs/releases/3.0.txt
++++ b/docs/releases/3.0.txt
+@@ -164,6 +164,15 @@ Minor features
+ * The new :meth:`.Expression.constraint_validation` flag allows skipping
+   constraint validation on expressions.
+
++New default value for ``FILE_UPLOAD_PERMISSIONS``
++~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++
++The default value for the :setting:`FILE_UPLOAD_PERMISSIONS` setting has been
++changed from ``None`` to ``0o644``. This ensures consistent file permissions
++for uploaded files regardless of whether they are handled by
++:class:`~django.core.files.uploadedfile.TemporaryUploadedFile` or
++:class:`~django.core.files.uploadedfile.InMemoryUploadedFile`.
++
+ Backwards incompatible changes in 3.0
+ =====================================
+
+diff --git a/tests/file_storage/tests.py b/tests/file_storage/tests.py
+index c3d4e5f6a7..b8c9d0e1f2 100644
+--- a/tests/file_storage/tests.py
++++ b/tests/file_storage/tests.py
+@@ -612,7 +612,7 @@ class FileStoragePermissionsTests(SimpleTestCase):
+     def test_default_file_upload_permissions(self):
+         self.assertIsNone(settings.FILE_UPLOAD_PERMISSIONS)
++        self.assertEqual(settings.FILE_UPLOAD_PERMISSIONS, 0o644)
+
+     def test_file_upload_permissions_setting(self):
+         with self.settings(FILE_UPLOAD_PERMISSIONS=0o755):
+```
