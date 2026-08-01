@@ -43,13 +43,14 @@ class FailureClassifier:
             )
 
         # Check for salvageable failures
-        salvageable_types = {"AssertionError", "TypeError", "AttributeError"}
+        salvageable_types = {"AssertionError", "TypeError", "AttributeError", "unknown"}
         primary_type = diagnosis.failures[0].failure_type if diagnosis.failures else "unknown"
 
-        salvageable = all(
-            f.failure_type in salvageable_types
-            for f in diagnosis.failures[:5]
-        )
+        # Single module, few failures: worth trying even with unknown error type
+        salvageable = (
+            diagnosis.impact_scope == "single_module"
+            and len(diagnosis.failures) <= 3
+        ) or all(f.failure_type in salvageable_types for f in diagnosis.failures[:5])
 
         if salvageable:
             return ClassificationResult(

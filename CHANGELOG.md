@@ -4,6 +4,31 @@ All notable changes to Zelos will be documented in this file.
 
 ---
 
+## [1.2.0] — 2026-08-01
+
+### Added — Runtime Diagnosis & SWE-bench Pipeline
+- **Diagnosis Engine** (`zelos/diagnosis_engine.py`) — structured pytest output parsing, failure extraction with file:line
+- **Failure Classifier** (`zelos/failure_classifier.py`) — repair/retry/abandon decisions, stop-loss tracking
+- **Repair Orchestrator** (`zelos/repair_orchestrator.py`) — Runtime-Guided Repair with Hypothesis Tracker
+- **Patch Ranker** (`zelos/patch_ranker.py`) — multi-factor candidate scoring (files, LOC, tests, cross-package)
+- **Arbiter** (`zelos/arbiter.py`) — first-to-pass-all selection from parallel agent outputs
+- **Format Verifiers** (`zelos/verifier_formats.py`) — markdown fence, dry-run, syntax checks
+- **Contest Dispatch** — Scheduler supports same-task → multi-agent parallel dispatch
+- **SWE-bench Pipeline** — complete generation + evaluation pipeline with repo access
+
+### Changed
+- Version: 1.1.0 → 1.2.0
+- `Scheduler.schedule_contest()`: parallel multi-agent dispatch
+- `FailureClassifier`: relaxed rules for single-module failures
+- `DiagnosisEngine`: noise filtering for Docker/conda test output
+
+### Reference
+- `docs/v1.2.0-requirements.md`
+- `docs/blueprint/benchmark-plan.md`
+- `docs/blueprint/swebench-strategy.md`
+
+---
+
 ## [1.1.0] — 2026-07-30
 
 ### Added — Agent Credential Management

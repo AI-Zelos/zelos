@@ -313,4 +313,4 @@ Explicitly NOT part of Zelos core. Future ecosystem:
 
 ## Versioning
 
-Semantic Versioning. Current version: **v1.1.0** (Phase 11 Complete).
+Semantic Versioning. Current version: **v1.2.0** (Phase 12 Complete).

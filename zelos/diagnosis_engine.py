@@ -58,8 +58,8 @@ class DiagnosisEngine:
 
     # pytest patterns — match "X passed, Y failed, Z errors"
     _SESSION_RE = re.compile(r'(\d+)\s+passed.*?(?:(\d+)\s+failed)?.*?(?:(\d+)\s+errors?)?')
-    _FAILED_RE = re.compile(r'FAILED\s+(\S+)')
-    _ERROR_RE = re.compile(r'ERROR\s+(\S+)')
+    _FAILED_RE = re.compile(r'(\S+)\s+FAILED')
+    _ERROR_RE = re.compile(r'(\S+)\s+ERROR')
     _ASSERT_RE = re.compile(r'AssertionError:?\s*(.*?)(?:\n|$)', re.DOTALL)
     _EXPECTED_RE = re.compile(r'[Ee]xpected[:\s]+(.+?)(?:\n|,?\s*[Aa]ctual)', re.DOTALL)
     _ACTUAL_RE = re.compile(r'[Aa]ctual[:\s]+(.+?)(?:\n|$)')
@@ -71,6 +71,12 @@ class DiagnosisEngine:
         if not test_output or not test_output.strip():
             return DiagnosisResult(pass_rate=1.0, recommendation="all_passed",
                                    raw_summary="No test output")
+
+        # Skip leading noise (conda activation, Docker setup logs)
+        # Find the actual pytest output start
+        session_start = test_output.find("= test session starts =")
+        if session_start > 0:
+            test_output = test_output[session_start:]
 
         result = DiagnosisResult(raw_summary=test_output[:500])
 

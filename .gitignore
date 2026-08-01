@@ -19,3 +19,10 @@ zelos-ts/dist/
 package-lock.json
 .idea/
 docs/agent-marketplace-blueprint.md
+
+# SWE-bench evaluation artifacts
+_*.py
+django_fields.py
+django_http_response_fixed.py
+zelos-*.json
+logs/run_evaluation/

@@ -2,7 +2,7 @@
 
 > The missing operating system for the multi-agent era.
 
-**Status:** Phase 11 Complete · **Version:** 1.1.0 · **156 Tests** · **39 Modules** · **3 SDKs** · **Apache 2.0**
+**Status:** Phase 12 Complete · **Version:** 1.2.0 · **162 Tests** · **46 Modules** · **3 SDKs** · **Apache 2.0**
 
 <p align="center">
   <b>Linux manages Processes. Kubernetes manages Containers. Temporal manages Workflows.</b><br>
