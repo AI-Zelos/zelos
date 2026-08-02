@@ -18,15 +18,43 @@ OUTPUT_DIR = "logs/poc_results/baseline"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
+def _extract_target_file(instance: dict, repo_dir: str) -> str:
+    """Find the source file to fix by searching repo for key identifiers from the issue."""
+    import subprocess as _sp
+    issue = instance.get("problem_statement", "")
+    # Extract likely function/class names from issue text
+    # e.g., "HttpResponse.delete_cookie()" → "delete_cookie"
+    import re
+    funcs = re.findall(r'(\w+)\.(\w+)\(', issue)
+    for _, func_name in funcs[:3]:
+        if len(func_name) > 3:
+            try:
+                r = _sp.run(
+                    ["grep", "-rl", f"def {func_name}", repo_dir],
+                    capture_output=True, text=True, timeout=10,
+                )
+                files = [f for f in r.stdout.strip().split("\n")
+                        if f.endswith(".py") and "test" not in f]
+                if files:
+                    return files[0].replace(repo_dir + "/", "")
+            except Exception:
+                pass
+    return ""
+
+
 def run_baseline(instance: dict, repo_dir: str) -> dict:
     iid = instance["instance_id"]
     issue = instance.get("problem_statement", "")
 
+    # Extract target file by searching repo for functions in issue
+    target_file = _extract_target_file(instance, repo_dir)
+
     # Ensure repo is at the correct commit
     if not checkout_instance_commit(instance, repo_dir):
-        print(f"  WARNING: Could not checkout base_commit, repo may be at wrong state")
+        print(f"  WARNING: Could not checkout base_commit")
 
     agent = ClaudeCodeAgent(repo_dir)
+    print(f"  Target file: {target_file or '(auto-detect)'}")
 
     print(f"\n{'='*60}")
     print(f"BASELINE: {iid}")
@@ -39,7 +67,7 @@ def run_baseline(instance: dict, repo_dir: str) -> dict:
     for attempt in range(MAX_RETRIES + 1):
         if attempt == 0:
             print(f"  Attempt {attempt+1}: generating patch...")
-            result = agent.generate_patch(issue)
+            result = agent.generate_patch(issue, target_file)
         else:
             print(f"  Attempt {attempt+1}: repairing with full test log...")
             result = agent.repair_patch_full_log(issue,

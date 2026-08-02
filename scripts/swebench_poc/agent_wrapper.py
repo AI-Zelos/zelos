@@ -30,15 +30,14 @@ API_KEY = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get(
 
 # Patch-only system prompt — forces clean diff output
 PATCH_SYSTEM_PROMPT = (
-    "You are a bug-fixing agent. Read the issue, find the bug, and output "
-    "the COMPLETE corrected file content. Do NOT output a diff.\n\n"
-    "FORMAT (MANDATORY):\n"
-    "Line 1: FILEPATH: path/to/file.py\n"
-    "Line 2: ```python\n"
-    "Line 3+: COMPLETE corrected file content\n"
-    "Last line: ```\n\n"
-    "The file content MUST be syntactically valid Python. "
-    "Include ALL imports, ALL functions, ALL classes — the complete file."
+    "You are a bug-fixing agent. Read the current file content and the "
+    "issue, then output the COMPLETE corrected file.\n\n"
+    "CRITICAL RULES:\n"
+    "1. Output the ENTIRE file — every import, every class, every function.\n"
+    "2. Preserve ALL original code. Only change the buggy part.\n"
+    "3. Use the EXACT same indentation as the original (4 spaces).\n"
+    "4. Output inside a ```python code block.\n"
+    "5. The output MUST be syntactically valid Python."
 )
 
 
@@ -140,14 +139,32 @@ class ClaudeCodeAgent:
 
     # ── Public API ──
 
-    def generate_patch(self, issue: str) -> dict:
+    def generate_patch(self, issue: str, target_file: str = "") -> dict:
         tree = self._get_tree()
+        # Read target file content (just the relevant section)
+        file_content = ""
+        if target_file:
+            fp = os.path.join(self.repo_path, target_file)
+            if os.path.exists(fp):
+                with open(fp) as fh:
+                    full = fh.read()
+                # Only send ~3000 chars around the relevant function
+                file_content = full[:3000]  # Start of file is most informative
+
         user_msg = (
             f"Repository structure:\n{tree}\n\n"
             f"Issue:\n{issue[:3000]}\n\n"
-            "Generate a unified diff patch to fix this bug."
         )
-        return self._call_api(user_msg, system=PATCH_SYSTEM_PROMPT)
+        if file_content:
+            user_msg += (
+                f"File to fix: {target_file}\n"
+                f"Current content:\n```python\n{file_content}\n```\n\n"
+                "Output the COMPLETE corrected file content in a ```python block."
+            )
+        else:
+            user_msg += "Find and fix the bug. Output the COMPLETE corrected file content."
+        return self._call_api(user_msg, system=PATCH_SYSTEM_PROMPT,
+                              hint_filepath=target_file)
 
     def repair_patch(self, issue: str, diagnosis: str,
                      previous_patch: str) -> dict:
@@ -233,15 +250,16 @@ class ClaudeCodeAgent:
         return "\n".join(lines[:120])
 
     def _call_api(self, user_message: str,
-                  system: str = PATCH_SYSTEM_PROMPT) -> dict:
-        """Call API. Parse FILEPATH+code → generate real patch via git diff."""
+                  system: str = PATCH_SYSTEM_PROMPT,
+                  hint_filepath: str = "") -> dict:
+        """Call API. Parse code block → generate real patch via git diff."""
         self._call_count += 1
         t0 = time.perf_counter()
 
         try:
             response = self._client.messages.create(
                 model=MODEL,
-                max_tokens=4096,
+                max_tokens=8192,
                 system=system,
                 messages=[{"role": "user", "content": user_message}],
             )
@@ -255,8 +273,7 @@ class ClaudeCodeAgent:
             self._total_input_tokens += response.usage.input_tokens
             self._total_output_tokens += response.usage.output_tokens
 
-            # Parse FILEPATH + code → generate real patch
-            patch = self._file_content_to_patch(output)
+            patch = self._file_content_to_patch(output, hint_filepath)
 
         except Exception as e:
             elapsed = time.perf_counter() - t0
@@ -287,8 +304,11 @@ class ClaudeCodeAgent:
                 code_end = i
                 break
 
-        if code_start < 0 or code_end < 0:
+        if code_start < 0:
             return ""
+        if code_end < 0:
+            # No closing ``` — use rest of output as code
+            code = "\n".join(lines[code_start:])
 
         code = "\n".join(lines[code_start:code_end])
         if len(code.strip()) < 20:
