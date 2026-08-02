@@ -240,15 +240,22 @@ apply_and_verify_patch()        Verifier Chain + SWE-bench eval harness
 
 ### 结论
 
-**PoC 验证了 Zelos 的核心价值：Runtime 的结构化诊断能力，显著优于 Agent 自己读日志。**
+**PoC 验证了 Zelos 的两个核心假设：**
 
-两个实例从 FAIL → PASS，Token 节省 70-76%。不需要更多实例就能看到信号——每次都是诊断引擎把问题精确定位到文件和行号，Agent 有了明确目标一次就修好。
+**H₁：Runtime 编排多 Agent 比单体 Agent 更好。** 编排组 4/4 (100%)，基线仅 1/4 (25%)。关键证据是 xarray-6744——基线失败、诊断失败、唯独编排成功。编排流程（多步搜索定位 + 诊断反馈 + MPC 决策）的协同效应，超过了任何一个单独改进。
 
-编排组因 API 稳定性问题未完成，但实验基础设施全部就绪，修复 API 超时后可以直接跑。
+**H₂：Runtime 的诊断和编排比 Agent 自己读日志更省 Token。** 编排组 Token 仅为基线的 21%。省的不是每次调用，是**重试次数**——编排组全部一次通过，基线反复重试来回烧 Token。
+
+**三个组件的贡献分布：**
+- 多步搜索：解决"改哪个文件"的问题（编排组独有，贡献最大）
+- Diagnosis Engine：解决"哪里改错了"的问题（诊断组和编排组共享）
+- MPC Replan：解决"还要不要继续改"的问题（本次实验触发较少，因为多数一次过）
+
+**诚实边界：** 样本仅 4 个，不足以做统计结论。LLM 输出非确定，同一实例不同轮次结果可能不同。验证限于 patch 应用+语法，非完整的 SWE-bench 测试执行。
 
 ### 下一步
 
-1. **立即**：修复 API 超时（已在 agent_wrapper 加 thread timeout），重跑编排组 4 个实例
-2. **短期**：接入 SWE-bench 官方 eval harness，跑完整测试（不只是 patch apply + 语法）
-3. **中期**：扩大样本到 20 实例，每组跑 2-3 次取多数结果
-4. **长期**：换用 Anthropic 原生 API 彻底解决非确定性和稳定性问题
+1. **接入 SWE-bench eval harness**：当前只验证了 patch 应用+语法，需替换为完整的 FAIL_TO_PASS 测试执行
+2. **扩大样本到 20 实例**：4 个实例信号强但不具统计意义，扩大后可做正式对比
+3. **编排组走 Zelos 全链路**：当前 PoC 用 Python 循环直接调用 Diagnosis Engine，生产环境应通过 ExecutionEngine._mpc_replan_check() + Event Bus
+4. **多步搜索产品化**：当前搜索实现在 agent_wrapper 里，应提取为独立的 Zelos Search Agent capability
