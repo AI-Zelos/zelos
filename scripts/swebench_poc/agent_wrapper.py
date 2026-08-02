@@ -1,166 +1,162 @@
 #!/usr/bin/env python3
 """
-Agent Wrapper — wraps Claude Code CLI for all three PoC experiment groups.
+Agent Wrapper — wraps Anthropic API for all three PoC experiment groups.
+
+Uses Claude API (NOT CLI) for:
+  - Exact token counting via response.usage
+  - Forced patch format via system prompt + stop_sequences
+  - Structured output control
 
 Provides:
   - generate_patch(issue, repo_path) → patch
   - repair_patch(issue, repo_path, diagnosis_text, prev_patch) → patch
   - search_location(issue, repo_path) → location_info
-
-Token estimation: character_count / 4 (rough GPT-4 token equivalence).
+  - review_patch(issue, patch) → verdict
 """
 
-import json
 import os
 import re
-import subprocess
 import time
 
-TIMEOUT = 300  # seconds per call
+import anthropic
+
+TIMEOUT = 300
+# Use settings from ~/.claude/settings.json if ANTHROPIC_BASE_URL is set
+# (e.g., DeepSeek as Anthropic-compatible backend)
+MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+API_KEY = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get(
+    "ANTHROPIC_API_KEY", "")
+
+# Patch-only system prompt — forces clean diff output
+PATCH_SYSTEM_PROMPT = (
+    "You are a bug-fixing agent. Output ONLY a unified diff patch. "
+    "The patch MUST start with '--- a/' on the first line. "
+    "Do NOT use markdown fences. Do NOT add explanations. "
+    "Every hunk header (@@ ... @@) MUST have correct line numbers."
+)
+
+
+def clean_patch(patch_text: str) -> str:
+    """Clean Claude-generated patch: strip markdown, fix common issues."""
+    for fence in ["```diff", "```python", "```patch", "```"]:
+        patch_text = patch_text.replace(fence, "")
+    lines = patch_text.split("\n")
+    cleaned = []
+    in_patch = False
+    for line in lines:
+        if line.startswith("--- ") or line.startswith("+++ ") or \
+           line.startswith("diff ") or (line.startswith("@@") and "@@" in line):
+            in_patch = True
+        if in_patch:
+            cleaned.append(line)
+        elif line.startswith("Index:") or line.startswith("==="):
+            cleaned.append(line)
+    result = "\n".join(cleaned if cleaned else lines).strip()
+    if result and not result.endswith("\n"):
+        result += "\n"
+    return result
 
 
 class ClaudeCodeAgent:
-    """Wrapper around Claude Code CLI."""
+    """Wrapper around Anthropic Claude API."""
 
-    def __init__(self, repo_path: str, timeout: int = TIMEOUT):
+    def __init__(self, repo_path: str, timeout: int = TIMEOUT,
+                 model: str = MODEL):
         self.repo_path = repo_path
         self.timeout = timeout
+        self.model = model
         self._call_count = 0
-        self._total_output_chars = 0
+        self._total_input_tokens = 0
+        self._total_output_tokens = 0
+
+        if not API_KEY:
+            print("  WARNING: ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY not set.")
+        self._client = anthropic.Anthropic(
+            api_key=API_KEY,
+            base_url=BASE_URL,
+            timeout=timeout,
+        )
 
     @property
     def total_tokens_estimate(self) -> int:
-        """Rough estimate: chars / 4. Includes prompt + output."""
-        return max(0, self._total_output_chars // 4)
+        """Exact token count from API usage."""
+        return self._total_input_tokens + self._total_output_tokens
 
     # ── Public API ──
 
     def generate_patch(self, issue: str) -> dict:
-        """
-        Generate a patch from scratch. Returns:
-        {"patch": str, "elapsed_s": float, "call_count": int}
-        """
-        prompt = self._build_fix_prompt(issue, extra_context="")
-        return self._call_claude(prompt)
+        tree = self._get_tree()
+        user_msg = (
+            f"Repository structure:\n{tree}\n\n"
+            f"Issue:\n{issue[:3000]}\n\n"
+            "Generate a unified diff patch to fix this bug."
+        )
+        return self._call_api(user_msg, system=PATCH_SYSTEM_PROMPT)
 
     def repair_patch(self, issue: str, diagnosis: str,
                      previous_patch: str) -> dict:
-        """
-        Repair a failed patch using structured diagnosis. Returns:
-        {"patch": str, "elapsed_s": float, "call_count": int}
-        """
-        prompt = self._build_repair_prompt(issue, diagnosis, previous_patch)
-        return self._call_claude(prompt)
+        tree = self._get_tree()
+        user_msg = (
+            f"Repository structure:\n{tree}\n\n"
+            f"Issue:\n{issue[:2000]}\n\n"
+            f"Previous (FAILED) patch:\n{previous_patch[:2000]}\n\n"
+            f"Test failure diagnosis:\n{diagnosis}\n\n"
+            "Fix ONLY the specific failures mentioned above."
+        )
+        return self._call_api(user_msg, system=PATCH_SYSTEM_PROMPT)
 
     def repair_patch_full_log(self, issue: str, test_output: str,
                               previous_patch: str) -> dict:
-        """
-        Repair using full pytest output (baseline behavior). Returns:
-        {"patch": str, "elapsed_s": float, "call_count": int}
-        """
-        prompt = self._build_baseline_repair_prompt(issue, test_output, previous_patch)
-        return self._call_claude(prompt)
+        tree = self._get_tree()
+        user_msg = (
+            f"Repository structure:\n{tree}\n\n"
+            f"Issue:\n{issue[:2000]}\n\n"
+            f"Previous (FAILED) patch:\n{previous_patch[:2000]}\n\n"
+            f"Test output:\n{test_output[:4000]}\n\n"
+            "Read the test output, find the failures, and fix them."
+        )
+        return self._call_api(user_msg, system=PATCH_SYSTEM_PROMPT)
 
     def search_location(self, issue: str) -> dict:
-        """
-        Search for relevant code locations. Returns:
-        {"location": str, "files": list[str], "elapsed_s": float}
-        """
-        prompt = self._build_search_prompt(issue)
-        result = self._call_claude(prompt)
-        # Extract file paths from response
-        files = []
-        for m in re.finditer(r'(?:File|file|path)[:\s]+([^\s,]+\.py)', result["patch"]):
-            files.append(m.group(1))
+        tree = self._get_tree()
+        user_msg = (
+            f"Repository structure:\n{tree}\n\n"
+            f"Issue:\n{issue[:3000]}\n\n"
+            "Identify the EXACT files and functions that need modification. "
+            "Output one file path per line."
+        )
+        result = self._call_api(user_msg, system=(
+            "You are a code search agent. Output ONLY file paths, "
+            "one per line. No explanations."
+        ))
+        files = re.findall(r'[\w/]+\.py', result.get("patch", ""))
         result["files"] = list(set(files[:5]))
         result["location"] = result.pop("patch", "")
         return result
 
     def review_patch(self, issue: str, patch: str) -> dict:
-        """
-        Review a patch. Returns:
-        {"verdict": "pass"|"fail", "issues": str, "elapsed_s": float}
-        """
-        prompt = self._build_review_prompt(issue, patch)
-        result = self._call_claude(prompt)
-        verdict = "fail" if "FAIL" in result.get("patch", "").upper()[:500] else "pass"
-        return {
-            "verdict": verdict,
-            "issues": result.get("patch", ""),
-            "elapsed_s": result.get("elapsed_s", 0),
-        }
-
-    # ── Prompt Builders ──
-
-    def _build_fix_prompt(self, issue: str, extra_context: str = "") -> str:
-        tree = self._get_tree()
-        return (
-            "You are a bug-fixing agent. Read the issue and project structure, "
-            "then output ONLY a unified diff patch. No markdown fences, no explanation.\n\n"
-            f"Repository structure:\n{tree}\n\n"
-            f"Issue:\n{issue[:3000]}\n"
-            f"{extra_context}\n"
-            "Output the unified diff patch now:"
-        )
-
-    def _build_repair_prompt(self, issue: str, diagnosis: str,
-                             previous_patch: str) -> str:
-        tree = self._get_tree()
-        return (
-            "You are a bug-fixing agent. Your previous patch FAILED tests. "
-            "Below is a structured diagnosis of the failure. "
-            "Fix ONLY the specific failures mentioned. "
-            "Output ONLY a unified diff patch. No markdown fences, no explanation.\n\n"
-            f"Repository structure:\n{tree}\n\n"
-            f"Issue:\n{issue[:2000]}\n\n"
-            f"Previous (FAILED) patch:\n{previous_patch[:2000]}\n\n"
-            f"Test failure diagnosis:\n{diagnosis}\n\n"
-            "Output the corrected unified diff patch now:"
-        )
-
-    def _build_baseline_repair_prompt(self, issue: str, test_output: str,
-                                      previous_patch: str) -> str:
-        tree = self._get_tree()
-        # Truncate test output to simulate "agent reads log"
-        truncated_log = test_output[:4000]
-        return (
-            "You are a bug-fixing agent. Your previous patch FAILED tests. "
-            "Below is the FULL test output. Read it carefully and fix the bug. "
-            "Output ONLY a unified diff patch. No markdown fences, no explanation.\n\n"
-            f"Repository structure:\n{tree}\n\n"
-            f"Issue:\n{issue[:2000]}\n\n"
-            f"Previous (FAILED) patch:\n{previous_patch[:2000]}\n\n"
-            f"FULL test output:\n{truncated_log}\n\n"
-            "Output the corrected unified diff patch now:"
-        )
-
-    def _build_search_prompt(self, issue: str) -> str:
-        tree = self._get_tree()
-        return (
-            "Analyze this issue and identify the EXACT files and functions "
-            "that need to be modified. Output file paths and function names only.\n\n"
-            f"Repository structure:\n{tree}\n\n"
-            f"Issue:\n{issue[:3000]}\n\n"
-            "List the files and functions to modify:"
-        )
-
-    def _build_review_prompt(self, issue: str, patch: str) -> str:
-        return (
-            "Review this patch against the issue. Does it correctly fix the bug? "
-            "Are there any side effects? Output PASS or FAIL with a brief explanation.\n\n"
+        user_msg = (
             f"Issue:\n{issue[:2000]}\n\n"
             f"Patch:\n{patch[:3000]}\n\n"
-            "Review result (PASS or FAIL with explanation):"
+            "Does this patch correctly fix the issue? Any side effects? "
+            "Output ONLY one word: PASS or FAIL, then a brief reason."
         )
+        result = self._call_api(user_msg, system=(
+            "You are a code reviewer. Output PASS or FAIL on the first line, "
+            "then a one-sentence reason."
+        ))
+        text = result.get("patch", "")
+        verdict = "fail" if text.upper().startswith("FAIL") else "pass"
+        return {"verdict": verdict, "issues": text,
+                "elapsed_s": result.get("elapsed_s", 0)}
 
     # ── Internal ──
 
     def _get_tree(self, max_depth: int = 2) -> str:
-        """Get a compact project tree for LLM context."""
         repo = self.repo_path
         if not os.path.isdir(repo):
-            return f"(repo path not available: {repo})"
-
+            return f"(repo not available: {repo})"
         lines = []
         for root, dirs, files in os.walk(repo):
             depth = root.replace(repo, "").count(os.sep)
@@ -181,30 +177,36 @@ class ClaudeCodeAgent:
                 break
         return "\n".join(lines[:120])
 
-    def _call_claude(self, prompt: str) -> dict:
-        """Call Claude Code CLI. Returns {"patch": str, "elapsed_s": float}."""
+    def _call_api(self, user_message: str,
+                  system: str = PATCH_SYSTEM_PROMPT) -> dict:
+        """Call Anthropic API. Returns {"patch": str, "elapsed_s": float}."""
         self._call_count += 1
-        self._total_output_chars += len(prompt)
-
         t0 = time.perf_counter()
-        try:
-            r = subprocess.run(
-                ["claude", "--print", "--output-format", "text", prompt],
-                capture_output=True, text=True,
-                timeout=self.timeout, input="",
-            )
-            output = r.stdout.strip()
-            # Clean markdown fences
-            for fence in ["```diff", "```python", "```"]:
-                output = output.replace(fence, "").strip()
-            elapsed = time.perf_counter() - t0
-        except subprocess.TimeoutExpired:
-            output = ""
-            elapsed = self.timeout
-        except FileNotFoundError:
-            output = ""
-            elapsed = 0
-            print("  WARNING: 'claude' CLI not found. Is Claude Code installed?")
 
-        self._total_output_chars += len(output)
-        return {"patch": output, "elapsed_s": elapsed, "call_count": self._call_count}
+        try:
+            response = self._client.messages.create(
+                model=MODEL,
+                max_tokens=4096,
+                system=system,
+                stop_sequences=["```"],
+                messages=[{"role": "user", "content": user_message}],
+            )
+            elapsed = time.perf_counter() - t0
+
+            # Extract text
+            output = ""
+            for block in response.content:
+                if block.type == "text":
+                    output += block.text
+
+            # Clean + track tokens
+            output = clean_patch(output)
+            self._total_input_tokens += response.usage.input_tokens
+            self._total_output_tokens += response.usage.output_tokens
+
+        except Exception as e:
+            elapsed = time.perf_counter() - t0
+            output = f"API_ERROR: {e}"
+
+        return {"patch": output, "elapsed_s": elapsed,
+                "call_count": self._call_count}

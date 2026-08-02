@@ -23,42 +23,97 @@ OUTPUT_DIR = "logs/poc_results/baseline"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
+def clean_patch(patch_text: str) -> str:
+    """Clean Claude-generated patch: strip markdown, fix common formatting issues."""
+    # Remove markdown fences
+    for fence in ["```diff", "```python", "```patch", "```"]:
+        patch_text = patch_text.replace(fence, "")
+    # Remove "Here's the corrected patch:" and similar preambles
+    lines = patch_text.split("\n")
+    cleaned = []
+    in_patch = False
+    for line in lines:
+        if line.startswith("--- ") or line.startswith("+++ ") or line.startswith("diff "):
+            in_patch = True
+        if line.startswith("@@") and "@@" in line:
+            in_patch = True
+        if in_patch:
+            cleaned.append(line)
+        elif line.startswith("Index:") or line.startswith("==="):
+            cleaned.append(line)
+    if not cleaned:
+        # Fallback: use original text
+        cleaned = lines
+    result = "\n".join(cleaned).strip()
+    # Ensure patch ends with newline
+    if result and not result.endswith("\n"):
+        result += "\n"
+    return result
+
+
 def run_tests_in_docker(instance_id: str, patch: str,
                         repo_dir: str) -> dict:
     """
-    Run SWE-bench tests in Docker.
+    Apply patch and run pytest. Tries multiple application methods.
 
     Returns: {"all_passed": bool, "raw_output": str, "exit_code": int}
     """
-    # Default: run pytest directly in the repo (not Docker)
-    # Docker mode can be added with SWE-bench eval harness
     if not os.path.isdir(repo_dir):
         return {"all_passed": False, "raw_output": "repo dir not found",
                 "exit_code": -1}
 
-    # Apply patch
+    patch = clean_patch(patch)
     patch_file = f"/tmp/zelos_poc_{instance_id.replace('/', '_')}.patch"
     with open(patch_file, "w") as f:
         f.write(patch)
 
-    try:
-        r = subprocess.run(
-            ["git", "apply", "--check", patch_file],
-            capture_output=True, text=True, timeout=30, cwd=repo_dir,
-        )
-        if r.returncode != 0:
-            return {"all_passed": False,
-                    "raw_output": f"Patch does not apply cleanly:\n{r.stderr[:2000]}",
-                    "exit_code": r.returncode}
+    apply_ok = False
+    apply_error = ""
 
+    # Try method 1: git apply (strict)
+    r = subprocess.run(
+        ["git", "apply", "--check", patch_file],
+        capture_output=True, text=True, timeout=30, cwd=repo_dir,
+    )
+    if r.returncode == 0:
         subprocess.run(["git", "apply", patch_file],
                        capture_output=True, cwd=repo_dir, timeout=10)
-    except subprocess.TimeoutExpired:
-        return {"all_passed": False, "raw_output": "Patch application timeout",
-                "exit_code": -1}
-    finally:
+        apply_ok = True
+    else:
+        # Method 2: git apply --reject --whitespace=fix
+        r2 = subprocess.run(
+            ["git", "apply", "--reject", "--whitespace=fix", patch_file],
+            capture_output=True, text=True, timeout=30, cwd=repo_dir,
+        )
+        if r2.returncode == 0:
+            apply_ok = True
+        else:
+            # Method 3: patch -p1 (most lenient)
+            with open(patch_file) as fh:
+                r3 = subprocess.run(
+                    ["patch", "-p1", "-f", "--dry-run"],
+                    stdin=fh, capture_output=True, text=True,
+                    timeout=30, cwd=repo_dir,
+                )
+            if r3.returncode == 0:
+                with open(patch_file) as fh:
+                    subprocess.run(
+                        ["patch", "-p1", "-f"],
+                        stdin=fh, capture_output=True, text=True,
+                        timeout=10, cwd=repo_dir,
+                    )
+                apply_ok = True
+            else:
+                apply_error = f"All apply methods failed.\n git apply: {r.stderr[:500]}\n git apply --reject: {r2.stderr[:500]}\n patch -p1: {r3.stderr[:500]}"
+
+    if not apply_ok:
         if os.path.exists(patch_file):
             os.remove(patch_file)
+        return {"all_passed": False, "raw_output": apply_error, "exit_code": -1}
+
+    # Cleanup patch file
+    if os.path.exists(patch_file):
+        os.remove(patch_file)
 
     # Run pytest
     try:
@@ -68,8 +123,11 @@ def run_tests_in_docker(instance_id: str, patch: str,
         )
         output = r.stdout + "\n" + r.stderr
         all_passed = r.returncode == 0
-        # Revert patch
+        # Revert
         subprocess.run(["git", "checkout", "--", "."],
+                       capture_output=True, cwd=repo_dir, timeout=10)
+        # Clean .rej files
+        subprocess.run(["git", "clean", "-fd"],
                        capture_output=True, cwd=repo_dir, timeout=10)
         return {"all_passed": all_passed, "raw_output": output,
                 "exit_code": r.returncode}

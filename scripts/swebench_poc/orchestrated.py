@@ -152,7 +152,7 @@ def run_orchestrated(instance: dict, repo_dir: str) -> dict:
                 "Generate a unified diff patch to fix this bug. "
                 "Output ONLY the patch, no markdown fences."
             )
-            fix_result = _call_claude_direct(fix_prompt)
+            fix_result = _call_claude_api(fix_prompt)
         else:
             # Replan attempt: with diagnosis
             print(f"    Replan attempt {attempt}...")
@@ -163,7 +163,7 @@ def run_orchestrated(instance: dict, repo_dir: str) -> dict:
                 "Fix ONLY the specific failures mentioned. "
                 "Output ONLY a unified diff patch, no markdown fences."
             )
-            fix_result = _call_claude_direct(fix_prompt)
+            fix_result = _call_claude_api(fix_prompt)
 
         patch = fix_result.get("patch", "")
         if not patch or len(patch) < 20:
@@ -280,25 +280,44 @@ def run_orchestrated(instance: dict, repo_dir: str) -> dict:
     return data
 
 
-def _call_claude_direct(prompt: str, timeout: int = TIMEOUT) -> dict:
-    """Direct Claude CLI call (bypass Agent wrapper for simplicity)."""
+def _call_claude_api(prompt: str, timeout: int = TIMEOUT,
+                     system: str = "") -> dict:
+    """Call Anthropic API directly (used by orchestrated experiment)."""
     import time as _time
+    import anthropic as _anthropic
+    from agent_wrapper import clean_patch
+
     t0 = _time.perf_counter()
     try:
-        r = subprocess.run(
-            ["claude", "--print", "--output-format", "text", prompt],
-            capture_output=True, text=True, timeout=timeout, input="",
+        api_key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get(
+            "ANTHROPIC_API_KEY", "")
+        base_url = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+        model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+
+        client = _anthropic.Anthropic(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
         )
-        output = r.stdout.strip()
-        for fence in ["```diff", "```python", "```"]:
-            output = output.replace(fence, "").strip()
+        response = client.messages.create(
+            model=model,
+            max_tokens=4096,
+            system=system or (
+                "Output ONLY a unified diff patch. Start with '--- a/'. "
+                "No markdown fences, no explanations."
+            ),
+            stop_sequences=["```"],
+            messages=[{"role": "user", "content": prompt}],
+        )
+        output = ""
+        for block in response.content:
+            if block.type == "text":
+                output += block.text
+        output = clean_patch(output)
         elapsed = _time.perf_counter() - t0
-    except subprocess.TimeoutExpired:
-        output = ""
-        elapsed = timeout
-    except FileNotFoundError:
-        output = ""
-        elapsed = 0
+    except Exception as e:
+        output = f"API_ERROR: {e}"
+        elapsed = _time.perf_counter() - t0
 
     return {"patch": output, "elapsed_s": elapsed}
 
