@@ -67,6 +67,13 @@ class PlannerPlan:
             result["architecture_delta"] = self.architecture_delta
         return result
 
+    def get_task(self, task_id: str) -> PlannerTask | None:
+        """v1.3.0: Find a PlannerTask by ID within this plan."""
+        for t in self.tasks:
+            if t.task_id == task_id:
+                return t
+        return None
+
 
 # ═══════════════════════════════════════════
 # LLM Providers
@@ -361,8 +368,108 @@ Use these capability domains:
 """
 
 
-class LLMPlanner:
-    """Default LLM-based Planner plugin."""
+class Planner(ABC):
+    """v1.3.0: Base class for all Planners. Extracted from LLMPlanner.
+
+    All planner implementations must implement plan(). replan_path()
+    has a default rule-based implementation that subclasses can override.
+    """
+
+    @abstractmethod
+    def plan(self, goal_description: str, goal_id: str = "",
+             context: dict | None = None) -> PlannerPlan:
+        """Generate an execution plan for a goal."""
+        ...
+
+    def replan_path(
+        self,
+        goal,
+        failed_task_id: str,
+        failure_context: dict,
+        completed_tasks: list[str],
+    ) -> list[PlannerTask]:
+        """
+        v1.3.0: Generate replacement tasks for a failed path.
+
+        Default implementation: creates a single replacement task with
+        diagnostic details embedded in its description. LLM-based planners
+        can override this for full-context decomposition.
+
+        failure_context keys:
+          - verdict: {"result": "failed"|"passed", "confidence": float, "reason": str}
+          - diagnosis: DiagnosisResult.to_dict() (if available)
+          - classification: ClassificationResult fields (if available)
+        """
+        diag = failure_context.get("diagnosis", {})
+        classification = failure_context.get("classification", {})
+
+        # Build a description enriched with diagnostic details
+        desc_parts = [
+            f"Previous attempt failed. "
+            f"Reason: {classification.get('reason', failure_context.get('verdict', {}).get('summary', 'unknown'))}"
+        ]
+        for f_detail in diag.get("failures_detail", []):
+            loc = f_detail.get("location", "unknown")
+            desc_parts.append(
+                f"  FAILED: {f_detail.get('test_name', '?')} — "
+                f"{f_detail.get('failure_type', '?')} at {loc}"
+            )
+            if f_detail.get("expected"):
+                desc_parts.append(f"    Expected: {f_detail['expected']}")
+            if f_detail.get("actual"):
+                desc_parts.append(f"    Actual: {f_detail['actual']}")
+
+        cap = self._infer_capability(failed_task_id)
+        deps = self._infer_dependencies(failed_task_id, completed_tasks)
+
+        return [PlannerTask(
+            task_id=str(uuid.uuid4()),
+            description="\n".join(desc_parts),
+            required_capability=cap,
+            dependencies=deps,
+        )]
+
+    def _infer_capability(self, failed_task_id: str) -> str:
+        """Default: return 'code-generation' as most common replan target."""
+        return "code-generation"
+
+    def _infer_dependencies(self, failed_task_id: str,
+                           completed_tasks: list[str]) -> list[str]:
+        """Default: depend on all completed tasks."""
+        return list(completed_tasks)
+
+
+class RuleBasedPlanner(Planner):
+    """v1.3.0: Deterministic rule-based planner — no LLM dependency.
+
+    Used for testing the MPC replan loop. replan_path() uses the parent's
+    rule-based default. plan() produces a trivial single-task plan.
+    """
+
+    def plan(self, goal_description: str, goal_id: str = "",
+             context: dict | None = None) -> PlannerPlan:
+        """Trivial plan: single task for the goal."""
+        plan_id = goal_id or str(uuid.uuid4())
+        return PlannerPlan(
+            plan_id=plan_id,
+            goal_id=goal_id,
+            tasks=[PlannerTask(
+                task_id=str(uuid.uuid4()),
+                description=goal_description,
+                required_capability="code-generation",
+            )],
+            planner_id="rule-based",
+            planner_version="1.3.0",
+            created_at=time.time(),
+        )
+
+
+class LLMPlanner(Planner):
+    """Default LLM-based Planner plugin.
+
+    v1.3.0: Overrides replan_path() to use the LLM provider for intelligent
+    replan analysis. Falls back to parent's rule-based default on LLM error.
+    """
 
     def __init__(self, config: dict[str, Any] | None = None):
         config = config or {}
@@ -437,6 +544,91 @@ Respond with the COMPLETE updated plan as JSON (existing tasks + new tasks).
 
         self._validate_plan(new_plan)
         return new_plan
+
+    # ── v1.3.0: LLM-powered replan_path ──
+
+    def replan_path(
+        self,
+        goal,
+        failed_task_id: str,
+        failure_context: dict,
+        completed_tasks: list[str],
+    ) -> list[PlannerTask]:
+        """
+        v1.3.0: Use LLM to analyze failure context and produce an
+        intelligent repair task. Falls back to parent's rule-based
+        default on LLM error.
+
+        Calls the LLM provider (OpenAI / DeepSeek / Anthropic) with
+        the structured failure context and asks for a focused fix.
+        """
+        import json as _json
+
+        diag = failure_context.get("diagnosis", {})
+        classification = failure_context.get("classification", {})
+        verdict = failure_context.get("verdict", {})
+
+        # Build a concise failure summary for the LLM
+        failure_summary = _json.dumps({
+            "failed_task_id": failed_task_id,
+            "verdict": verdict,
+            "diagnosis": diag,
+            "classification": classification,
+            "completed_tasks": completed_tasks,
+        }, indent=2, ensure_ascii=False)
+
+        goal_text = goal.get("intent", str(goal)) if isinstance(goal, dict) else str(goal)
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a repair planner. Given a task failure with structured "
+                    "diagnostic information (test name, failure type, file:line, "
+                    "expected vs actual), produce ONE focused repair task.\n\n"
+                    "Output a JSON object with a single 'tasks' array containing "
+                    "exactly one task:\n"
+                    '{"tasks": [{"description": "...", "required_capability": "..."}]}\n\n'
+                    "The task description must include:\n"
+                    "- What specific file/line to fix\n"
+                    "- What assertion failed and why (expected X, got Y)\n"
+                    "- What the fix should accomplish"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Goal: {goal_text}\n\n"
+                    f"Failure context:\n{failure_summary}\n\n"
+                    "Produce a single repair task based on this diagnostic info. "
+                    "Be specific: mention the exact file, line, and assertion to fix."
+                ),
+            },
+        ]
+
+        try:
+            response_text = self._call_llm_with_retry(messages)
+            data = _json.loads(response_text.strip().lstrip("```json").rstrip("```").strip())
+            tasks_data = data.get("tasks", [])
+            if tasks_data:
+                cap = self._infer_capability(failed_task_id)
+                deps = self._infer_dependencies(failed_task_id, completed_tasks)
+                return [PlannerTask(
+                    task_id=str(uuid.uuid4()),
+                    description=tasks_data[0].get("description", "LLM-generated repair"),
+                    required_capability=tasks_data[0].get("required_capability", cap),
+                    dependencies=deps,
+                )]
+        except Exception:
+            pass  # Fall through to parent's rule-based default
+
+        # Fallback: parent's rule-based replan
+        return super().replan_path(
+            goal=goal,
+            failed_task_id=failed_task_id,
+            failure_context=failure_context,
+            completed_tasks=completed_tasks,
+        )
 
     # ── LLM Call ──
 

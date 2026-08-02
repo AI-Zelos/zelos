@@ -19,7 +19,24 @@ DEFAULT_CONFIG = {
         "logging": {"level": "info", "format": "json"},
     },
     "plugins": [],
+    # v1.3.0: Feature flags for phased component loading
+    "features": {
+        "planner": True, "scheduler": True, "execution_engine": True,
+        "verifier": True, "capability_registry": True,
+        "task_graph_engine": True, "event_bus": True,
+        "event_sourcing": False, "execution_trace": False,
+        "evidence_collection": False, "confidence_scoring": False,
+        "memory": False, "policy_gate": False, "cp_governance": False,
+        "car": False, "diagnosis_engine": False,
+        "credential_management": False, "failure_classifier": False,
+        "repair_orchestrator": False, "patch_ranker": False,
+        "arbiter": False, "contest_dispatch": False,
+        "mpc_replan": True,
+    },
 }
+
+# v1.3.0: Known feature flag keys (from zelos.feature_flags.FeatureFlags)
+_VALID_FEATURE_FLAGS = set(DEFAULT_CONFIG["features"].keys())
 
 
 class ConfigLoader:
@@ -146,6 +163,9 @@ class ConfigLoader:
                 result["runtime"]["instance_id"] = rt["instance_id"]
         if "plugins" in data:
             result["plugins"] = data["plugins"]
+        # v1.3.0: Merge feature flags
+        if "features" in data:
+            result["features"].update(data["features"])
 
         return result
 
@@ -165,6 +185,19 @@ class ConfigLoader:
                 raise ValueError(
                     f"Unknown plugin type '{ptype}' for plugin '{p['id']}'. "
                     f"Valid types: {', '.join(sorted(VALID_PLUGIN_TYPES))}"
+                )
+
+        # v1.3.0: Validate feature flags
+        features = config.get("features", {})
+        for key in features:
+            if key not in _VALID_FEATURE_FLAGS:
+                raise ValueError(
+                    f"Unknown feature flag '{key}'. "
+                    f"Valid flags: {', '.join(sorted(_VALID_FEATURE_FLAGS))}"
+                )
+            if not isinstance(features[key], bool):
+                raise ValueError(
+                    f"Feature flag '{key}' must be a boolean, got {type(features[key]).__name__}"
                 )
 
         # Validate auth keys

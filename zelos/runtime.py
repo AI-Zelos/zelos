@@ -32,6 +32,9 @@ from .policy import CompositePolicy
 from .scheduler import PolicyPlugin, Scheduler, ScoringStrategy
 from .storage import InMemoryStorageBackend, StorageBackend, create_storage_backend  # v0.8.0
 
+# ═══ v1.3.0 imports ═══
+from .feature_flags import FeatureFlags  # noqa: E402
+
 # ═══ Phase 3 imports ═══
 from .security import AccessControl, APIKeyManager, AuditLogger, TLSConfig
 from .task_graph import Task, TaskGraphEngine, TaskStatus
@@ -66,6 +69,12 @@ class ZelosRuntime:
     def __init__(self, config: dict[str, Any] | None = None):
         self.config = config or {}
 
+        # ── v1.3.0: Feature Flags ──
+        if "features" in self.config:
+            self._flags = FeatureFlags(**self.config["features"])
+        else:
+            self._flags = FeatureFlags()
+
         # ── Phase 1 & 2: Kernel ──
         self._event_bus = EventBus()
         self._capability_registry = CapabilityRegistry()
@@ -81,6 +90,16 @@ class ZelosRuntime:
         self._context_assembler: ContextAssembler | None = None
         self._scheduler: Scheduler | None = None
         self._execution_engine = ExecutionEngine(self._task_graph, self._event_bus)
+        # v1.3.0: Wire MPC replan callback (conditional on feature flag)
+        if self._flags.mpc_replan:
+            self._execution_engine.set_replan_callback(self._on_replan)
+        # v1.3.0: Wiring for Diagnosis Engine (if enabled, loaded later in start())
+        if self._flags.diagnosis_engine:
+            try:
+                from .diagnosis_engine import DiagnosisEngine
+                self._execution_engine.set_diagnosis_engine(DiagnosisEngine())
+            except ImportError:
+                pass
         self._goals: dict[str, dict[str, Any]] = {}
         self._agents: dict[str, dict[str, Any]] = {}  # name → {agent info}
         self._agent_instances: dict[str, Any] = {}  # name → agent object
@@ -2139,3 +2158,131 @@ class ZelosRuntime:
                 "is_leader": self._leader_election.is_leader(),
             },
         }
+
+    # ═══ v1.3.0: MPC Adaptive Replan ═══
+
+    def _on_replan(self, plan_id: str, trigger: str, context: dict):
+        """
+        v1.3.0: Runtime-level replan coordination.
+
+        Called by ExecutionEngine.replan_callback when a task fails and
+        replan rules are triggered. Coordinates TaskGraphEngine + Planner.
+
+        Returns a new PlannerPlan or None if replan is not possible.
+        """
+        task_graph = self._task_graph
+        failed_task_id = context.get("failed_task_id", "")
+        verdict = context.get("verdict")
+
+        # 1. Mark failed task's downstream dependents as BLOCKED
+        downstream_ids = task_graph.get_dependents(failed_task_id)
+        for tid in downstream_ids:
+            downstream_task = task_graph.get_task(tid)
+            if downstream_task and downstream_task.status not in (
+                TaskStatus.COMPLETED, TaskStatus.FAILED,
+                TaskStatus.FATAL_FAILED, TaskStatus.CANCELLED,
+            ):
+                try:
+                    task_graph.transition(tid, TaskStatus.BLOCKED)
+                except ValueError:
+                    pass  # Already in a terminal state
+
+        # 2. Build structured failure context
+        failure_context = self._build_failure_context(failed_task_id, context)
+
+        # 3. Call Planner to generate replacement tasks
+        goal = self._goals.get(plan_id, {}).get("goal", {"intent": "unknown"})
+        if not self._planner:
+            return None
+
+        replacement_tasks = self._planner.replan_path(
+            goal=goal,
+            failed_task_id=failed_task_id,
+            failure_context=failure_context,
+            completed_tasks=context.get("completed_tasks", []),
+        )
+
+        # 4. Insert replacement tasks into TaskGraphEngine + update PlannerPlan
+        plan = self._get_plan(plan_id)
+        if not plan:
+            return None
+
+        for rt in replacement_tasks:
+            task = Task(
+                task_id=rt.task_id,
+                plan_id=plan_id,
+                description=rt.description,
+                required_capability=rt.required_capability,
+                dependencies=rt.dependencies,
+            )
+            task_graph.add_task(task)
+            plan.tasks.append(rt)
+
+        plan.version += 1
+        return plan
+
+    def _build_failure_context(self, failed_task_id: str, context: dict) -> dict:
+        """
+        v1.3.0: Build structured failure context for Planner.replan_path().
+
+        Layers (coarse → fine):
+          1. verdict — incremental verification result
+          2. diagnosis — Diagnosis Engine structured output (if available)
+          3. classification — Failure Classifier decision (if available)
+        """
+        fc: dict[str, Any] = {
+            "failed_task_id": failed_task_id,
+            "verdict": {
+                "result": context.get("verdict", {}).verdict
+                if hasattr(context.get("verdict", {}), "verdict") else "unknown",
+                "score": context.get("verdict", {}).score
+                if hasattr(context.get("verdict", {}), "score") else 0.0,
+                "summary": getattr(context.get("verdict", {}), "summary", ""),
+            },
+        }
+
+        # Layer 2: Diagnosis Engine output
+        diagnosis = context.get("diagnosis")
+        if diagnosis and hasattr(diagnosis, 'to_dict'):
+            diag_dict = diagnosis.to_dict()
+            fc["diagnosis"] = diag_dict
+            fc["diagnosis"]["failures_detail"] = [
+                {
+                    "test_name": f.test_name,
+                    "failure_type": f.failure_type,
+                    "location": f"{f.location_file}:{f.location_line}"
+                    if f.location_file else "unknown",
+                    "expected": f.expected,
+                    "actual": f.actual,
+                }
+                for f in (diagnosis.failures[:5] if hasattr(diagnosis, 'failures') else [])
+            ]
+
+        # Layer 3: Failure Classifier output
+        if (hasattr(self, '_failure_classifier') and self._failure_classifier
+                and diagnosis):
+            try:
+                classification = self._failure_classifier.classify(diagnosis)
+                fc["classification"] = {
+                    "action": classification.action,
+                    "reason": classification.reason,
+                    "salvageable": classification.salvageable,
+                    "failure_type": classification.failure_type,
+                }
+            except Exception:
+                fc["classification"] = {
+                    "action": "retry",
+                    "reason": "Classification unavailable",
+                    "salvageable": True,
+                    "failure_type": "unknown",
+                }
+
+        return fc
+
+    def _get_plan(self, plan_id: str):
+        """v1.3.0: Retrieve a PlannerPlan by ID from stored goals."""
+        for goal_data in self._goals.values():
+            plan = goal_data.get("plan")
+            if plan and getattr(plan, 'plan_id', '') == plan_id:
+                return plan
+        return None

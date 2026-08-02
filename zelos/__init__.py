@@ -1,7 +1,7 @@
 """
 Zelos — Open Multi-Agent Orchestration Runtime
 
-v0.9.0: Change Evidence Package — Execution trace, evidence collection, confidence scoring, policy gate v2.
+v1.3.0: MPC Adaptive Scheduling Loop — Feature Flags, Incremental Verification, Replan Rules.
 """
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"

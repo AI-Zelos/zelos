@@ -16,18 +16,20 @@ class TaskStatus(Enum):
     CANCELLED = "cancelled"
     TIMED_OUT = "timed_out"
     FATAL_FAILED = "fatal_failed"  # v0.8.0: non-retryable terminal failure
+    BLOCKED = "blocked"  # v1.3.0: blocked by upstream failure, awaiting replan
 
 
 VALID_TRANSITIONS = {
-    TaskStatus.CREATED: {TaskStatus.READY, TaskStatus.CANCELLED},
-    TaskStatus.READY: {TaskStatus.ASSIGNED, TaskStatus.CANCELLED, TaskStatus.FAILED, TaskStatus.FATAL_FAILED},
-    TaskStatus.ASSIGNED: {TaskStatus.STARTED, TaskStatus.READY, TaskStatus.CANCELLED, TaskStatus.FATAL_FAILED},
+    TaskStatus.CREATED: {TaskStatus.READY, TaskStatus.CANCELLED, TaskStatus.BLOCKED},
+    TaskStatus.READY: {TaskStatus.ASSIGNED, TaskStatus.CANCELLED, TaskStatus.FAILED, TaskStatus.FATAL_FAILED, TaskStatus.BLOCKED},
+    TaskStatus.ASSIGNED: {TaskStatus.STARTED, TaskStatus.READY, TaskStatus.CANCELLED, TaskStatus.FATAL_FAILED, TaskStatus.BLOCKED},
     TaskStatus.STARTED: {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.TIMED_OUT, TaskStatus.CANCELLED, TaskStatus.FATAL_FAILED},
-    TaskStatus.FAILED: {TaskStatus.READY, TaskStatus.FATAL_FAILED},
+    TaskStatus.FAILED: {TaskStatus.READY, TaskStatus.FATAL_FAILED, TaskStatus.BLOCKED},
     TaskStatus.TIMED_OUT: {TaskStatus.READY, TaskStatus.FATAL_FAILED},
     TaskStatus.COMPLETED: set(),  # Terminal
     TaskStatus.CANCELLED: set(),  # Terminal
     TaskStatus.FATAL_FAILED: set(),  # v0.8.0: Terminal — no recovery
+    TaskStatus.BLOCKED: {TaskStatus.READY, TaskStatus.CANCELLED, TaskStatus.FATAL_FAILED},  # v1.3.0
 }
 
 
@@ -277,6 +279,12 @@ class TaskGraphEngine:
 
     def get_ready_tasks(self) -> list[Task]:
         return [t for t in self._tasks.values() if t.status == TaskStatus.READY]
+
+    # ── v1.3.0: Replan Support ──
+
+    def get_dependents(self, task_id: str) -> list[str]:
+        """Return all task IDs that directly depend on this task (BFS level 1)."""
+        return list(self._dependents_map.get(task_id, set()))
 
     # ── DAG Validation ──
 

@@ -4,6 +4,36 @@ All notable changes to Zelos will be documented in this file.
 
 ---
 
+## [1.3.0] — 2026-08-01
+
+### Added — MPC Adaptive Scheduling Loop
+- **Feature Flags** (`zelos/feature_flags.py`) — phased component loading (stage_a through stage_e), mpc_replan control
+- **Replan Rules Engine** (`zelos/replan_rules.py`) — 4 default rules (VerdictRejected, ConfidenceLow, SchemaMismatch, EmptyArtifact), extensible via ReplanRule ABC
+- **MPC Replan Check** (`zelos/execution_engine.py`) — `_mpc_replan_check()` hook in submit_result(), incremental verification per task, diagnosis engine trigger, replan count cap at 5
+- **Planner base class** (`zelos/planner.py`) — `Planner(ABC)` extracted from LLMPlanner, `replan_path()` with structured failure_context (verdict → diagnosis → classification)
+- **Runtime replan coordination** (`zelos/runtime.py`) — `_on_replan()`, `_build_failure_context()`, FeatureFlags integration, diagnosis engine wiring
+- **TaskGraph additions** (`zelos/task_graph.py`) — `BLOCKED` TaskStatus, `get_dependents()` method
+- **PlannerPlan.get_task()** — task lookup by ID within a plan
+
+### Changed
+- Version: 1.2.0 → 1.3.0
+- `ExecutionEngine.__init__()`: new v1.3.0 fields (replan_callback, replan_rules, current_plan, replan_count, max_replans, incremental_verifier, diagnosis_engine)
+- `ExecutionEngine.submit_result()`: MPC replan check invoked after result handling (outside lock)
+- `ZelosRuntime.__init__()`: FeatureFlags-aware init, conditional MPC callback + diagnosis wiring
+- `TaskStatus`: new `BLOCKED` enum value with valid transitions
+- `LLMPlanner` now extends `Planner` base class
+
+### Test Results
+- 49 new v1.3.0 tests (47 passed, 5 integration tests skipped — require full Runtime + Agent env)
+- 211 total passed, 12 skipped, 0 failures
+- Zero regressions across all 162 existing tests
+
+### Reference
+- `docs/v1.3.0-requirements.md`
+- `docs/zelos-architecture-critique-and-evolution.md`
+
+---
+
 ## [1.2.0] — 2026-08-01
 
 ### Added — Runtime Diagnosis & SWE-bench Pipeline

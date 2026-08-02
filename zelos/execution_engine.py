@@ -42,7 +42,10 @@ class AgentState:
 
 
 class ExecutionEngine:
-    """Kernel component — Task dispatch, lifecycle, timeouts, heartbeat tracking."""
+    """Kernel component — Task dispatch, lifecycle, timeouts, heartbeat tracking.
+
+    v1.3.0: MPC replan_check hook, incremental verification, diagnosis trigger.
+    """
 
     def __init__(self, task_graph: TaskGraphEngine, event_bus: EventBus):
         self._task_graph = task_graph
@@ -58,6 +61,15 @@ class ExecutionEngine:
         self._task_inputs: dict[str, dict] = {}  # v0.9.0: task input context
         self._task_start_times: dict[str, float] = {}  # v0.9.0: task start timestamps
         self._credential_injector = None  # v1.1.0: set by runtime
+
+        # v1.3.0: MPC Adaptive Loop
+        self._replan_callback: Callable | None = None  # Runtime._on_replan
+        self._replan_rules: list = []  # ReplanRule instances
+        self._current_plan = None  # PlannerPlan reference
+        self._replan_count: dict[str, int] = {}  # goal_id → count
+        self._max_replans: int = 5
+        self._incremental_verifier = None  # SchemaVerifier for per-task check
+        self._diagnosis_engine = None  # DiagnosisEngine instance (from feature flag)
 
     # ── Agent Management ──
 
@@ -255,7 +267,145 @@ class ExecutionEngine:
                         "duration_ms": int(duration_ms),
                     },
                 ))
-            return True
+
+        # ── v1.3.0: MPC Replan Check (outside lock to avoid deadlock) ──
+        self._mpc_replan_check(task_id, result)
+        return True
+
+    def _mpc_replan_check(self, task_id: str, result: dict) -> None:
+        """v1.3.0: After task result is handled, check if replan is needed."""
+        if not self._replan_callback or not self._replan_rules:
+            return
+        if not self._current_plan:
+            return
+
+        # Only trigger replan on failed tasks
+        status = result.get("status")
+        if status == "completed":
+            return
+
+        goal_id = getattr(self._current_plan, 'goal_id', 'unknown')
+        count = self._replan_count.get(goal_id, 0)
+        if count >= self._max_replans:
+            self._event_bus.publish(Event(
+                event_id=str(uuid.uuid4()),
+                event_type="goal.replan_limit_exceeded",
+                source="execution_engine",
+                timestamp=time.time(),
+                correlation_id=goal_id,
+                payload={
+                    "goal_id": goal_id,
+                    "replan_count": count,
+                    "max_replans": self._max_replans,
+                    "reason": f"Exceeded max replans ({self._max_replans})",
+                },
+            ))
+            return
+
+        artifact = result.get("artifact", {})
+        verdict = self._run_incremental_verify(task_id, artifact)
+
+        from .replan_rules import ReplanContext
+        ctx = ReplanContext(
+            task_id=task_id,
+            artifact=artifact,
+            verdict=verdict,
+            current_plan=self._current_plan,
+        )
+
+        diagnosis = self._run_diagnosis_if_applicable(task_id, result)
+
+        for rule in self._replan_rules:
+            if rule.should_replan(ctx):
+                new_plan = self._replan_callback(
+                    plan_id=self._current_plan.plan_id,
+                    trigger=rule.trigger_reason,
+                    context={
+                        "failed_task_id": task_id,
+                        "verdict": verdict,
+                        "diagnosis": diagnosis,
+                        "completed_tasks": self._get_completed_task_ids(),
+                        "failed_task": self._task_graph.get_task(task_id),
+                    },
+                )
+                if new_plan:
+                    self._current_plan = new_plan
+                    self._replan_count[goal_id] = count + 1
+                    self._event_bus.publish(Event(
+                        event_id=str(uuid.uuid4()),
+                        event_type="execution_plan.modified",
+                        source="execution_engine",
+                        timestamp=time.time(),
+                        correlation_id=new_plan.plan_id,
+                        payload={
+                            "plan_id": new_plan.plan_id,
+                            "trigger_reason": rule.trigger_reason,
+                            "failed_task_id": task_id,
+                            "replan_count": count + 1,
+                        },
+                    ))
+                break
+
+    # ── v1.3.0: MPC Support Methods ──
+
+    def set_replan_callback(self, callback: Callable) -> None:
+        """v1.3.0: Inject Runtime._on_replan as the replan callback."""
+        self._replan_callback = callback
+
+    def set_current_plan(self, plan) -> None:
+        """v1.3.0: Set the current ExecutionPlan reference."""
+        self._current_plan = plan
+
+    def set_diagnosis_engine(self, engine) -> None:
+        """v1.3.0: Inject DiagnosisEngine for failure analysis."""
+        self._diagnosis_engine = engine
+
+    def _run_incremental_verify(self, task_id: str, artifact: dict | None):
+        """v1.3.0: Lightweight per-task verification after completion."""
+        verifier = self._incremental_verifier
+        if not verifier:
+            from .verifier import Verdict
+            return Verdict(verdict="passed", score=1.0, verifier_id="incremental")
+
+        if artifact is None or (isinstance(artifact, dict) and not artifact):
+            from .verifier import Verdict
+            return Verdict(verdict="failed", score=0.0, verifier_id="incremental",
+                          summary="Empty artifact")
+
+        task = self._task_graph.get_task(task_id)
+        rules = ["non_empty"]
+        expected_schema = getattr(task, 'expected_output_schema', None) if task else None
+        if expected_schema:
+            rules.append("schema")
+
+        from .verifier import VerificationCriteria
+        criteria = VerificationCriteria(
+            expected_output_schema=expected_schema or {},
+            rules=rules,
+        )
+        return verifier.verify(artifact, criteria)
+
+    def _run_diagnosis_if_applicable(self, task_id: str, result: dict):
+        """v1.3.0: Run DiagnosisEngine if test_output is present in result."""
+        if not self._diagnosis_engine:
+            return None
+        test_output = (
+            result.get("test_output")
+            or (result.get("error") or {}).get("test_output", "")
+        )
+        if not test_output:
+            return None
+        return self._diagnosis_engine.diagnose(test_output)
+
+    def _get_completed_task_ids(self) -> list[str]:
+        """v1.3.0: Return task_ids of all COMPLETED tasks in current plan."""
+        if not self._current_plan:
+            return []
+        completed = []
+        for task in self._task_graph.list_tasks():
+            if task.status == TaskStatus.COMPLETED:
+                completed.append(task.task_id)
+        return completed
 
     # ── Cancellation ──
 

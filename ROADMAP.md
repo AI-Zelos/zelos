@@ -313,4 +313,43 @@ Explicitly NOT part of Zelos core. Future ecosystem:
 
 ## Versioning
 
-Semantic Versioning. Current version: **v1.2.0** (Phase 12 Complete).
+---
+
+## Phase 13: MPC Adaptive Scheduling Loop
+
+**Status:** Complete
+**Version:** v1.3.0
+**Timeline:** August 2026
+
+### Goal
+
+Implement MPC (Model Predictive Control) adaptive scheduling: replan after each task failure
+instead of one-shot Plan → Execute. Add Feature Flag system for phased component verification.
+
+### Scope
+
+- [x] Feature Flags (`zelos/feature_flags.py`) — 20 flags, stage_a through stage_e
+- [x] Replan Rules Engine (`zelos/replan_rules.py`) — 4 default rules, extensible ABC
+- [x] MPC Replan Check (`zelos/execution_engine.py`) — `_mpc_replan_check()` hook, replan cap (5)
+- [x] Incremental Verification — `_run_incremental_verify()` per task completion
+- [x] Structured Failure Context — 3-layer (verdict → diagnosis → classification)
+- [x] Planner base class (`zelos/planner.py`) — `Planner(ABC)` + `RuleBasedPlanner` + `replan_path()`
+- [x] LLM-powered replan — `LLMPlanner.replan_path()` calls LLM with failure context
+- [x] ConfigLoader features parsing (`zelos/config_loader.py`) — yaml + validation
+- [x] TaskGraph BLOCKED status + `get_dependents()`
+- [x] Runtime MPC coordination — `_on_replan()` + `_build_failure_context()`
+
+### Test Results
+
+216 total tests: 216 passed, 7 skipped. Zero regressions.
+
+### Reference
+- `docs/v1.3.0-requirements.md`
+- `docs/zelos-architecture-critique-and-evolution.md`
+- `docs/swebench-poc-experiment-design.md` (planned)
+
+---
+
+## Versioning
+
+Semantic Versioning. Current version: **v1.3.0** (Phase 13 Complete).
