@@ -1,0 +1,39 @@
+{
+  "instance_id": "django__django-13344",
+  "group": "orchestrated",
+  "timestamp": "2026-08-02T16:25:44",
+  "result": {
+    "pass": false,
+    "patch": "",
+    "total_time_seconds": 206.3
+  },
+  "metrics": {
+    "replan_count": 4,
+    "agent_tokens_estimate": 34739,
+    "total_tokens_estimate": 34739,
+    "decision_reach_rate": 1.0,
+    "diagnosis_results": [
+      {
+        "total_tests": 0,
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "pass_rate": 1.0,
+        "failures": [],
+        "impact_scope": "unknown",
+        "recommendation": "all_passed"
+      },
+      {
+        "total_tests": 0,
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "pass_rate": 1.0,
+        "failures": [],
+        "impact_scope": "unknown",
+        "recommendation": "all_passed"
+      }
+    ],
+    "files_found": []
+  }
+}

@@ -25,7 +25,7 @@
 | xarray-3993 | ❌ FAIL | ✅ PASS | ✅ **PASS** | 2,871 |
 | xarray-6744 | ❌ FAIL | ❌ FAIL | ✅ **PASS** | 4,371 |
 | django-13195 | ❌ FAIL | ✅ PASS | ✅ **PASS** | 5,444 |
-| django-13344 | ✅ PASS | ❌ (API err) | — | — |
+| django-13344 | ✅ PASS | ❌ (API err) | ❌ FAIL | 34,739 |
 
 编排组 **3/3 PASS**，对应基线全部 FAIL。
 
