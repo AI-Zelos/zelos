@@ -61,7 +61,7 @@ def generate_report(results_dir: str, output_file: str) -> str:
     for name, s in [("基线组", b_summary), ("+诊断组", d_summary), ("+编排组", o_summary)]:
         lines.append(
             f"| {name} | {s.get('pass_rate', 'N/A')} | "
-            f"{s.get('total_tokens_estimate', 'N/A'):,} | "
+            f"{s.get('total_tokens_estimate', 0):,} | "
             f"{s.get('avg_retries_per_instance', 'N/A')} | "
             f"{s.get('avg_time_seconds', 'N/A')}s |"
         )

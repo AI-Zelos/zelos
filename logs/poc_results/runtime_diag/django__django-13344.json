@@ -1,0 +1,17 @@
+{
+  "instance_id": "django__django-13344",
+  "group": "runtime_diag",
+  "timestamp": "2026-08-02T16:11:20",
+  "result": {
+    "pass": false,
+    "patch": "API_ERROR: API call timeout (120s)",
+    "total_time_seconds": 480.4
+  },
+  "metrics": {
+    "retry_count": 4,
+    "runtime_diag_overhead_tokens": 148,
+    "agent_tokens_estimate": 0,
+    "total_tokens_estimate": 148,
+    "agent_calls": 4
+  }
+}

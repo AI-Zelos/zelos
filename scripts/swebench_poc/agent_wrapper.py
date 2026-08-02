@@ -129,7 +129,8 @@ class ClaudeCodeAgent:
         self._client = anthropic.Anthropic(
             api_key=API_KEY,
             base_url=BASE_URL,
-            timeout=timeout,
+            timeout=120,  # Per-request timeout
+            max_retries=1,
         )
 
     @property
@@ -257,22 +258,32 @@ class ClaudeCodeAgent:
         t0 = time.perf_counter()
 
         try:
-            response = self._client.messages.create(
-                model=MODEL,
-                max_tokens=8192,
-                system=system,
-                messages=[{"role": "user", "content": user_message}],
-            )
+            import threading
+            result = [None]
+            error = [None]
+            def _call():
+                try:
+                    result[0] = self._client.messages.create(
+                        model=MODEL, max_tokens=8192, system=system,
+                        messages=[{"role": "user", "content": user_message}],
+                    )
+                except Exception as e:
+                    error[0] = e
+
+            t = threading.Thread(target=_call, daemon=True)
+            t.start()
+            t.join(timeout=120)
+            if t.is_alive():
+                raise TimeoutError("API call timeout (120s)")
+
+            if error[0]:
+                raise error[0]
+
+            response = result[0]
             elapsed = time.perf_counter() - t0
-
-            output = ""
-            for block in response.content:
-                if block.type == "text":
-                    output += block.text
-
+            output = "".join(b.text for b in response.content if b.type == "text")
             self._total_input_tokens += response.usage.input_tokens
             self._total_output_tokens += response.usage.output_tokens
-
             patch = self._file_content_to_patch(output, hint_filepath)
 
         except Exception as e:

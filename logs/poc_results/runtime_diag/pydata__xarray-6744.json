@@ -1,0 +1,17 @@
+{
+  "instance_id": "pydata__xarray-6744",
+  "group": "runtime_diag",
+  "timestamp": "2026-08-02T15:59:02",
+  "result": {
+    "pass": false,
+    "patch": "",
+    "total_time_seconds": 349.6
+  },
+  "metrics": {
+    "retry_count": 4,
+    "runtime_diag_overhead_tokens": 37,
+    "agent_tokens_estimate": 24824,
+    "total_tokens_estimate": 24861,
+    "agent_calls": 4
+  }
+}

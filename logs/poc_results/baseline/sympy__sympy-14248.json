@@ -1,0 +1,15 @@
+{
+  "instance_id": "sympy__sympy-14248",
+  "group": "baseline",
+  "timestamp": "2026-08-02T15:36:42",
+  "result": {
+    "pass": false,
+    "patch": "",
+    "total_time_seconds": 481.9
+  },
+  "metrics": {
+    "retry_count": 0,
+    "total_tokens_estimate": 33810,
+    "agent_calls": 4
+  }
+}
