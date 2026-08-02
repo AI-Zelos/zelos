@@ -59,7 +59,114 @@
 
 编排组最初使用 Anthropic 兼容端点时 API 频繁 hang。切换到 OpenAI 兼容端点（`api.deepseek.com/v1`）后，稳定性完全解决，单次调用从 40-100s 降到 5s。
 
-## 四、实验局限性
+## 四、编排组执行流程
+
+### 整体架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    编排组执行流程                          │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  Phase 1: Search Agent（代码定位）                        │
+│    ┌──────────────────────────────────────┐             │
+│    │ 输入: issue 描述 + repo 结构          │             │
+│    │ API 调用: "分析这个 issue，找出需要     │             │
+│    │            修改的文件和函数"            │             │
+│    │ 输出: 文件路径列表                     │             │
+│    │ 例: ["django/http/response.py"]       │             │
+│    └──────────────────────────────────────┘             │
+│                         ↓                               │
+│  Phase 2: Fix Loop（MPC 自适应修复）                      │
+│    ┌──────────────────────────────────────┐             │
+│    │ Attempt 1:                           │             │
+│    │   Fix Agent 收到:                    │             │
+│    │     - issue 描述                     │             │
+│    │     - Phase 1 定位结果                │             │
+│    │     - 目标文件完整内容                 │             │
+│    │   → DeepSeek API 调用                │             │
+│    │   → 输出修复后的完整文件               │             │
+│    │   → git diff 生成 patch              │             │
+│    │   → git apply + 语法检查              │             │
+│    │   → 失败 ↓                           │             │
+│    ├──────────────────────────────────────┤             │
+│    │         MPC Replan（最多 3 次）        │             │
+│    │                                      │             │
+│    │   ① Diagnosis Engine 解析失败原因     │             │
+│    │      pytest 输出 → 结构化诊断:        │             │
+│    │       - 哪个测试失败                   │             │
+│    │       - 失败类型（AssertionError等）    │             │
+│    │       - 文件:行号                     │             │
+│    │       - expected vs actual           │             │
+│    │                                      │             │
+│    │   ② Failure Classifier 决策          │             │
+│    │      repair → 继续修                  │             │
+│    │      retry  → 重试当前方案             │             │
+│    │      abandon → 放弃                   │             │
+│    │                                      │             │
+│    │   ③ 诊断结论 → Fix Agent              │             │
+│    │      "test_foo 在 response.py:255    │             │
+│    │       AssertionError,                │             │
+│    │       expected X, got Y"             │             │
+│    ├──────────────────────────────────────┤             │
+│    │ Attempt 2:                           │             │
+│    │   Fix Agent 收到:                    │             │
+│    │     - 原始 issue                     │             │
+│    │     - Phase 1 定位结果                │             │
+│    │     - **结构化诊断**（不是全量日志）    │             │
+│    │     - 上一轮失败的 patch              │             │
+│    │   → DeepSeek API 调用                │             │
+│    │   → 定向修复                          │             │
+│    │   → apply + 语法检查                  │             │
+│    │   → 通过 ✓                           │             │
+│    └──────────────────────────────────────┘             │
+│                                                         │
+│  Phase 3: 最终验证（最多 4 次尝试后）                      │
+│    → apply_and_verify_patch 最终判定                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 与基线组的关键差异
+
+| 维度 | 基线组 | 编排组 |
+|------|--------|--------|
+| **代码定位** | Agent 自己猜，prompt 里给 repo 结构 | 独立 Search Agent 先定位，结果传给 Fix Agent |
+| **失败反馈** | 全量 pytest/错误日志（4000 字符）丢给 Agent | Diagnosis Engine 结构化诊断（~200 字符） |
+| **决策方式** | Agent 自己决定怎么修 | Failure Classifier 判断 repair/retry/abandon |
+| **重试策略** | Agent 自主判断（黑盒） | Zelos Runtime 显式控制 max 3 次 replan |
+| **Token 效率** | Agent 反复读日志消耗大量 Token | 诊断压缩后 Token 大幅减少 |
+
+### xarray-6744 为什么诊断组失败但编排组成功
+
+```
+诊断组流程:
+  Agent 读 issue → 生成 patch → 语法错误 → Diagnosis Engine 诊断
+  → Agent 看到 "IndentationError" → 重试 → 还是语法错误 → 放弃
+  
+编排组流程:
+  Search Agent → 精确定位到 xarray/core/rolling.py
+  Fix Agent → 收到定位结果 + 文件内容 → 生成 patch → 通过 ✓
+  
+关键差异: Search Agent 独立定位, Agent 有了明确的修改目标,
+不需要自己从 issue 描述中猜测文件位置。
+```
+
+### 实现层面的诚实说明
+
+当前 PoC 的"编排"通过 Python for 循环实现，未经过 Zelos `ExecutionEngine._mpc_replan_check()` 全链路。
+
+```
+PoC 实现（当前）                生产环境（目标）
+─────────────────              ─────────────────
+Python for 循环                 Zelos Runtime Event Bus
+直接调用 DiagnosisEngine        ExecutionEngine._mpc_replan_check()
+直接调用 FailureClassifier      Runtime._on_replan() + RuleBasedPlanner
+apply_and_verify_patch()        Verifier Chain + SWE-bench eval harness
+```
+
+功能等效，v1.3 的 MPC 基础设施代码已就绪（216 tests），PoC 阶段为快速验证选择了直接调用方式。生产环境切换到 Zelos 全链路只需改编排组脚本的调用方式，不需要修改 Runtime 代码。
+
+## 五、实验局限性
 
 | 问题 | 影响 | 建议 |
 |------|------|------|
@@ -69,7 +176,7 @@
 | 缺少真实测试执行 | 只验证了 patch 应用+语法 | 后续接入 SWE-bench eval harness 跑完整测试 |
 | 编排组未执行 | H₁ 无法验证 | 解决 API 稳定性后重跑 |
 
-## 五、结论与下一步
+## 六、结论与下一步
 
 ### 结论
 
