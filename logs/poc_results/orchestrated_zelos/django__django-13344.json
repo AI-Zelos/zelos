@@ -1,0 +1,24 @@
+{
+  "instance_id": "django__django-13344",
+  "group": "orchestrated_zelos",
+  "timestamp": "2026-08-02T19:36:32",
+  "result": {
+    "pass": true,
+    "patch": "diff --git a/django/contrib/staticfiles/handlers.py b/django/contrib/staticfiles/handlers.py\nindex 2ee826e2de..b566601567 100644\n--- a/django/contrib/staticfiles/handlers.py\n+++ b/django/contrib/staticfiles/handlers.py\n@@ -88,9 +88,20 @@ class ASGIStaticFilesHandler(StaticFilesHandlerMixin, ASGIHandler):\n \n     async def __call__(self, scope, receive, send):\n         # Only even look at HTTP requests\n-        if scope['type'] == 'http' and self._should_handle(scope['path']):\n-            # Serve static content\n-            # (the one thing super() doesn't do is __call__, apparently)\n-            return await super().__call__(scope, receive, send)\n-        # Hand off to the main app\n-        return await self.application(scope, receive, send)\n+        if scope['type'] != 'http':\n+            return await self.application(scope, receive, send)\n+\n+        # First, handle the request by getting the path from the scope\n+        path = scope['path']\n+        path = path.lstrip('/') or ''\n+        path = path.replace('//', '/')\n+\n+        if not self._should_handle(path):\n+            return await self.application(scope, receive, send)\n+\n+        # Serve the static file\n+        from django.core.handlers.asgi import ASGIRequest\n+        request = ASGIRequest(scope, receive)\n+\n+        response = await self.get_response_async(request)\n+        await response(scope, receive, send)\n\\ No newline at end of file",
+    "total_time_seconds": 11.3
+  },
+  "metrics": {
+    "replan_count": 0,
+    "mpc_plan_modified_events": 0,
+    "total_mpc_events": 0,
+    "agent_tokens_estimate": 8162,
+    "total_tokens_estimate": 8162,
+    "decision_reach_rate": 0.0,
+    "files_found": [
+      "django/contrib/staticfiles/handlers.py",
+      "django/core/handlers/asgi.py",
+      "django/http/response.py"
+    ],
+    "target_file": "django/contrib/staticfiles/handlers.py"
+  }
+}
