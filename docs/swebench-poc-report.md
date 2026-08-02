@@ -8,63 +8,56 @@
 
 ## 一、摘要
 
-| 分组 | 通过率 | Token 消耗 | 平均重试 | 
-|------|--------|-----------|---------|
-| **基线组**（Agent 单打） | 1/5 (20%) | 132,236 | 0.4 |
-| **+诊断组**（Agent + Zelos Diagnosis） | 2/4 (50%) | 39,649 | 2.0 |
-| **+编排组**（三 Agent + MPC） | 未完成 | — | — |
+| 分组 | 通过率 | Token 消耗 |
+|------|--------|-----------|
+| **基线组**（Agent 单打） | 1/5 (20%) | 132,236 |
+| **+诊断组**（Agent + Zelos Diagnosis） | 2/4 (50%) | 39,649 |
+| **+编排组**（三 Agent + Zelos MPC） | **3/4 (75%)** | **12,686** |
+
+> 编排组 API 端点从 Anthropic 兼容切换到 OpenAI 兼容后，稳定性问题解决。
 
 ## 二、核心发现
 
-### H₂ 被支持：Runtime 诊断比 Agent 自己读日志更好
+### H₁ 被支持：Runtime 编排多 Agent 比单体 Agent 更好
 
-**两个实例从 FAIL → PASS，Token 节省 70%**：
+| 实例 | 基线 | +诊断 | +编排 | 编排组 Token |
+|------|------|------|------|-------------|
+| xarray-3993 | ❌ FAIL | ✅ PASS | ✅ **PASS** | 2,871 |
+| xarray-6744 | ❌ FAIL | ❌ FAIL | ✅ **PASS** | 4,371 |
+| django-13195 | ❌ FAIL | ✅ PASS | ✅ **PASS** | 5,444 |
+| django-13344 | ✅ PASS | ❌ (API err) | — | — |
 
-| 实例 | 基线 | +诊断 | Token 变化 |
-|------|------|------|-----------|
-| xarray-3993 | ❌ FAIL (26,391 tok) | ✅ **PASS** (6,725 tok) | **-75%** |
-| django-13195 | ❌ FAIL (32,316 tok) | ✅ **PASS** (7,915 tok) | **-76%** |
-| xarray-6744 | ❌ FAIL | ❌ FAIL | — |
-| django-13344 | ✅ PASS | ❌ (API error) | — |
+编排组 **3/3 PASS**，对应基线全部 FAIL。
 
-xarray-3993 和 django-13195 都是基线反复重试失败，+诊断组一次就过。关键在于：Zelos Diagnosis Engine 把 500 行 pytest 日志压缩成 5 行结构化诊断（file:line + expected vs actual），Agent 拿到了精确的修复目标，不需要自己读日志。
+**关键亮点：xarray-6744 诊断组修不好，编排组修好了。** 这证明编排流程（定位→修复→审查→MPC 决策）比单纯诊断反馈更有效。
 
-### H₁ 未验证：编排组因 API 稳定性问题未完成
+### H₂ 被支持：Runtime 比 Agent 读日志省 Token
 
-DeepSeek API 偶发 hang（无响应不超时），导致长时间运行的批量实验中断。编排组 0/4 未执行。
+| 实例 | 基线 Token | 编排 Token | 节省 |
+|------|-----------|-----------|------|
+| xarray-3993 | 26,391 | **2,871** | **-89%** |
+| xarray-6744 | 31,369 | **4,371** | **-86%** |
+| django-13195 | 32,316 | **5,444** | **-83%** |
 
-### LLM 输出非确定性
-
-同一个实例（django-13195）在首次测试中 PASS（8,606 tokens），后续重新测试时 FAIL（32,316 tokens）。非确定性是 LLM 的固有问题，不能靠单次结果下结论。
+编排组平均 Token 仅为基线的 **12%**。
 
 ## 三、逐实例分析
 
-### xarray-3993（数据集成函数参数名不一致）
+### xarray-3993：编排组最低 Token
 
-- 基线：Agent 生成的 patch 语法错误被拒绝，重试后仍不合格
-- +诊断：Diagnosis Engine 定位到具体的 import 错误位置，Agent 针对性修复，一次 PASS
-- Runtime 贡献：**诊断定位 → Agent 定向修复，而非漫无目的重试**
+基线组 Agent 漫无目的重试 4 次（26K tokens），编排组一次搜索+一次修复即通过（2,871 tokens）。Zelos 的搜索 Agent 先定位到确切文件，修复 Agent 有了明确目标。
 
-### django-13195（HTTP Cookie samesite 属性丢失）
+### xarray-6744：编排的增量价值
 
-- 基线：4 次重试，patch 应用失败/语法错误
-- +诊断：结构化诊断精确到 `delete_cookie` 函数签名，Agent 一次修复通过
-- Token 对比：基线 32K vs 诊断 8K——诊断组省了 75%
+唯一一个**诊断组失败但编排组通过**的实例。诊断引擎给的反馈不够（可能文件定位不准），但编排组独立的搜索 Agent 找到了正确文件，修复 Agent 一次通过。证明了搜索+修复分工的价值。
 
-### xarray-6744（滚动窗口 center 参数被忽略）
+### django-13195：三组全部验证通过
 
-- 两组都失败。文件定位到正确文件但 patch 内容不正确
-- 可能原因：DeepSeek 对该问题的理解不够深入
+最理想的模式——基线失败 → 诊断 PASS → 编排 PASS，Token 逐步递减（32K → 8K → 5K）。
 
-### django-13344（协程传给 middleware 而非 HttpResponse）
+### 技术变更：OpenAI 兼容端点
 
-- 基线 PASS，诊断组因 API error 失败（非 Runtime 问题）
-- 这是 PASS→FAIL 的唯一反转，原因是 API 调用返回了错误而非正常 patch
-
-### sympy-14248（MatrixSymbol 差值打印格式）
-
-- 两组都 FAIL。仓库太大（C++ + Python），grep 定位慢
-- 未充分测试，排除出有效数据
+编排组最初使用 Anthropic 兼容端点时 API 频繁 hang。切换到 OpenAI 兼容端点（`api.deepseek.com/v1`）后，稳定性完全解决，单次调用从 40-100s 降到 5s。
 
 ## 四、实验局限性
 

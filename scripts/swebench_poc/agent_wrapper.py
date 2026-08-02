@@ -18,15 +18,14 @@ import os
 import re
 import time
 
-import anthropic
+from openai import OpenAI
 
 TIMEOUT = 300
-# Use settings from ~/.claude/settings.json if ANTHROPIC_BASE_URL is set
-# (e.g., DeepSeek as Anthropic-compatible backend)
-MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+# DeepSeek OpenAI-compatible endpoint (more stable than Anthropic-compatible)
+MODEL = "deepseek-chat"
+BASE_URL = "https://api.deepseek.com/v1"
 API_KEY = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get(
-    "ANTHROPIC_API_KEY", "")
+    "DEEPSEEK_API_KEY", os.environ.get("ANTHROPIC_API_KEY", ""))
 
 # Patch-only system prompt — forces clean diff output
 PATCH_SYSTEM_PROMPT = (
@@ -126,11 +125,11 @@ class ClaudeCodeAgent:
 
         if not API_KEY:
             print("  WARNING: ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY not set.")
-        self._client = anthropic.Anthropic(
+        self._client = OpenAI(
             api_key=API_KEY,
             base_url=BASE_URL,
-            timeout=120,  # Per-request timeout
-            max_retries=1,
+            timeout=90.0,
+            max_retries=0,
         )
 
     @property
@@ -253,37 +252,21 @@ class ClaudeCodeAgent:
     def _call_api(self, user_message: str,
                   system: str = PATCH_SYSTEM_PROMPT,
                   hint_filepath: str = "") -> dict:
-        """Call API. Parse code block → generate real patch via git diff."""
+        """Call API with 90s timeout. Parse code block → git diff."""
         self._call_count += 1
         t0 = time.perf_counter()
 
         try:
-            import threading
-            result = [None]
-            error = [None]
-            def _call():
-                try:
-                    result[0] = self._client.messages.create(
-                        model=MODEL, max_tokens=8192, system=system,
-                        messages=[{"role": "user", "content": user_message}],
-                    )
-                except Exception as e:
-                    error[0] = e
-
-            t = threading.Thread(target=_call, daemon=True)
-            t.start()
-            t.join(timeout=120)
-            if t.is_alive():
-                raise TimeoutError("API call timeout (120s)")
-
-            if error[0]:
-                raise error[0]
-
-            response = result[0]
+            messages = [{"role": "system", "content": system},
+                       {"role": "user", "content": user_message}]
+            response = self._client.chat.completions.create(
+                model=MODEL, max_tokens=8192, messages=messages,
+                timeout=90,
+            )
             elapsed = time.perf_counter() - t0
-            output = "".join(b.text for b in response.content if b.type == "text")
-            self._total_input_tokens += response.usage.input_tokens
-            self._total_output_tokens += response.usage.output_tokens
+            output = response.choices[0].message.content or ""
+            self._total_input_tokens += response.usage.prompt_tokens
+            self._total_output_tokens += response.usage.completion_tokens
             patch = self._file_content_to_patch(output, hint_filepath)
 
         except Exception as e:
