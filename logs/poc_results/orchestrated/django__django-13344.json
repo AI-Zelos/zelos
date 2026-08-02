@@ -1,39 +1,24 @@
 {
   "instance_id": "django__django-13344",
   "group": "orchestrated",
-  "timestamp": "2026-08-02T16:25:44",
+  "timestamp": "2026-08-02T17:02:33",
   "result": {
-    "pass": false,
-    "patch": "",
-    "total_time_seconds": 206.3
+    "pass": true,
+    "patch": "diff --git a/django/contrib/staticfiles/handlers.py b/django/contrib/staticfiles/handlers.py\nindex 2ee826e2de..65ef6ef2f4 100644\n--- a/django/contrib/staticfiles/handlers.py\n+++ b/django/contrib/staticfiles/handlers.py\n@@ -88,9 +88,18 @@ class ASGIStaticFilesHandler(StaticFilesHandlerMixin, ASGIHandler):\n \n     async def __call__(self, scope, receive, send):\n         # Only even look at HTTP requests\n-        if scope['type'] == 'http' and self._should_handle(scope['path']):\n-            # Serve static content\n-            # (the one thing super() doesn't do is __call__, apparently)\n-            return await super().__call__(scope, receive, send)\n-        # Hand off to the main app\n-        return await self.application(scope, receive, send)\n+        if scope['type'] != 'http':\n+            await self.application(scope, receive, send)\n+            return\n+\n+        # If this is not a static file request, just pass it through\n+        path = scope['path']\n+        if not self._should_handle(path):\n+            await self.application(scope, receive, send)\n+            return\n+\n+        # Otherwise, handle the request with the static files handler\n+        request = self.request_class(scope, receive)\n+        response = await self.get_response_async(request)\n+        if response is not None:\n+            await response(scope, receive, send)\n\\ No newline at end of file",
+    "total_time_seconds": 11.1
   },
   "metrics": {
-    "replan_count": 4,
-    "agent_tokens_estimate": 34739,
-    "total_tokens_estimate": 34739,
-    "decision_reach_rate": 1.0,
-    "diagnosis_results": [
-      {
-        "total_tests": 0,
-        "passed": 0,
-        "failed": 0,
-        "errors": 0,
-        "pass_rate": 1.0,
-        "failures": [],
-        "impact_scope": "unknown",
-        "recommendation": "all_passed"
-      },
-      {
-        "total_tests": 0,
-        "passed": 0,
-        "failed": 0,
-        "errors": 0,
-        "pass_rate": 1.0,
-        "failures": [],
-        "impact_scope": "unknown",
-        "recommendation": "all_passed"
-      }
-    ],
-    "files_found": []
+    "replan_count": 0,
+    "agent_tokens_estimate": 7925,
+    "total_tokens_estimate": 7925,
+    "decision_reach_rate": 0.0,
+    "diagnosis_results": [],
+    "files_found": [
+      "django/contrib/staticfiles/handlers.py",
+      "django/core/handlers/asgi.py",
+      "django/http/response.py",
+      "__init__.py",
+      "asgi.py"
+    ]
   }
 }

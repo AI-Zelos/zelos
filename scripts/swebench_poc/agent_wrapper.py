@@ -678,6 +678,119 @@ def apply_and_verify_patch(patch: str, instance_id: str,
             "exit_code": 0 if all_passed else -1}
 
 
+def run_swebench_eval(instance: dict, patch: str, repo_dir: str) -> dict:
+    """
+    Run SWE-bench evaluation: apply patch, run FAIL_TO_PASS tests.
+    Returns {"resolved": bool, "report": str}
+    """
+    import json as _json, subprocess as _sp, sys as _sys
+
+    # Parse test lists
+    ftp_raw = instance.get("FAIL_TO_PASS", "[]")
+    ptp_raw = instance.get("PASS_TO_PASS", "[]")
+    fail_to_pass = _json.loads(ftp_raw) if isinstance(ftp_raw, str) else ftp_raw
+
+    if not fail_to_pass:
+        return {"resolved": False, "report": "No FAIL_TO_PASS tests",
+                "passed": 0, "failed": 0}
+
+    # Apply patch
+    patch = clean_patch(patch)
+    if not patch or len(patch) < 20:
+        return {"resolved": False, "report": "Empty patch",
+                "passed": 0, "failed": 0}
+
+    pf = f"/tmp/swebench_eval.patch"
+    with open(pf, "w") as f:
+        f.write(patch)
+
+    # Try git apply
+    r = _sp.run(["git", "apply", "--check", pf],
+                capture_output=True, text=True, timeout=30, cwd=repo_dir)
+    if r.returncode != 0:
+        # Try git apply --reject
+        r2 = _sp.run(["git", "apply", "--reject", "--whitespace=fix", pf],
+                     capture_output=True, text=True, timeout=30, cwd=repo_dir)
+        if r2.returncode != 0:
+            if os.path.exists(pf):
+                os.remove(pf)
+            return {"resolved": False,
+                    "report": f"Patch apply failed: {r.stderr[:300]}",
+                    "passed": 0, "failed": 0}
+    else:
+        _sp.run(["git", "apply", pf], capture_output=True, cwd=repo_dir, timeout=10)
+
+    if os.path.exists(pf):
+        os.remove(pf)
+
+    # Determine test runner
+    repo_name = instance.get("repo", "")
+    if "django" in repo_name:
+        # Django: python tests/runtests.py <test_path>
+        test_runner = [_sys.executable, "tests/runtests.py", "--verbosity=0"]
+    else:
+        # xarray, sympy, etc: pytest (skip project plugins, just run tests)
+        test_runner = [_sys.executable, "-m", "pytest", "-q", "--tb=no",
+                      "-p", "no:mypy", "-p", "no:cacheprovider"]
+
+    # Run FAIL_TO_PASS tests
+    passed = 0
+    failed = 0
+    report_lines = []
+    failure_details = []  # Detailed error output for repair
+
+    for test_name in fail_to_pass[:10]:  # Max 10 tests
+        # Convert test name to runner format
+        if "django" in repo_name:
+            import re as _re
+            m = _re.match(r'(\S+)\s+\((.+)\)', test_name)
+            if m:
+                test_id = f"{m.group(2)}.{m.group(1)}"
+            else:
+                test_id = test_name
+            cmd = test_runner + [test_id]
+        else:
+            cmd = test_runner + [test_name]
+
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True,
+                       timeout=120, cwd=repo_dir)
+            if r.returncode == 0:
+                passed += 1
+                report_lines.append(f"  PASS: {test_name}")
+            else:
+                failed += 1
+                report_lines.append(f"  FAIL: {test_name}")
+                # Capture last 5 lines of error for repair feedback
+                err_lines = [l for l in (r.stdout + r.stderr).split("\n")
+                            if l.strip() and "===" not in l][-8:]
+                failure_details.append({
+                    "test": test_name,
+                    "error": "\n".join(err_lines),
+                })
+        except _sp.TimeoutExpired:
+            failed += 1
+            report_lines.append(f"  TIMEOUT: {test_name}")
+
+    # Revert
+    _sp.run(["git", "checkout", "--", "."],
+            capture_output=True, cwd=repo_dir, timeout=10)
+    _sp.run(["git", "clean", "-fd"],
+            capture_output=True, cwd=repo_dir, timeout=10)
+
+    resolved = (failed == 0 and passed > 0)
+    # Build detailed report with error output
+    detail = "\n".join(report_lines[:20])
+    if failure_details:
+        detail += "\n\nError details:\n"
+        for fd in failure_details[:3]:
+            detail += f"\n  {fd['test']}:\n{fd['error']}\n"
+
+    return {"resolved": resolved, "report": detail,
+            "passed": passed, "failed": failed,
+            "failure_details": failure_details}
+
+
 def checkout_instance_commit(instance: dict, repo_dir: str) -> bool:
     """Checkout the SWE-bench instance's base_commit. Returns True on success."""
     import subprocess as _sp
