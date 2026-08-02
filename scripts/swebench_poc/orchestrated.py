@@ -78,16 +78,20 @@ def run_orchestrated(instance: dict, repo_dir: str) -> dict:
     search_result = agent.search_location(issue)
     files_found = search_result.get("files", [])
     print(f"    Found: {files_found[:3]}")
+    # Use search result as target file if old grep found nothing
+    if not target_file and files_found:
+        target_file = files_found[0]
 
     # ── Phase 2: Fix (with MPC loop) ──
     print("  Phase 2: Fix + MPC loop...")
     diagnosis_results = []
 
+    diag_text = ""
     for attempt in range(MAX_REPLANS + 1):
         if attempt == 0:
             result = agent.generate_patch(issue, target_file)
         else:
-            result = agent.repair_patch(issue, diag_text, patch)
+            result = agent.repair_patch(issue, diag_text or "Test failure", patch)
 
         patch = result.get("patch", "")
         if not patch or len(patch) < 20:

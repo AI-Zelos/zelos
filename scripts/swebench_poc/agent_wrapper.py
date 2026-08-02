@@ -191,6 +191,163 @@ class ClaudeCodeAgent:
         return self._call_api(user_msg, system=PATCH_SYSTEM_PROMPT)
 
     def search_location(self, issue: str) -> dict:
+        """Multi-step search with tool access. LLM can grep, read files, list dirs."""
+        tree = self._get_tree()
+        # Extract key terms from issue for initial grep
+        import re as _re
+        # Priority 1: backtick-quoted identifiers (most specific)
+        backticked = _re.findall(r'`([^`]+)`', issue)
+        # Priority 2: ClassName.method or module.ClassName patterns
+        qualified = _re.findall(r'\b([A-Z]\w*\.\w+)', issue)
+        # Priority 3: CamelCase identifiers (class names)
+        camel = _re.findall(r'\b([A-Z]\w{2,})\b', issue)
+        # Priority 4: quoted strings
+        quoted = _re.findall(r'"([^"]+)"|\'([^\']+)\'', issue)
+        keywords = []
+        for t in backticked[:5] + qualified[:5] + camel[:5]:
+            if len(t) > 3 and not t.startswith('http'):
+                keywords.append(t.strip())
+        # Dedupe preserving order
+        seen = set()
+        keywords = [k for k in keywords if not (k in seen or seen.add(k))]
+
+        # Run initial grep for top keywords, show keyword→files mapping
+        import subprocess as _sp
+        grep_hits = []
+        grep_detail = []
+        for kw in keywords[:8]:
+            try:
+                # Grep for the keyword, and also try "class <kw>" for class names
+                patterns = [kw]
+                if kw[0].isupper():  # Looks like a class name
+                    patterns.append(f"class {kw}")
+                for pat in patterns[:2]:
+                    r = _sp.run(
+                        ["grep", "-rln", "--include=*.py", pat, self.repo_path],
+                        capture_output=True, text=True, timeout=15,
+                    )
+                    files = [f.replace(self.repo_path + "/", "")
+                            for f in r.stdout.strip().split("\n")
+                            if f.endswith(".py") and "test" not in f.lower()]
+                    # Prefer files that match "class <Name>" (definition) over usage
+                    if "class " in pat:
+                        for f in files:
+                            grep_detail.append(f"  grep 'class {kw}' → {f}")
+                            grep_hits.insert(0, f)  # Insert at front
+                    else:
+                        for f in files[:2]:
+                            grep_detail.append(f"  grep '{kw}' → {f}")
+                        grep_hits.extend(files[:2])
+            except Exception:
+                pass
+        grep_hits = list(dict.fromkeys(grep_hits))[:15]  # dedupe preserving order
+        grep_text = "\n".join(grep_detail[:20]) if grep_detail else "(no grep matches)"
+        # Also read first 30 lines of top 3 hits for context
+        file_previews = ""
+        for f in grep_hits[:3]:
+            fp = os.path.join(self.repo_path, f)
+            if os.path.isfile(fp):
+                with open(fp) as fh:
+                    preview = "".join(fh.readlines()[:30])
+                file_previews += f"\n=== {f} (first 30 lines) ===\n{preview}"
+
+        # Build search prompt with grep results + tool access
+        user_msg = (
+            f"Repository structure:\n{tree}\n\n"
+            f"Issue:\n{issue[:3000]}\n\n"
+            f"Grep results for keywords:\n{grep_text}\n"
+            f"{file_previews}\n\n"
+            "You have access to these tools:\n"
+            "- grep <keyword>: search for a keyword in the repo\n"
+            "- read <filepath>: read first 50 lines of a file\n"
+            "- list <dirpath>: list files in a directory\n\n"
+            "To use a tool, output: TOOL: <tool> <arg>\n"
+            "When confident, output: FILES: (one file path per line)\n\n"
+            "Find the files that need to be modified to fix this issue."
+        )
+
+        system = (
+            "You are a code search agent with tool access. "
+            "Use tools to explore the codebase, then output the exact files "
+            "to modify. Output FILES: on the final line."
+        )
+
+        conversation = [{"role": "user", "content": user_msg}]
+        found_files = list(grep_hits[:3])  # Start with grep results
+
+        for _round in range(3):  # Max 3 tool-calling rounds
+            msgs = [{"role": "system", "content": system}] + conversation
+            response = self._client.chat.completions.create(
+                model=MODEL, max_tokens=1024, messages=msgs, timeout=30,
+            )
+            text = response.choices[0].message.content or ""
+            self._total_input_tokens += response.usage.prompt_tokens
+            self._total_output_tokens += response.usage.completion_tokens
+
+            if "FILES:" in text:
+                # Extract file list
+                files_section = text.split("FILES:", 1)[1]
+                for line in files_section.split("\n"):
+                    line = line.strip()
+                    if line.endswith(".py") and not line.startswith("TOOL"):
+                        if line not in found_files:
+                            found_files.append(line)
+                break
+
+            if "TOOL:" in text:
+                tool_line = [l for l in text.split("\n") if "TOOL:" in l]
+                if tool_line:
+                    cmd = tool_line[0].split("TOOL:", 1)[1].strip()
+                    result_text = self._execute_tool(cmd)
+                    conversation.append({"role": "assistant", "content": text})
+                    conversation.append({"role": "user", "content": f"RESULT:\n{result_text}"})
+                    # Also extract any file paths mentioned
+                    for f in _re.findall(r'[\w/]+\.py', result_text):
+                        if f not in found_files and "test" not in f.lower():
+                            found_files.append(f)
+                    continue
+
+            # No TOOL or FILES → treat as final answer
+            for f in _re.findall(r'[\w/]+\.py', text):
+                if f not in found_files and "test" not in f.lower():
+                    found_files.append(f)
+            break
+
+        return {"files": found_files[:5], "location": "\n".join(found_files[:5]),
+                "elapsed_s": 0}
+
+    def _execute_tool(self, cmd: str) -> str:
+        """Execute a tool command: grep, read, or list."""
+        import subprocess as _sp
+        parts = cmd.split(None, 1)
+        tool = parts[0] if parts else ""
+        arg = parts[1] if len(parts) > 1 else ""
+
+        try:
+            if tool == "grep":
+                r = _sp.run(
+                    ["grep", "-rl", "--include=*.py", arg, self.repo_path],
+                    capture_output=True, text=True, timeout=15,
+                )
+                return r.stdout[:2000] or "(no matches)"
+            elif tool == "read":
+                fp = os.path.join(self.repo_path, arg)
+                if os.path.isfile(fp):
+                    with open(fp) as fh:
+                        lines = fh.readlines()[:50]
+                    return "".join(lines)
+                return f"File not found: {arg}"
+            elif tool == "list":
+                dp = os.path.join(self.repo_path, arg)
+                if os.path.isdir(dp):
+                    return "\n".join(sorted(os.listdir(dp))[:30])
+                return f"Dir not found: {arg}"
+            else:
+                return f"Unknown tool: {tool}"
+        except Exception as e:
+            return f"Error: {e}"
+
+    def search_location_legacy(self, issue: str) -> dict:
         tree = self._get_tree()
         user_msg = (
             f"Repository structure:\n{tree}\n\n"
