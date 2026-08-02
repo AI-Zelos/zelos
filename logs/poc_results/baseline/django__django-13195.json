@@ -1,0 +1,15 @@
+{
+  "instance_id": "django__django-13195",
+  "group": "baseline",
+  "timestamp": "2026-08-02T15:23:57",
+  "result": {
+    "pass": false,
+    "patch": "",
+    "total_time_seconds": 370.9
+  },
+  "metrics": {
+    "retry_count": 1,
+    "total_tokens_estimate": 32316,
+    "agent_calls": 4
+  }
+}

@@ -2,59 +2,62 @@
 """
 +Runtime Diagnosis Experiment — Single Agent + Zelos Diagnosis Engine.
 
-Group B: Agent generates patch → apply + verify → if fail:
-  Diagnosis Engine → structured diagnosis → Agent repairs (NOT full log)
+Baseline Agent, but test failures are parsed by Diagnosis Engine into
+structured output instead of feeding raw logs to the Agent.
 """
 
-import json
-import os
-import sys
-import time
+import json, os, re, subprocess, sys, time
 
-from agent_wrapper import ClaudeCodeAgent, apply_and_verify_patch
+from agent_wrapper import (ClaudeCodeAgent, apply_and_verify_patch,
+                           checkout_instance_commit)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-from zelos.diagnosis_engine import DiagnosisEngine
-from zelos.failure_classifier import FailureClassifier
+try:
+    from zelos.diagnosis_engine import DiagnosisEngine
+    from zelos.failure_classifier import FailureClassifier
+    HAS_ZELOS = True
+except ImportError:
+    HAS_ZELOS = False
 
 MAX_RETRIES = 3
 OUTPUT_DIR = "logs/poc_results/runtime_diag"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-diagnosis_engine = DiagnosisEngine()
-classifier = FailureClassifier()
 
-
-def format_diagnosis_for_agent(diag) -> str:
-    """Convert DiagnosisResult to a concise, agent-friendly string."""
-    lines = [f"Tests: {diag.passed}P {diag.failed}F {diag.errors}E "
-             f"(pass rate: {diag.pass_rate:.0%})",
-             f"Impact: {diag.impact_scope}",
-             f"Recommendation: {diag.recommendation}", ""]
-    for i, f_detail in enumerate(diag.failures[:5]):
-        loc = f"{f_detail.location_file}:{f_detail.location_line}" \
-            if f_detail.location_file else "unknown"
-        lines.append(f"Failure {i+1}: {f_detail.test_name}")
-        lines.append(f"  Type: {f_detail.failure_type}")
-        lines.append(f"  Location: {loc}")
-        if f_detail.expected:
-            lines.append(f"  Expected: {f_detail.expected}")
-        if f_detail.actual:
-            lines.append(f"  Actual: {f_detail.actual}")
-    return "\n".join(lines)
-
-
-def estimate_diagnosis_tokens(diag) -> int:
-    return len(format_diagnosis_for_agent(diag)) // 4
+def _extract_target_file(instance: dict, repo_dir: str) -> str:
+    """Find source file by grepping for function names in issue."""
+    issue = instance.get("problem_statement", "")
+    funcs = re.findall(r'(\w+)\.(\w+)\(', issue)
+    for _, fn in funcs[:3]:
+        if len(fn) > 3:
+            try:
+                r = subprocess.run(
+                    ["grep", "-rl", f"def {fn}", repo_dir],
+                    capture_output=True, text=True, timeout=10,
+                )
+                files = [f for f in r.stdout.strip().split("\n")
+                        if f.endswith(".py") and "test" not in f]
+                if files:
+                    return files[0].replace(repo_dir + "/", "")
+            except Exception:
+                pass
+    return ""
 
 
 def run_runtime_diag(instance: dict, repo_dir: str) -> dict:
     iid = instance["instance_id"]
     issue = instance.get("problem_statement", "")
+    target_file = _extract_target_file(instance, repo_dir)
+
+    if not checkout_instance_commit(instance, repo_dir):
+        print(f"  WARNING: Could not checkout base_commit")
+
     agent = ClaudeCodeAgent(repo_dir)
+    de = DiagnosisEngine() if HAS_ZELOS else None
+    fc = FailureClassifier() if HAS_ZELOS else None
 
     print(f"\n{'='*60}")
-    print(f"+DIAGNOSIS: {iid}")
+    print(f"+DIAGNOSIS: {iid}  (target: {target_file or 'auto'})")
     print(f"{'='*60}")
 
     t_start = time.perf_counter()
@@ -65,35 +68,42 @@ def run_runtime_diag(instance: dict, repo_dir: str) -> dict:
     for attempt in range(MAX_RETRIES + 1):
         if attempt == 0:
             print(f"  Attempt {attempt+1}: generating patch...")
-            result = agent.generate_patch(issue)
+            result = agent.generate_patch(issue, target_file)
         else:
             print(f"  Attempt {attempt+1}: repairing with diagnosis...")
-            result = agent.repair_patch(issue, last_diagnosis_text, patch)
+            result = agent.repair_patch(issue, last_diag_text, patch)
 
         patch = result.get("patch", "")
         if not patch or len(patch) < 20:
-            print(f"  ✗ Empty/short patch ({len(patch)} chars)")
+            print(f"  ✗ Empty/short patch")
             retry_count += 1
             continue
 
-        print(f"  Patch: {len(patch)} chars, {result['elapsed_s']:.0f}s")
+        elapsed = result.get("elapsed_s", 0)
+        tokens = agent._total_input_tokens + agent._total_output_tokens
+        print(f"  Patch: {len(patch)} chars, {elapsed:.0f}s, tokens={tokens}")
 
         test_result = apply_and_verify_patch(patch, iid, repo_dir)
         if test_result["all_passed"]:
             print(f"  ✓ OK!")
             break
 
-        # ── Runtime Diagnosis ──
         retry_count += 1
-        diag = diagnosis_engine.diagnose(test_result["raw_output"])
-        total_diag_tokens += estimate_diagnosis_tokens(diag)
-        print(f"    Diag: {diag.failed}F impact={diag.impact_scope} rec={diag.recommendation}")
+        raw = test_result.get("raw_output", "")
 
-        cls = classifier.classify(diag)
-        print(f"    Classifier: {cls.action} salvageable={cls.salvageable}")
-        last_diagnosis_text = format_diagnosis_for_agent(diag)
-        if cls.action == "abandon":
-            break
+        # ── Runtime Diagnosis ──
+        if de and raw:
+            diag = de.diagnose(raw)
+            total_diag_tokens += len(str(diag.to_dict())) // 4
+            print(f"    Diag: {diag.failed}F impact={diag.impact_scope}")
+            last_diag_text = str(diag.to_dict())
+            if fc:
+                cls = fc.classify(diag)
+                print(f"    Classifier: {cls.action} salvageable={cls.salvageable}")
+                if cls.action == "abandon":
+                    break
+        else:
+            last_diag_text = raw[:500]  # Fallback: raw error as diagnosis
 
     elapsed = time.perf_counter() - t_start
 
