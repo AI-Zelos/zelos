@@ -1,0 +1,52 @@
+[
+  {
+    "instance_id": "pydata__xarray-3993",
+    "repo": "pydata/xarray",
+    "difficulty": "simple",
+    "file_count": 2,
+    "fail_tests": 2,
+    "pass_tests": 2398,
+    "total_tests": 2400,
+    "problem_length": 919
+  },
+  {
+    "instance_id": "pydata__xarray-6744",
+    "repo": "pydata/xarray",
+    "difficulty": "simple",
+    "file_count": 1,
+    "fail_tests": 3,
+    "pass_tests": 1815,
+    "total_tests": 1818,
+    "problem_length": 1547
+  },
+  {
+    "instance_id": "django__django-13195",
+    "repo": "django/django",
+    "difficulty": "medium",
+    "file_count": 3,
+    "fail_tests": 5,
+    "pass_tests": 382,
+    "total_tests": 387,
+    "problem_length": 2402
+  },
+  {
+    "instance_id": "django__django-13344",
+    "repo": "django/django",
+    "difficulty": "medium",
+    "file_count": 3,
+    "fail_tests": 2,
+    "pass_tests": 356,
+    "total_tests": 358,
+    "problem_length": 1361
+  },
+  {
+    "instance_id": "sympy__sympy-14248",
+    "repo": "sympy/sympy",
+    "difficulty": "hard",
+    "file_count": 9,
+    "fail_tests": 2,
+    "pass_tests": 433,
+    "total_tests": 435,
+    "problem_length": 583
+  }
+]
