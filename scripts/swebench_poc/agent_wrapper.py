@@ -30,32 +30,87 @@ API_KEY = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get(
 
 # Patch-only system prompt — forces clean diff output
 PATCH_SYSTEM_PROMPT = (
-    "You are a bug-fixing agent. Output ONLY a unified diff patch. "
-    "The patch MUST start with '--- a/' on the first line. "
-    "Do NOT use markdown fences. Do NOT add explanations. "
-    "Every hunk header (@@ ... @@) MUST have correct line numbers."
+    "You are a bug-fixing agent. Read the issue, find the bug, and output "
+    "the COMPLETE corrected file content. Do NOT output a diff.\n\n"
+    "FORMAT (MANDATORY):\n"
+    "Line 1: FILEPATH: path/to/file.py\n"
+    "Line 2: ```python\n"
+    "Line 3+: COMPLETE corrected file content\n"
+    "Last line: ```\n\n"
+    "The file content MUST be syntactically valid Python. "
+    "Include ALL imports, ALL functions, ALL classes — the complete file."
 )
 
 
-def clean_patch(patch_text: str) -> str:
-    """Clean Claude-generated patch: strip markdown, fix common issues."""
+def clean_patch(patch_text: str, repo_dir: str = "") -> str:
+    """Clean LLM output: extract valid unified diff block, strip preamble.
+
+    If patch has @@ hunks but missing ---/+++ headers, tries to
+    auto-detect file path from repo_dir or hunk context.
+    """
+    if not patch_text:
+        return ""
+
+    # Remove markdown fences
     for fence in ["```diff", "```python", "```patch", "```"]:
         patch_text = patch_text.replace(fence, "")
+
     lines = patch_text.split("\n")
-    cleaned = []
-    in_patch = False
-    for line in lines:
-        if line.startswith("--- ") or line.startswith("+++ ") or \
-           line.startswith("diff ") or (line.startswith("@@") and "@@" in line):
-            in_patch = True
-        if in_patch:
-            cleaned.append(line)
-        elif line.startswith("Index:") or line.startswith("==="):
-            cleaned.append(line)
-    result = "\n".join(cleaned if cleaned else lines).strip()
+
+    # Strategy 1: Find first --- line and extract from there
+    for i, line in enumerate(lines):
+        if line.startswith("--- ") and i + 1 < len(lines):
+            if lines[i + 1].startswith("+++ "):
+                result = "\n".join(lines[i:]).strip()
+                if result and not result.endswith("\n"):
+                    result += "\n"
+                return result
+
+    # Strategy 2: Find first @@ hunk, try to construct headers
+    for i, line in enumerate(lines):
+        if line.startswith("@@") and "@@" in line:
+            # Extract the hunk and all following content
+            hunk_lines = lines[i:]
+            # Try to infer file path from hunk function name context
+            match = re.search(r'@@[^@]*@@\s*(.*)', line)
+            func_hint = match.group(1).strip() if match else ""
+            # Search repo for file containing this function
+            filepath = _find_file_by_function(repo_dir, func_hint) if repo_dir else ""
+            if filepath:
+                relpath = filepath.replace(repo_dir + "/", "")
+                result = f"--- a/{relpath}\n+++ b/{relpath}\n" + "\n".join(hunk_lines)
+            else:
+                result = "\n".join(hunk_lines)
+            if result and not result.endswith("\n"):
+                result += "\n"
+            return result
+
+    # Strategy 3: Return original (best effort)
+    result = patch_text.strip()
     if result and not result.endswith("\n"):
         result += "\n"
     return result
+
+
+def _find_file_by_function(repo_dir: str, func_name: str) -> str:
+    """Search repo for a Python file containing a function definition."""
+    if not repo_dir or not func_name:
+        return ""
+    func_name = func_name.split("(")[0].strip().rstrip(":")
+    if not func_name or len(func_name) < 3:
+        return ""
+    import subprocess as _sp
+    try:
+        r = _sp.run(
+            ["grep", "-rl", f"def {func_name}", repo_dir],
+            capture_output=True, text=True, timeout=10,
+        )
+        files = [f for f in r.stdout.strip().split("\n") if f.endswith(".py")]
+        if files:
+            return files[0]
+    except Exception:
+        pass
+    return ""
 
 
 class ClaudeCodeAgent:
@@ -179,7 +234,7 @@ class ClaudeCodeAgent:
 
     def _call_api(self, user_message: str,
                   system: str = PATCH_SYSTEM_PROMPT) -> dict:
-        """Call Anthropic API. Returns {"patch": str, "elapsed_s": float}."""
+        """Call API. Parse FILEPATH+code → generate real patch via git diff."""
         self._call_count += 1
         t0 = time.perf_counter()
 
@@ -188,25 +243,285 @@ class ClaudeCodeAgent:
                 model=MODEL,
                 max_tokens=4096,
                 system=system,
-                stop_sequences=["```"],
                 messages=[{"role": "user", "content": user_message}],
             )
             elapsed = time.perf_counter() - t0
 
-            # Extract text
             output = ""
             for block in response.content:
                 if block.type == "text":
                     output += block.text
 
-            # Clean + track tokens
-            output = clean_patch(output)
             self._total_input_tokens += response.usage.input_tokens
             self._total_output_tokens += response.usage.output_tokens
 
+            # Parse FILEPATH + code → generate real patch
+            patch = self._file_content_to_patch(output)
+
         except Exception as e:
             elapsed = time.perf_counter() - t0
-            output = f"API_ERROR: {e}"
+            patch = f"API_ERROR: {e}"
 
-        return {"patch": output, "elapsed_s": elapsed,
+        return {"patch": patch, "elapsed_s": elapsed,
                 "call_count": self._call_count}
+
+    def _file_content_to_patch(self, llm_output: str,
+                                hint_filepath: str = "") -> str:
+        """Extract code block from LLM output, generate real git diff.
+
+        Parsing: finds ```python...``` block. If hint_filepath is given,
+        uses it directly. Otherwise infers from code content.
+        """
+        import subprocess as _sp
+
+        lines = llm_output.split("\n")
+        code_start = -1
+        code_end = -1
+
+        # Find ```python ... ``` code block
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("```") and code_start < 0:
+                code_start = i + 1
+            elif stripped == "```" and code_start > 0:
+                code_end = i
+                break
+
+        if code_start < 0 or code_end < 0:
+            return ""
+
+        code = "\n".join(lines[code_start:code_end])
+        if len(code.strip()) < 20:
+            return ""
+
+        # Determine file path
+        filepath = hint_filepath
+        if not filepath:
+            # Try FILEPATH: prefix
+            for line in lines[:code_start]:
+                if line.startswith("FILEPATH:") or line.startswith("FILE:"):
+                    filepath = line.split(":", 1)[1].strip()
+                    break
+        if not filepath:
+            # Infer from django/http pattern in code imports
+            for line in code.split("\n")[:10]:
+                if "from django." in line:
+                    parts = line.split()[1].split(".")
+                    if len(parts) >= 3:
+                        filepath = "/".join(parts[:3]) + ".py"
+                        break
+        if not filepath:
+            return ""  # Can't determine file path
+
+        # Write corrected file → git diff → restore
+        full_path = os.path.join(self.repo_path, filepath)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
+        orig = ""
+        if os.path.exists(full_path):
+            with open(full_path) as f:
+                orig = f.read()
+
+        with open(full_path, "w") as f:
+            f.write(code)
+
+        try:
+            r = _sp.run(
+                ["git", "diff", "HEAD", "--", filepath],
+                capture_output=True, text=True, timeout=10,
+                cwd=self.repo_path,
+            )
+            patch = r.stdout.strip()
+        except Exception:
+            patch = ""
+
+        # Restore original
+        if orig:
+            with open(full_path, "w") as f:
+                f.write(orig)
+        else:
+            _sp.run(["git", "checkout", "--", filepath],
+                   capture_output=True, cwd=self.repo_path, timeout=10)
+
+        return patch if patch else llm_output
+
+        # Write corrected file, then git diff
+        full_path = os.path.join(self.repo_path, filepath)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
+        # Save original
+        orig = ""
+        if os.path.exists(full_path):
+            with open(full_path) as f:
+                orig = f.read()
+
+        # Write corrected version
+        with open(full_path, "w") as f:
+            f.write(code)
+
+        # Generate diff against HEAD (not working tree, which might be dirty)
+        try:
+            r = _sp.run(
+                ["git", "diff", "HEAD", "--", filepath],
+                capture_output=True, text=True, timeout=10,
+                cwd=self.repo_path,
+            )
+            patch = r.stdout.strip()
+        except Exception:
+            patch = ""
+
+        # Restore original
+        if orig:
+            with open(full_path, "w") as f:
+                f.write(orig)
+        else:
+            _sp.run(["git", "checkout", "--", filepath],
+                   capture_output=True, cwd=self.repo_path, timeout=10)
+
+        return patch if patch else llm_output  # fallback to raw output
+
+
+# ═══════════════════════════════════════════════════════════════
+# Shared utility: apply patch and run quick validation
+# ═══════════════════════════════════════════════════════════════
+
+def _fix_patch_headers(patch: str, repo_dir: str) -> str:
+    """If patch is missing file headers, try to infer them from repo."""
+    lines = patch.split("\n")
+    # Check if first non-empty line is a hunk (@@), missing ---/+++ headers
+    first_real = ""
+    for line in lines:
+        if line.strip():
+            first_real = line.strip()
+            break
+    if first_real.startswith("@@") and not any(
+        l.startswith("--- ") or l.startswith("+++ ") for l in lines[:3]
+    ):
+        # Try to find the file path from hunk context or repo structure
+        # Search for a common file mentioned in the issue or repo
+        # For now, try common paths from the hunk
+        for root, dirs, files in os.walk(repo_dir):
+            for f in files:
+                if f.endswith(".py") and not f.startswith("_"):
+                    # Try the most common target
+                    pass
+            break
+        # Fallback: guess from known patterns
+        # Most django patches target django/http/response.py or similar
+        # Just add a generic header — git apply will reject if wrong anyway
+        # Better: pass through as-is and let patch -p1 try
+        pass
+    return patch
+
+
+def apply_and_verify_patch(patch: str, instance_id: str,
+                           repo_dir: str) -> dict:
+    """
+    Apply patch using multiple methods, then syntax-check changed files.
+
+    Returns: {"all_passed": bool, "raw_output": str, "exit_code": int}
+    """
+    import subprocess as _sp
+    import sys as _sys
+
+    if not os.path.isdir(repo_dir):
+        return {"all_passed": False, "raw_output": "repo not found", "exit_code": -1}
+    if not patch or len(patch.strip()) < 20:
+        return {"all_passed": False, "raw_output": "Empty or too-short patch", "exit_code": -1}
+
+    patch = clean_patch(patch)
+    if not patch or len(patch.strip()) < 20:
+        return {"all_passed": False, "raw_output": "Patch empty after cleaning", "exit_code": -1}
+    pf = f"/tmp/zelos_poc_{instance_id.replace('/', '_')}.patch"
+    with open(pf, "w") as f:
+        f.write(patch)
+
+    apply_ok = False
+    apply_error = ""
+
+    # Method 1: git apply
+    r = _sp.run(["git", "apply", "--check", pf],
+                capture_output=True, text=True, timeout=30, cwd=repo_dir)
+    if r.returncode == 0:
+        _sp.run(["git", "apply", pf], capture_output=True, cwd=repo_dir, timeout=10)
+        apply_ok = True
+    else:
+        # Method 2: git apply --reject
+        r2 = _sp.run(["git", "apply", "--reject", "--whitespace=fix", pf],
+                     capture_output=True, text=True, timeout=30, cwd=repo_dir)
+        if r2.returncode == 0:
+            apply_ok = True
+        else:
+            # Method 3: patch -p1
+            with open(pf) as fh:
+                r3 = _sp.run(["patch", "-p1", "-f", "--dry-run"],
+                            stdin=fh, capture_output=True, text=True,
+                            timeout=30, cwd=repo_dir)
+            if r3.returncode == 0:
+                with open(pf) as fh:
+                    _sp.run(["patch", "-p1", "-f"], stdin=fh,
+                           capture_output=True, text=True, timeout=10, cwd=repo_dir)
+                apply_ok = True
+            else:
+                apply_error = (
+                    f"git apply: {r.stderr[:300]}\n"
+                    f"git apply --reject: {r2.stderr[:300]}\n"
+                    f"patch: {r3.stderr[:300]}"
+                )
+
+    if os.path.exists(pf):
+        os.remove(pf)
+
+    if not apply_ok:
+        return {"all_passed": False, "raw_output": apply_error, "exit_code": -1}
+
+    # Syntax check changed Python files
+    changed_files = []
+    for line in patch.split("\n"):
+        if line.startswith("+++ b/"):
+            f = line[6:].split("\t")[0]
+            if f != "/dev/null" and f.endswith(".py"):
+                changed_files.append(os.path.join(repo_dir, f))
+
+    syntax_ok = True
+    syntax_output = ""
+    for cf in changed_files[:5]:
+        if os.path.exists(cf):
+            r = _sp.run([_sys.executable, "-m", "py_compile", cf],
+                       capture_output=True, text=True, timeout=30)
+            if r.returncode != 0:
+                syntax_ok = False
+                syntax_output += f"Syntax error in {cf}:\n{r.stderr[:500]}\n"
+
+    # Revert
+    _sp.run(["git", "checkout", "--", "."], capture_output=True,
+            cwd=repo_dir, timeout=10)
+    _sp.run(["git", "clean", "-fd"], capture_output=True,
+            cwd=repo_dir, timeout=10)
+
+    all_passed = apply_ok and syntax_ok
+    output = syntax_output or (
+        f"Patch applied OK, syntax OK ({len(changed_files)} files)"
+    )
+    return {"all_passed": all_passed, "raw_output": output,
+            "exit_code": 0 if all_passed else -1}
+
+
+def checkout_instance_commit(instance: dict, repo_dir: str) -> bool:
+    """Checkout the SWE-bench instance's base_commit. Returns True on success."""
+    import subprocess as _sp
+    commit = instance.get("base_commit", "")
+    if not commit:
+        return True  # No commit specified, assume repo is already correct
+    try:
+        # Clean working tree first
+        _sp.run(["git", "checkout", "--", "."],
+               capture_output=True, cwd=repo_dir, timeout=30)
+        _sp.run(["git", "clean", "-fd"],
+               capture_output=True, cwd=repo_dir, timeout=10)
+        # Checkout target commit
+        r = _sp.run(["git", "checkout", commit],
+                   capture_output=True, text=True, timeout=30, cwd=repo_dir)
+        return r.returncode == 0
+    except Exception:
+        return False

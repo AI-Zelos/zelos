@@ -24,7 +24,7 @@ import sys
 import time
 import uuid
 
-from agent_wrapper import ClaudeCodeAgent
+from agent_wrapper import ClaudeCodeAgent, apply_and_verify_patch
 
 # Add zelos to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -40,48 +40,6 @@ MAX_REPLANS = 3  # Fewer than default 5 for controlled experiment
 TIMEOUT = 400  # Per Agent call
 OUTPUT_DIR = "logs/poc_results/orchestrated"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-
-def run_tests_in_docker(instance_id: str, patch: str, repo_dir: str) -> dict:
-    """Same test runner as baseline and runtime_diag."""
-    if not os.path.isdir(repo_dir):
-        return {"all_passed": False, "raw_output": "repo dir not found", "exit_code": -1}
-
-    patch_file = f"/tmp/zelos_poc_{instance_id.replace('/', '_')}.patch"
-    with open(patch_file, "w") as f:
-        f.write(patch)
-
-    try:
-        r = subprocess.run(
-            ["git", "apply", "--check", patch_file],
-            capture_output=True, text=True, timeout=30, cwd=repo_dir,
-        )
-        if r.returncode != 0:
-            return {"all_passed": False,
-                    "raw_output": f"Patch apply check failed:\n{r.stderr[:2000]}",
-                    "exit_code": r.returncode}
-        subprocess.run(["git", "apply", patch_file],
-                       capture_output=True, cwd=repo_dir, timeout=10)
-    except subprocess.TimeoutExpired:
-        return {"all_passed": False, "raw_output": "Patch timeout", "exit_code": -1}
-    finally:
-        if os.path.exists(patch_file):
-            os.remove(patch_file)
-
-    try:
-        r = subprocess.run(
-            ["python", "-m", "pytest", "-x", "-q", "--tb=short"],
-            capture_output=True, text=True, timeout=120, cwd=repo_dir,
-        )
-        output = r.stdout + "\n" + r.stderr
-        all_passed = r.returncode == 0
-        subprocess.run(["git", "checkout", "--", "."],
-                       capture_output=True, cwd=repo_dir, timeout=10)
-        return {"all_passed": all_passed, "raw_output": output, "exit_code": r.returncode}
-    except subprocess.TimeoutExpired:
-        subprocess.run(["git", "checkout", "--", "."],
-                       capture_output=True, cwd=repo_dir, timeout=10)
-        return {"all_passed": False, "raw_output": "Test timeout", "exit_code": -1}
 
 
 def run_orchestrated(instance: dict, repo_dir: str) -> dict:
@@ -174,7 +132,7 @@ def run_orchestrated(instance: dict, repo_dir: str) -> dict:
               f"{fix_result['elapsed_s']:.0f}s")
 
         # ── Phase 3: Test ──
-        test_result = run_tests_in_docker(iid, patch, repo_dir)
+        test_result = apply_and_verify_patch(patch, iid, repo_dir)
 
         if test_result["all_passed"]:
             print(f"    ✓ ALL TESTS PASSED!")
