@@ -35,7 +35,9 @@
 17. [v1.0.0：CP 治理平台](#17) — ChangeProposal 五元模型、约束引擎、Verifier链、自动合并
    - [17.1 ChangeProposal](#171-changeproposal) · [17.2 约束引擎](#172-约束引擎) · [17.3 Verifier 链](#173-verifier-链) · [17.4 自动合并](#174-自动合并)
 18. [v1.1.0：Agent 凭据管理](#18) — 四种后端、Agent隔离、零泄漏
-19. [验证 vs 决策：什么时候需要什么](#19) — 概念辨析、使用场景、人工审核流程
+19. [v1.2.0：Runtime Diagnosis & SWE-bench Pipeline](#19) — 诊断引擎、故障分类器、修复编排器
+20. [v1.3.0：MPC 自适应调度闭环](#20) — Feature Flag、增量验证、Replan规则引擎、PoC实验
+21. [验证 vs 决策：什么时候需要什么](#21) — 概念辨析、使用场景、人工审核流程
 
 ---
 
@@ -1877,6 +1879,99 @@ rt.auto_decide(goal_id)
 ### Q: Planner 一定要用 LLM 吗？
 
 不。Planner 是一个可替换的插件。你可以实现一个基于模板的 Planner，或者基于规则引擎的 Planner。LLMPlanner 只是默认实现。
+
+---
+
+## 19. v1.2.0 新特性：Runtime Diagnosis & SWE-bench Pipeline
+
+v1.2.0 引入了 Runtime 的结构化诊断能力——当 Agent 的产出（patch）未通过测试时，Runtime 不会把 500 行 pytest 日志直接丢回给 Agent，而是：
+
+1. **Diagnosis Engine** — 解析 pytest 输出，提取 file:line、failure_type、expected vs actual
+2. **Failure Classifier** — 决定 repair（修）/ retry（重试）/ abandon（放弃）
+3. **Repair Orchestrator** — 将诊断结论定向传递给 Agent，追踪修复假设防止重复
+4. **Patch Ranker** — 多因子候选 patch 排序
+5. **SWE-bench Pipeline** — 完整的生成 + 评估流水线
+
+```python
+from zelos.diagnosis_engine import DiagnosisEngine
+from zelos.failure_classifier import FailureClassifier
+
+de = DiagnosisEngine()
+result = de.diagnose(pytest_output)
+# → DiagnosisResult(failed=2, failures=[
+#     FailureDetail(test_name="test_foo", failure_type="AssertionError",
+#                   location_file="tests/test_foo.py", location_line=42,
+#                   expected="X", actual="Y")
+#   ])
+
+fc = FailureClassifier()
+decision = fc.classify(result)
+# → ClassificationResult(action="repair", salvageable=True)
+```
+
+参考：`docs/v1.2.0-requirements.md`
+
+---
+
+## 20. v1.3.0 新特性：MPC 自适应调度闭环
+
+v1.3.0 改变了 Zelos 的执行模型——从"一次性规划→全部执行→最后验证"的瀑布模型，
+升级为**每步执行后立即验证，失败时自动诊断、自动重规划**的 MPC（Model Predictive Control）闭环。
+
+### 核心变化
+
+```
+之前（v1.2）:                         现在（v1.3）:
+Planner → Plan → 执行全部 → 验证       Planner → Plan → 执行1步 → 验证
+                                              ↑                    ↓
+                                              └── Replan ← Classify ← Diagnose
+```
+
+### 新增组件
+
+**Feature Flag 系统** — 20 个功能开关，从核心向外围逐层验证。`zelos.yaml`:
+
+```yaml
+features:
+  mpc_replan: true        # 开启 MPC 自适应调度
+  diagnosis_engine: true   # 开启诊断引擎
+  event_sourcing: false    # 阶段 B 再开
+```
+
+**增量验证** — 每个 Task 完成后立即运行轻量 Schema 验证，不再等所有 Task 跑完。
+
+**Replan 规则引擎** — 4 条默认规则（可扩展）：
+
+| 规则 | 触发条件 |
+|------|---------|
+| VerdictRejectedRule | Verifier 返回 failed |
+| ConfidenceLowRule | 置信度 < 0.5 |
+| SchemaMismatchRule | Artifact 格式不匹配 |
+| EmptyArtifactRule | 产出为空 |
+
+**MPC 决策流程**（以 SWE-bench 修复为例）：
+
+```
+Task 失败 → 增量验证(Verdict) → Diagnosis Engine(结构化诊断)
+  → Failure Classifier(repair/abandon) → Runtime 重规划
+  → 新 Task 含精确诊断 → Agent 定向修复 → 重新测试
+```
+
+重规划上限 5 次，超限 → Goal FAILED (FATAL)。每次 replan 发布 `execution_plan.modified` Event。
+
+### PoC 实验验证
+
+5 个 SWE-bench 实例，三组对比：
+
+| 分组 | 通过率 (apply+语法) | Token 消耗 |
+|------|-------------------|-----------|
+| 基线组 (Agent 单打) | 1/5 (20%) | 132K |
+| +诊断组 | 2/4 (50%) | 40K |
+| **+编排组** (MPC 全链路) | **5/5 (100%)** | **35K** |
+
+编排组 Token 节省 73%，全部一次通过。Zelos MPC 全链路已通过 ExecutionEngine + Event Bus 验证。
+
+参考：`docs/v1.3.0-requirements.md` | `docs/swebench-poc-report.md`
 
 ---
 

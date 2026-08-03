@@ -16,6 +16,33 @@
 
 ---
 
+## What's New in v1.3.0
+
+**MPC Adaptive Scheduling Loop** — Runtime 不再是"一次性规划→全量执行→后置验证"的瀑布模型。
+
+```
+Planner → Scheduler → Executor → Incremental Verify
+                                    │
+                         ┌──────────┴──────────┐
+                         │ Task 失败？           │
+                         │ ① Diagnosis Engine   │
+                         │ ② Failure Classifier │
+                         │ ③ Replan → 新 Task  │
+                         └─────────────────────┘
+```
+
+- **Feature Flag 系统** — 20 个功能开关，从核心向外围逐层验证
+- **增量验证** — 每个 Task 完成后立即验证，不再等全部跑完
+- **Replan 规则引擎** — 4 条默认规则 + 可扩展，失败自动自愈
+- **结构化失败诊断** — 3 层信息传递（Verdict → Diagnosis → Classification）
+
+> **PoC 验证**: 5 个 SWE-bench 实例，编排组 vs 单体 Agent 基线。编排组 Token 节省 73%。
+
+Read more: [`docs/v1.3.0-requirements.md`](docs/v1.3.0-requirements.md) |
+[`docs/swebench-poc-report.md`](docs/swebench-poc-report.md)
+
+---
+
 ## Why Zelos Exists
 
 **Two hard problems define the agent era:**

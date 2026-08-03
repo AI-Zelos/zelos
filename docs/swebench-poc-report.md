@@ -230,6 +230,66 @@ apply_and_verify_patch()        Verifier Chain + SWE-bench eval harness
 
 功能等效，v1.3 的 MPC 基础设施代码已就绪（216 tests），PoC 阶段为快速验证选择了直接调用方式。生产环境切换到 Zelos 全链路只需改编排组脚本的调用方式，不需要修改 Runtime 代码。
 
+### Zelos MPC 决策流程（生产环境）
+
+以下是在 Zelos Runtime 全链路中，一个 Task 失败后 MPC 自动介入的端到端流程（以 django-13195 为例）：
+
+```
+  Task B (Fix Agent) 生成 patch → Task C (Test) 在 Docker 中跑测试
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │ ① 增量验证 (Verdict) │
+                         │ result=failed       │
+                         │ → 触发 replan 规则   │
+                         └────────┬────────────┘
+                                  │
+                                  ▼
+                    ┌──────────────────────────┐
+                    │ ② Diagnosis Engine 解析   │
+                    │ 500 行 pytest 日志        │
+                    │   → 5 行结构化诊断:       │
+                    │   "AssertionError at      │
+                    │    response.py:255        │
+                    │    expected: samesite=Lax │
+                    │    actual:   samesite=None│
+                    └────────┬─────────────────┘
+                             │
+                             ▼
+                    ┌──────────────────────────┐
+                    │ ③ Failure Classifier 决策 │
+                    │ impact=single_module      │
+                    │ → action=repair           │
+                    │ → salvageable=True        │
+                    │ 决策: 值得修，定向修复     │
+                    └────────┬─────────────────┘
+                             │
+                             ▼
+             ┌───────────────────────────────┐
+             │ ④ Runtime._on_replan() 重规划  │
+             │ - 标记下游 Task 为 BLOCKED    │
+             │ - Planner 生成替代 Task B'    │
+             │ - 新 Task 含诊断信息           │
+             │ - 发布 plan.modified Event    │
+             └────────┬──────────────────────┘
+                      │
+                      ▼
+          ┌──────────────────────────┐
+          │ ⑤ 重新派发 Task B'       │
+          │ Agent 收到的不是原始 issue│
+          │ 而是精确诊断:             │
+          │ "response.py:255,        │
+          │  AssertionError,         │
+          │  samesite 参数丢失"       │
+          │ → 定向修复 → ✅ 通过     │
+          └──────────────────────────┘
+
+  关键:
+  - 决策可追溯: execution_plan.modified Event 记录每次 replan 的原因
+  - 防无限循环: 最多 5 次 replan，超限 → Goal FAILED (FATAL)
+  - Token 高效: Agent 不需要读 500 行日志，Runtime 一步压缩为诊断
+```
+
 ## 五、实验局限性
 
 | 问题 | 影响 | 建议 |
