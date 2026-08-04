@@ -594,6 +594,11 @@ class ZelosRuntime:
             # Set up Execution Engine callbacks
             self._execution_engine._agent_dispatch = self._on_dispatch
 
+            # v1.3.0: Wire MPC replan rules into Execution Engine
+            from .replan_rules import DEFAULT_REPLAN_RULES
+            if not self._execution_engine._replan_rules:
+                self._execution_engine._replan_rules = list(DEFAULT_REPLAN_RULES)
+
             # Start all agents
             for name, info in list(self._agents.items()):
                 self._start_agent(name, info)
@@ -767,7 +772,8 @@ class ZelosRuntime:
                         all_tasks = [t for t in self._task_graph.list_tasks() if t.plan_id == plan_id]
                         if not all_tasks:
                             continue
-                        terminal = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.FATAL_FAILED}
+                        terminal = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED,
+                                     TaskStatus.FATAL_FAILED, TaskStatus.TIMED_OUT}
                         all_done = all(t.status in terminal for t in all_tasks)
                         if all_done:
                             all_completed = all(t.status == TaskStatus.COMPLETED for t in all_tasks)
@@ -1085,12 +1091,40 @@ class ZelosRuntime:
                 agent = self._agent_instances.get(name)
                 if agent and hasattr(agent, "execute"):
                     try:
-                        artifact = agent.execute(task)
-                        artifact_content = (
-                            getattr(artifact, "content", artifact)
-                            if hasattr(artifact, "content")
-                            else str(artifact)
-                        )
+                        raw_result = agent.execute(task)
+
+                        # ── Respect agent's return contract ──
+                        # Agent returns {status: "completed"|"failed", artifact/error}
+                        if isinstance(raw_result, dict) and "status" in raw_result:
+                            agent_status = raw_result.get("status")
+                            if agent_status == "failed":
+                                # Agent explicitly reports failure → feed into MPC
+                                self._execution_engine.submit_result(
+                                    task.task_id, agent_id, raw_result,
+                                )
+                                self._audit("system", "task.failed", task.task_id,
+                                            result="failed",
+                                            detail=raw_result.get("error", {}).get("message", ""))
+                                break
+
+                            # On "completed", use the artifact from agent's return
+                            if isinstance(raw_result, dict) and "artifact" in raw_result:
+                                artifact = raw_result["artifact"]
+                                artifact_content = (
+                                    getattr(artifact, "content", artifact)
+                                    if hasattr(artifact, "content")
+                                    else str(artifact)
+                                )
+                            else:
+                                artifact_content = str(raw_result)
+                        else:
+                            # Legacy: agent returns a plain artifact object
+                            artifact = raw_result
+                            artifact_content = (
+                                getattr(artifact, "content", artifact)
+                                if hasattr(artifact, "content")
+                                else str(artifact)
+                            )
 
                         # ── v1.2.0: Verify artifact before accepting ──
                         verification_passed = True
@@ -1352,6 +1386,7 @@ class ZelosRuntime:
 
             goal["status"] = "planned"
             goal["plan_id"] = plan_id
+            goal["plan"] = planner_plan  # v1.3.0: store plan for MPC _get_plan
             goal["updated_at"] = time.time()
 
             # v0.9.0: Capture architecture delta from planner
@@ -1360,6 +1395,12 @@ class ZelosRuntime:
 
             # v0.8.0: Persist after plan creation
             self._persist_goal_state(goal_id)
+
+            # v1.3.0: Wire current plan for MPC replan triggers
+            try:
+                self._execution_engine.set_current_plan(planner_plan)
+            except Exception:
+                pass
 
         task_count = len([t for t in self._task_graph.list_tasks() if t.plan_id == plan_id])
 

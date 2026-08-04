@@ -176,6 +176,7 @@ class AnthropicProvider(LLMProvider):
             "temperature": kwargs.get("temperature", self.temperature),
             "system": system,
             "messages": user_messages,
+            "thinking": {"type": "disabled"},  # Disable extended thinking for structured JSON responses
         }
         data = json.dumps(payload).encode()
         req = urllib.request.Request(
@@ -190,6 +191,11 @@ class AnthropicProvider(LLMProvider):
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
                 result = json.loads(resp.read())
+                # Handle thinking blocks: iterate content to find the text block
+                for block in result.get("content", []):
+                    if block.get("type") == "text":
+                        return block["text"]
+                # Fallback: try first block's text key
                 return result["content"][0]["text"]
         except urllib.error.HTTPError as e:
             raise RuntimeError(f"Anthropic API error {e.code}: {e.read().decode()}") from e
@@ -583,15 +589,18 @@ Respond with the COMPLETE updated plan as JSON (existing tasks + new tasks).
             {
                 "role": "system",
                 "content": (
-                    "You are a repair planner. Given a task failure with structured "
-                    "diagnostic information (test name, failure type, file:line, "
-                    "expected vs actual), produce ONE focused repair task.\n\n"
-                    "Output a JSON object with a single 'tasks' array containing "
-                    "exactly one task:\n"
+                    "You are a repair planner. Given a task failure, produce ONE "
+                    "focused repair task.\n\n"
+                    "Output a JSON object with a single 'tasks' array:\n"
                     '{"tasks": [{"description": "...", "required_capability": "..."}]}\n\n'
+                    "Use one of these capabilities exactly:\n"
+                    "- code-fix.python (fix bugs in Python code)\n"
+                    "- code-refactor.python (refactor Python code)\n"
+                    "- code-generation.python (generate new Python code)\n"
+                    "- verification.unit-test (write unit tests)\n\n"
                     "The task description must include:\n"
                     "- What specific file/line to fix\n"
-                    "- What assertion failed and why (expected X, got Y)\n"
+                    "- What failed and why\n"
                     "- What the fix should accomplish"
                 ),
             },
@@ -600,8 +609,7 @@ Respond with the COMPLETE updated plan as JSON (existing tasks + new tasks).
                 "content": (
                     f"Goal: {goal_text}\n\n"
                     f"Failure context:\n{failure_summary}\n\n"
-                    "Produce a single repair task based on this diagnostic info. "
-                    "Be specific: mention the exact file, line, and assertion to fix."
+                    "Produce ONE repair task. Use only the standard capabilities listed above."
                 ),
             },
         ]
